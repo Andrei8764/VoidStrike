@@ -8,9 +8,19 @@ const nameError = document.getElementById("nameError");
 
 const connectionStatusElement = document.getElementById("connectionStatus");
 const playerNameElement = document.getElementById("playerName");
-const playerIdElement = document.getElementById("playerId");
-const roomIdElement = document.getElementById("roomId");
 const hpElement = document.getElementById("hp");
+const teamElement = document.getElementById("team");
+const weaponElement = document.getElementById("weapon");
+const ammoElement = document.getElementById("ammo");
+const magazineElement = document.getElementById("magazine");
+const reloadStatusElement = document.getElementById("reloadStatus");
+const roundNumberElement = document.getElementById("roundNumber");
+const roundTimerElement = document.getElementById("roundTimer");
+const redScoreElement = document.getElementById("redScore");
+const blueScoreElement = document.getElementById("blueScore");
+const scoreboardElement = document.getElementById("scoreboard");
+const scoreboardBodyElement = document.getElementById("scoreboardBody");
+const killFeedElement = document.getElementById("killFeed");
 
 const WORLD_WIDTH = 1600;
 const WORLD_HEIGHT = 900;
@@ -25,13 +35,24 @@ const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 let socket = null;
 let playerId = null;
 let playerName = null;
-let roomId = null;
 let joined = false;
-
-let inputIntervalId = null;
 
 let players = [];
 let bullets = [];
+let obstacles = [];
+let killFeed = [];
+let round = null;
+
+let selectedWeaponSlot = 2;
+let reloadRequested = false;
+let scoreboardVisible = false;
+let lastSelfAmmo = null;
+let recoilKick = 0;
+let lastReloading = false;
+
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+let inputIntervalId = null;
 
 const keys = {
     up: false,
@@ -90,6 +111,34 @@ window.addEventListener("keydown", event => {
         case "ArrowRight":
             keys.right = true;
             break;
+        case "KeyR":
+            reloadRequested = true;
+            break;
+        case "Digit1":
+        case "Numpad1":
+            selectedWeaponSlot = 1;
+            break;
+        case "Digit2":
+        case "Numpad2":
+            selectedWeaponSlot = 2;
+            break;
+        case "Digit3":
+        case "Numpad3":
+            selectedWeaponSlot = 3;
+            break;
+        case "Digit4":
+        case "Numpad4":
+            selectedWeaponSlot = 4;
+            break;
+        case "Digit5":
+        case "Numpad5":
+            selectedWeaponSlot = 5;
+            break;
+        case "Tab":
+            event.preventDefault();
+            scoreboardVisible = true;
+            scoreboardElement.classList.remove("hidden");
+            break;
     }
 });
 
@@ -111,6 +160,37 @@ window.addEventListener("keyup", event => {
         case "ArrowRight":
             keys.right = false;
             break;
+        case "Tab":
+            event.preventDefault();
+            scoreboardVisible = false;
+            scoreboardElement.classList.add("hidden");
+            break;
+    }
+});
+
+canvas.addEventListener("keyup", event => {
+    switch (event.code) {
+        case "KeyW":
+        case "ArrowUp":
+            keys.up = false;
+            break;
+        case "KeyS":
+        case "ArrowDown":
+            keys.down = false;
+            break;
+        case "KeyA":
+        case "ArrowLeft":
+            keys.left = false;
+            break;
+        case "KeyD":
+        case "ArrowRight":
+            keys.right = false;
+            break;
+        case "Tab":
+            event.preventDefault();
+            scoreboardVisible = false;
+            scoreboardElement.classList.add("hidden");
+            break;
     }
 });
 
@@ -125,6 +205,7 @@ canvas.addEventListener("mousemove", event => {
 
 canvas.addEventListener("mousedown", event => {
     if (event.button === 0) {
+        resumeAudio();
         mouse.down = true;
     }
 });
@@ -174,11 +255,8 @@ function connectWebSocket() {
         if (message.type === "joined") {
             joined = true;
             playerId = message.playerId;
-            roomId = message.roomId;
             playerName = message.name;
 
-            playerIdElement.textContent = playerId;
-            roomIdElement.textContent = roomId;
             playerNameElement.textContent = playerName;
 
             nameOverlay.classList.add("hidden");
@@ -190,8 +268,15 @@ function connectWebSocket() {
         if (message.type === "snapshot") {
             players = message.players;
             bullets = message.bullets;
+            obstacles = message.obstacles || obstacles;
+            killFeed = message.killFeed || [];
+            round = message.round;
 
+            detectLocalShot();
+            detectReloadSound();
             updateHud();
+            updateScoreboard();
+            updateKillFeed();
         }
     };
 
@@ -214,6 +299,8 @@ function connectWebSocket() {
 }
 
 function joinGame() {
+    resumeAudio();
+
     if (!socket || socket.readyState !== WebSocket.OPEN) {
         nameError.textContent = "Conexiunea nu este încă pregătită.";
         return;
@@ -234,6 +321,12 @@ function joinGame() {
         type: "join",
         name: requestedName
     }));
+}
+
+function resumeAudio() {
+    if (audioContext.state === "suspended") {
+        audioContext.resume();
+    }
 }
 
 function validatePlayerName(name) {
@@ -269,8 +362,12 @@ function startSendingInput() {
             left: keys.left,
             right: keys.right,
             shoot: mouse.down,
+            reload: reloadRequested,
+            weaponSlot: selectedWeaponSlot,
             angle: mouse.angle
         }));
+
+        reloadRequested = false;
     }, 1000 / 30);
 }
 
@@ -285,6 +382,8 @@ function gameLoop() {
     updateCamera();
     updateMouseWorldPosition();
     updateAimAngle();
+
+    recoilKick *= 0.88;
 
     render();
 
@@ -327,16 +426,39 @@ function render() {
     context.clearRect(0, 0, canvas.width, canvas.height);
 
     drawBackground();
-    drawMapBorder();
+    drawFloorLighting();
     drawGrid();
+    drawSpawnZones();
+    drawObstacles();
+    drawMapBorder();
     drawBullets();
     drawPlayers();
+    drawGunOverlay();
     drawCrosshair();
     drawMinimap();
+    drawVignette();
 }
 
 function drawBackground() {
-    context.fillStyle = "#070a12";
+    context.fillStyle = "#080b12";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawFloorLighting() {
+    const gradient = context.createRadialGradient(
+        canvas.width / 2,
+        canvas.height / 2,
+        60,
+        canvas.width / 2,
+        canvas.height / 2,
+        Math.max(canvas.width, canvas.height) * 0.7
+    );
+
+    gradient.addColorStop(0, "rgba(26, 39, 62, 0.72)");
+    gradient.addColorStop(0.55, "rgba(11, 18, 32, 0.84)");
+    gradient.addColorStop(1, "rgba(3, 7, 18, 1)");
+
+    context.fillStyle = gradient;
     context.fillRect(0, 0, canvas.width, canvas.height);
 }
 
@@ -380,37 +502,109 @@ function drawGrid() {
     context.restore();
 }
 
+function drawSpawnZones() {
+    context.save();
+
+    context.fillStyle = "rgba(239, 68, 68, 0.12)";
+    context.fillRect(-camera.x, -camera.y, 320, WORLD_HEIGHT);
+
+    context.fillStyle = "rgba(59, 130, 246, 0.12)";
+    context.fillRect(WORLD_WIDTH - 320 - camera.x, -camera.y, 320, WORLD_HEIGHT);
+
+    context.restore();
+}
+
+function drawObstacles() {
+    const depth = 22;
+
+    context.save();
+
+    for (const obstacle of obstacles) {
+        const x = obstacle.x - camera.x;
+        const y = obstacle.y - camera.y;
+        const width = obstacle.width;
+        const height = obstacle.height;
+
+        context.fillStyle = "rgba(0, 0, 0, 0.28)";
+        context.fillRect(x + 10, y + 14, width, height);
+
+        context.fillStyle = "#172033";
+        context.fillRect(x, y + depth, width, height - depth);
+
+        context.fillStyle = "#273754";
+        context.beginPath();
+        context.moveTo(x, y + depth);
+        context.lineTo(x + depth, y);
+        context.lineTo(x + width + depth, y);
+        context.lineTo(x + width, y + depth);
+        context.closePath();
+        context.fill();
+
+        context.fillStyle = "#111827";
+        context.beginPath();
+        context.moveTo(x + width, y + depth);
+        context.lineTo(x + width + depth, y);
+        context.lineTo(x + width + depth, y + height - depth);
+        context.lineTo(x + width, y + height);
+        context.closePath();
+        context.fill();
+
+        context.strokeStyle = "rgba(125, 211, 252, 0.32)";
+        context.lineWidth = 1.5;
+        context.strokeRect(x, y + depth, width, height - depth);
+    }
+
+    context.restore();
+}
+
 function drawPlayers() {
     for (const player of players) {
         const screenX = player.x - camera.x;
         const screenY = player.y - camera.y;
         const isSelf = player.id === playerId;
 
-        drawPlayerBody(screenX, screenY, player.angle, isSelf);
+        drawPlayerBody(screenX, screenY, player.angle, isSelf, player.team);
         drawHealthBar(screenX, screenY - 34, player.hp);
         drawPlayerName(screenX, screenY + 38, isSelf ? player.name + " (YOU)" : player.name);
     }
 }
 
-function drawPlayerBody(x, y, angle, isSelf) {
+function drawPlayerBody(x, y, angle, isSelf, team) {
+    const mainColor = team === "RED" ? "#ef4444" : "#3b82f6";
+    const outlineColor = team === "RED" ? "#fecaca" : "#bfdbfe";
+
     context.save();
     context.translate(x, y);
 
-    context.fillStyle = isSelf ? "#22c55e" : "#ef4444";
-    context.strokeStyle = isSelf ? "#bbf7d0" : "#fecaca";
+    context.fillStyle = "rgba(0, 0, 0, 0.34)";
+    context.beginPath();
+    context.ellipse(4, 13, PLAYER_RADIUS + 8, PLAYER_RADIUS * 0.72, 0, 0, Math.PI * 2);
+    context.fill();
+
+    context.translate(0, -8);
+
+    const bodyGradient = context.createRadialGradient(-8, -9, 4, 0, 0, PLAYER_RADIUS + 10);
+    bodyGradient.addColorStop(0, isSelf ? "#86efac" : outlineColor);
+    bodyGradient.addColorStop(1, isSelf ? "#16a34a" : mainColor);
+
+    context.fillStyle = isSelf ? "#22c55e" : mainColor;
+    context.strokeStyle = isSelf ? "#bbf7d0" : outlineColor;
     context.lineWidth = 3;
-    context.shadowColor = isSelf ? "#22c55e" : "#ef4444";
+    context.shadowColor = isSelf ? "#22c55e" : mainColor;
     context.shadowBlur = 16;
 
     context.beginPath();
-    context.arc(0, 0, PLAYER_RADIUS, 0, Math.PI * 2);
+    context.ellipse(0, 0, PLAYER_RADIUS, PLAYER_RADIUS + 6, 0, 0, Math.PI * 2);
+    context.fillStyle = bodyGradient;
     context.fill();
     context.stroke();
 
     context.rotate(angle);
 
-    context.fillStyle = isSelf ? "#dcfce7" : "#fee2e2";
-    context.fillRect(PLAYER_RADIUS - 2, -5, 28, 10);
+    context.fillStyle = "#e5e7eb";
+    context.fillRect(PLAYER_RADIUS - 2, -5, 36, 10);
+    context.fillStyle = "#94a3b8";
+    context.fillRect(PLAYER_RADIUS + 21, -3, 18, 6);
 
     context.restore();
 }
@@ -459,27 +653,78 @@ function drawBullets() {
 }
 
 function drawCrosshair() {
+    const size = 10 + recoilKick;
+
     context.save();
 
     context.strokeStyle = mouse.down ? "#f87171" : "#93c5fd";
     context.lineWidth = 2;
 
     context.beginPath();
-    context.moveTo(mouse.x - 10, mouse.y);
+    context.moveTo(mouse.x - size, mouse.y);
     context.lineTo(mouse.x - 4, mouse.y);
     context.moveTo(mouse.x + 4, mouse.y);
-    context.lineTo(mouse.x + 10, mouse.y);
-    context.moveTo(mouse.x, mouse.y - 10);
+    context.lineTo(mouse.x + size, mouse.y);
+    context.moveTo(mouse.x, mouse.y - size);
     context.lineTo(mouse.x, mouse.y - 4);
     context.moveTo(mouse.x, mouse.y + 4);
-    context.lineTo(mouse.x, mouse.y + 10);
+    context.lineTo(mouse.x, mouse.y + size);
     context.stroke();
 
     context.beginPath();
-    context.arc(mouse.x, mouse.y, 14, 0, Math.PI * 2);
+    context.arc(mouse.x, mouse.y, 14 + recoilKick * 0.4, 0, Math.PI * 2);
     context.stroke();
 
     context.restore();
+}
+
+function drawGunOverlay() {
+    const self = getSelfPlayer();
+
+    if (!self) {
+        return;
+    }
+
+    const sway = Math.sin(performance.now() / 120) * (keys.up || keys.down || keys.left || keys.right ? 2 : 0);
+    const recoil = recoilKick * 0.9;
+    const baseX = canvas.width * 0.64 + sway;
+    const baseY = canvas.height - 92 + recoil;
+
+    context.save();
+    context.translate(baseX, baseY);
+
+    context.fillStyle = "rgba(0, 0, 0, 0.38)";
+    context.fillRect(-22, 24, 250, 24);
+
+    context.fillStyle = "#0f172a";
+    context.fillRect(0, -8, 210, 42);
+    context.fillStyle = "#334155";
+    context.fillRect(22, -20, 120, 18);
+    context.fillStyle = "#64748b";
+    context.fillRect(150, -4, 80, 14);
+    context.fillStyle = "#111827";
+    context.fillRect(54, 30, 42, 58);
+    context.fillStyle = self.team === "RED" ? "#ef4444" : "#3b82f6";
+    context.fillRect(10, 2, 10, 24);
+
+    context.restore();
+}
+
+function drawVignette() {
+    const gradient = context.createRadialGradient(
+        canvas.width / 2,
+        canvas.height / 2,
+        Math.min(canvas.width, canvas.height) * 0.22,
+        canvas.width / 2,
+        canvas.height / 2,
+        Math.max(canvas.width, canvas.height) * 0.72
+    );
+
+    gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0.42)");
+
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 function drawMinimap() {
@@ -498,11 +743,21 @@ function drawMinimap() {
     context.fillRect(x, y, width, height);
     context.strokeRect(x, y, width, height);
 
+    context.fillStyle = "rgba(148, 163, 184, 0.35)";
+    for (const obstacle of obstacles) {
+        context.fillRect(
+            x + obstacle.x / WORLD_WIDTH * width,
+            y + obstacle.y / WORLD_HEIGHT * height,
+            obstacle.width / WORLD_WIDTH * width,
+            obstacle.height / WORLD_HEIGHT * height
+        );
+    }
+
     for (const player of players) {
         const px = x + player.x / WORLD_WIDTH * width;
         const py = y + player.y / WORLD_HEIGHT * height;
 
-        context.fillStyle = player.id === playerId ? "#22c55e" : "#ef4444";
+        context.fillStyle = player.id === playerId ? "#22c55e" : player.team === "RED" ? "#ef4444" : "#3b82f6";
 
         context.beginPath();
         context.arc(px, py, 4, 0, Math.PI * 2);
@@ -517,6 +772,145 @@ function updateHud() {
 
     if (self) {
         hpElement.textContent = self.hp;
+        teamElement.textContent = self.team;
+        teamElement.className = self.team.toLowerCase();
+        weaponElement.textContent = self.weapon;
+        ammoElement.textContent = self.ammo;
+        magazineElement.textContent = self.magazineSize;
+        reloadStatusElement.textContent = self.reloading ? "Reloading..." : "";
+    }
+
+    if (round) {
+        roundNumberElement.textContent = round.roundNumber;
+        roundTimerElement.textContent = formatTime(round.timeLeftSeconds);
+        redScoreElement.textContent = round.redScore;
+        blueScoreElement.textContent = round.blueScore;
+    }
+}
+
+function updateScoreboard() {
+    const sortedPlayers = [...players].sort((a, b) => b.kills - a.kills);
+
+    scoreboardBodyElement.innerHTML = sortedPlayers.map(player => `
+        <tr class="${player.team.toLowerCase()}">
+            <td>${escapeHtml(player.name)}</td>
+            <td>${player.team}</td>
+            <td>${player.kills}</td>
+            <td>${player.deaths}</td>
+            <td>${player.weapon}</td>
+            <td>${player.hp}</td>
+        </tr>
+    `).join("");
+}
+
+function updateKillFeed() {
+    killFeedElement.innerHTML = killFeed.map(event => `
+        <div class="killFeedItem">
+            <span>${escapeHtml(event.attacker)}</span>
+            <strong>${escapeHtml(event.weapon)}</strong>
+            <span>${escapeHtml(event.victim)}</span>
+        </div>
+    `).join("");
+}
+
+function detectLocalShot() {
+    const self = getSelfPlayer();
+
+    if (!self) {
+        return;
+    }
+
+    if (lastSelfAmmo !== null && self.ammo < lastSelfAmmo) {
+        playShootSound(self.weapon);
+        recoilKick = Math.min(18, recoilKick + getRecoilKick(self.weapon));
+    }
+
+    lastSelfAmmo = self.ammo;
+}
+
+function detectReloadSound() {
+    const self = getSelfPlayer();
+
+    if (!self) {
+        lastReloading = false;
+        return;
+    }
+
+    if (self.reloading && !lastReloading) {
+        playReloadSound();
+    }
+
+    lastReloading = self.reloading;
+}
+
+function playShootSound(weapon) {
+    const now = audioContext.currentTime;
+    const punch = audioContext.createOscillator();
+    const snap = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const filter = audioContext.createBiquadFilter();
+
+    punch.type = "square";
+    snap.type = "sawtooth";
+    punch.frequency.value = weapon === "Sniper" ? 78 : weapon === "SMG" ? 160 : 118;
+    snap.frequency.value = weapon === "Sniper" ? 240 : 340;
+
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(1800, now);
+    filter.frequency.exponentialRampToValueAtTime(220, now + 0.12);
+
+    gain.gain.setValueAtTime(weapon === "Sniper" ? 0.12 : 0.075, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + (weapon === "Sniper" ? 0.16 : 0.09));
+
+    punch.connect(filter);
+    snap.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioContext.destination);
+
+    punch.start(now);
+    snap.start(now);
+    punch.stop(now + 0.14);
+    snap.stop(now + 0.08);
+}
+
+function playReloadSound() {
+    playTone("triangle", 260, 0.035, 0.08, 0);
+    playTone("square", 190, 0.025, 0.07, 0.1);
+    playTone("triangle", 360, 0.025, 0.08, 0.22);
+}
+
+function playTone(type, frequency, volume, duration, delay) {
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const start = audioContext.currentTime + delay;
+
+    oscillator.type = type;
+    oscillator.frequency.value = frequency;
+
+    gain.gain.setValueAtTime(volume, start);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+
+    oscillator.start(start);
+    oscillator.stop(start + duration);
+}
+
+function getRecoilKick(weapon) {
+    switch (weapon) {
+        case "Pistol":
+            return 4;
+        case "Rifle":
+            return 6;
+        case "SMG":
+            return 5;
+        case "Shotgun":
+            return 12;
+        case "Sniper":
+            return 15;
+        default:
+            return 5;
     }
 }
 
@@ -534,12 +928,20 @@ function resizeCanvas() {
     canvas.height = window.innerHeight;
 }
 
-function shortId(id) {
-    if (!id) {
-        return "-";
-    }
+function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const rest = seconds % 60;
 
-    return id.substring(0, 6);
+    return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+}
+
+function escapeHtml(value) {
+    return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll("\"", "&quot;")
+        .replaceAll("'", "&#039;");
 }
 
 function clamp(value, min, max) {

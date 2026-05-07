@@ -29,19 +29,52 @@
     </div>
 </div>
 
+<div id="topBar">
+    <div class="teamScore red">RED <span id="redScore">0</span></div>
+    <div class="roundInfo">
+        <div>ROUND <span id="roundNumber">1</span></div>
+        <div id="roundTimer">03:00</div>
+    </div>
+    <div class="teamScore blue"><span id="blueScore">0</span> BLUE</div>
+</div>
+
 <div id="hud">
     <div class="title">VoidStrike</div>
     <div>Status: <span id="connectionStatus">connecting...</span></div>
     <div>Player: <span id="playerName">-</span></div>
-    <div>Player ID: <span id="playerId">-</span></div>
-    <div>Room ID: <span id="roomId">-</span></div>
+    <div>Team: <span id="team">-</span></div>
     <div>HP: <span id="hp">100</span></div>
+    <div>Weapon: <span id="weapon">Rifle</span></div>
+    <div>Ammo: <span id="ammo">30</span>/<span id="magazine">30</span></div>
+    <div id="reloadStatus"></div>
     <div class="controls">
-        W/A/S/D - move |
-        Mouse - aim |
-        Click - shoot
+        W/A/S/D - move<br>
+        Mouse - aim<br>
+        Click - shoot<br>
+        R - reload<br>
+        1-5 - switch weapon<br>
+        TAB - scoreboard
     </div>
 </div>
+
+<div id="scoreboard" class="hidden">
+    <h2>Scoreboard</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Player</th>
+            <th>Team</th>
+            <th>K</th>
+            <th>D</th>
+            <th>Weapon</th>
+            <th>HP</th>
+        </tr>
+        </thead>
+        <tbody id="scoreboardBody"></tbody>
+    </table>
+</div>
+
+<div id="killFeed"></div>
 
 <canvas id="gameCanvas" width="1280" height="720"></canvas>
 

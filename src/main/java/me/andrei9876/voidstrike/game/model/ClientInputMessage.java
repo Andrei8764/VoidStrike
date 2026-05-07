@@ -8,6 +8,8 @@ public class ClientInputMessage {
     private boolean left;
     private boolean right;
     private boolean shoot;
+    private boolean reload;
+    private int weaponSlot;
     private double angle;
 
     public String getType() {
@@ -32,6 +34,14 @@ public class ClientInputMessage {
 
     public boolean isShoot() {
         return shoot;
+    }
+
+    public boolean isReload() {
+        return reload;
+    }
+
+    public int getWeaponSlot() {
+        return weaponSlot;
     }
 
     public double getAngle() {
@@ -60,6 +70,14 @@ public class ClientInputMessage {
 
     public void setShoot(boolean shoot) {
         this.shoot = shoot;
+    }
+
+    public void setReload(boolean reload) {
+        this.reload = reload;
+    }
+
+    public void setWeaponSlot(int weaponSlot) {
+        this.weaponSlot = weaponSlot;
     }
 
     public void setAngle(double angle) {

@@ -4,6 +4,7 @@ public class BulletState {
 
     private final String id;
     private final String ownerId;
+    private final int damage;
 
     private double x;
     private double y;
@@ -12,9 +13,10 @@ public class BulletState {
 
     private long lifeMs;
 
-    public BulletState(String id, String ownerId, double x, double y, double velocityX, double velocityY) {
+    public BulletState(String id, String ownerId, int damage, double x, double y, double velocityX, double velocityY) {
         this.id = id;
         this.ownerId = ownerId;
+        this.damage = damage;
         this.x = x;
         this.y = y;
         this.velocityX = velocityX;
@@ -38,6 +40,10 @@ public class BulletState {
 
     public String getOwnerId() {
         return ownerId;
+    }
+
+    public int getDamage() {
+        return damage;
     }
 
     public double getX() {
