@@ -1,0 +1,156 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    overflow: hidden;
+    background: #080b12;
+    color: #f2f6ff;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+#nameOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+            radial-gradient(circle at center, rgba(56, 189, 248, 0.18), transparent 40%),
+            rgba(3, 7, 18, 0.92);
+}
+
+#nameOverlay.hidden {
+    display: none;
+}
+
+#namePanel {
+    width: min(420px, calc(100vw - 32px));
+    padding: 28px;
+    border: 1px solid rgba(125, 211, 252, 0.35);
+    border-radius: 18px;
+    background: rgba(8, 13, 26, 0.94);
+    box-shadow: 0 0 40px rgba(56, 189, 248, 0.18);
+    text-align: center;
+}
+
+#namePanel h1 {
+    margin: 0 0 10px;
+    color: #7dd3fc;
+    font-size: 36px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+#namePanel p {
+    margin: 0 0 18px;
+    color: #cbd5e1;
+}
+
+#nameInput {
+    width: 100%;
+    margin-bottom: 12px;
+    padding: 13px 14px;
+    border: 1px solid rgba(125, 211, 252, 0.35);
+    border-radius: 10px;
+    outline: none;
+    background: #020617;
+    color: #f8fafc;
+    font-size: 16px;
+}
+
+#nameInput:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.25);
+}
+
+#joinButton {
+    width: 100%;
+    padding: 13px 14px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #0284c7, #22c55e);
+    color: white;
+    font-weight: 800;
+    font-size: 15px;
+    cursor: pointer;
+    text-transform: uppercase;
+}
+
+#joinButton:hover {
+    filter: brightness(1.1);
+}
+
+#joinButton:disabled {
+    cursor: not-allowed;
+    filter: grayscale(1) brightness(0.8);
+}
+
+#nameError {
+    min-height: 20px;
+    margin-top: 12px;
+    color: #fca5a5;
+    font-size: 14px;
+}
+
+.nameRules {
+    margin-top: 10px;
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+#gameCanvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    background:
+            radial-gradient(circle at center, rgba(68, 93, 160, 0.22), transparent 45%),
+            linear-gradient(135deg, #101827, #05070d);
+    cursor: crosshair;
+}
+
+#hud {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 10;
+    min-width: 260px;
+    padding: 14px 16px;
+    border: 1px solid rgba(120, 170, 255, 0.28);
+    border-radius: 12px;
+    background: rgba(5, 8, 16, 0.72);
+    box-shadow: 0 0 30px rgba(40, 90, 180, 0.2);
+    backdrop-filter: blur(8px);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.title {
+    margin-bottom: 6px;
+    color: #7dd3fc;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.controls {
+    margin-top: 8px;
+    color: #aeb8ca;
+    font-size: 12px;
+}
+
+#connectionStatus.connected {
+    color: #86efac;
+}
+
+#connectionStatus.disconnected {
+    color: #fca5a5;
+}
+
+#connectionStatus.connecting {
+    color: #fde68a;
+}

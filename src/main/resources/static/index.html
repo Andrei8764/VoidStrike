@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>VoidStrike</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="nameOverlay">
+    <div id="namePanel">
+        <h1>VoidStrike</h1>
+        <p>Alege un nume pentru a intra în joc.</p>
+
+        <input
+                id="nameInput"
+                type="text"
+                maxlength="16"
+                placeholder="Numele tău"
+                autocomplete="off"
+        >
+
+        <button id="joinButton">Intră în joc</button>
+
+        <div id="nameError"></div>
+
+        <div class="nameRules">
+            Numele trebuie să aibă 3-16 caractere și poate conține doar litere, cifre, _ și -.
+        </div>
+    </div>
+</div>
+
+<div id="hud">
+    <div class="title">VoidStrike</div>
+    <div>Status: <span id="connectionStatus">connecting...</span></div>
+    <div>Player: <span id="playerName">-</span></div>
+    <div>Player ID: <span id="playerId">-</span></div>
+    <div>Room ID: <span id="roomId">-</span></div>
+    <div>HP: <span id="hp">100</span></div>
+    <div class="controls">
+        W/A/S/D - move |
+        Mouse - aim |
+        Click - shoot
+    </div>
+</div>
+
+<canvas id="gameCanvas" width="1280" height="720"></canvas>
+
+<script src="game.js"></script>
+</body>
+</html>
