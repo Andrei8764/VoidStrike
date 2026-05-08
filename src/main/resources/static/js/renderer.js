@@ -82,6 +82,66 @@ function drawBackground() {
     context.fillRect(0, 0, canvas.width, canvas.height);
 }
 
+function getFarmWallPalette(obstacleIndex) {
+    if (obstacleIndex >= 4 && obstacleIndex <= 6) {
+        return {
+            color: "#dc2626",
+            accent: "#fca5a5",
+            roof: "#7f1d1d",
+            trim: "#fee2e2",
+            kind: "barn"
+        };
+    }
+
+    if (obstacleIndex >= 7 && obstacleIndex <= 9) {
+        return {
+            color: "#8b5a2b",
+            accent: "#d6a05f",
+            roof: "#4a2c16",
+            trim: "#f3d19b",
+            kind: "wood"
+        };
+    }
+
+    if (obstacleIndex >= 10 && obstacleIndex <= 13) {
+        return {
+            color: "#d97706",
+            accent: "#fde68a",
+            roof: "#92400e",
+            trim: "#fef3c7",
+            kind: "hay"
+        };
+    }
+
+    if (obstacleIndex >= 14 && obstacleIndex <= 15) {
+        return {
+            color: "#b91c1c",
+            accent: "#fecaca",
+            roof: "#641414",
+            trim: "#fee2e2",
+            kind: "garage"
+        };
+    }
+
+    if (obstacleIndex >= 16 && obstacleIndex <= 21) {
+        return {
+            color: "#7c4a21",
+            accent: "#c08457",
+            roof: "#3f2412",
+            trim: "#e7b77f",
+            kind: "fence"
+        };
+    }
+
+    return {
+        color: "#6b4f2a",
+        accent: "#e2b979",
+        roof: "#3f2f1a",
+        trim: "#f1d09a",
+        kind: "wood"
+    };
+}
+
 function drawFirstPersonScene() {
     const self = getSelfPlayer();
 
@@ -99,28 +159,41 @@ function drawFirstPersonScene() {
     drawProjectedBulletTrails(self);
 
     const objects = [
-        ...getBoundaryWallSegments().map((segment, index) => ({
+        ...getBoundaryWallSegments().map(segment => ({
             ...segment,
             depth: getWallSortDepth(self, segment),
-            color: ["#2563eb", "#0891b2", "#7c3aed", "#0f766e"][index % 4],
-            accent: ["#bfdbfe", "#67e8f9", "#ddd6fe", "#99f6e4"][index % 4]
+            color: "#6b3f1d",
+            accent: "#d6a05f",
+            roof: "#3f2412",
+            trim: "#f1d09a",
+            kind: "fence"
         })),
-        ...getObstacleWallSegments().map((segment, index) => ({
-            ...segment,
-            depth: getWallSortDepth(self, segment),
-            color: ["#f97316", "#dc2626", "#16a34a", "#9333ea", "#0284c7"][index % 5],
-            accent: ["#fed7aa", "#fecaca", "#bbf7d0", "#e9d5ff", "#bae6fd"][index % 5]
-        })),
+        ...getObstacleWallSegments().map(segment => {
+            const farmPalette = getFarmWallPalette(segment.obstacleIndex);
+
+            return {
+                ...segment,
+                depth: getWallSortDepth(self, segment),
+                color: farmPalette.color,
+                accent: farmPalette.accent,
+                roof: farmPalette.roof,
+                trim: farmPalette.trim,
+                kind: farmPalette.kind
+            };
+        }),
+        ...getProjectedFarmRoofs(self),
         ...getProjectedPlayers(self),
         ...getProjectedBullets(self)
     ];
 
     objects
-        .filter(object => object.type === "wall" || object.depth > NEAR_PLANE)
+        .filter(object => object.type === "wall" || object.type === "roof" || object.depth > NEAR_PLANE)
         .sort((a, b) => b.depth - a.depth)
         .forEach(object => {
             if (object.type === "sprite") {
                 drawProjectedSprite(object);
+            } else if (object.type === "roof") {
+                drawProjectedRoof(object);
             } else {
                 drawProjectedWall(self, object);
             }
@@ -132,9 +205,9 @@ function drawSkyAndFloor() {
     const time = performance.now() * 0.001;
 
     const sky = context.createLinearGradient(0, 0, 0, horizon);
-    sky.addColorStop(0, "#38bdf8");
-    sky.addColorStop(0.45, "#7dd3fc");
-    sky.addColorStop(1, "#dbeafe");
+    sky.addColorStop(0, "#7dd3fc");
+    sky.addColorStop(0.5, "#bae6fd");
+    sky.addColorStop(1, "#e0f2fe");
 
     context.fillStyle = sky;
     context.fillRect(0, 0, canvas.width, horizon);
@@ -142,10 +215,10 @@ function drawSkyAndFloor() {
     drawClouds(horizon, time);
 
     const floor = context.createLinearGradient(0, horizon, 0, canvas.height);
-    floor.addColorStop(0, "#86efac");
-    floor.addColorStop(0.3, "#22c55e");
-    floor.addColorStop(0.7, "#15803d");
-    floor.addColorStop(1, "#052e16");
+    floor.addColorStop(0, "#a3e635");
+    floor.addColorStop(0.28, "#65a30d");
+    floor.addColorStop(0.72, "#4d7c0f");
+    floor.addColorStop(1, "#365314");
 
     context.fillStyle = floor;
     context.fillRect(0, horizon, canvas.width, canvas.height - horizon);
@@ -159,8 +232,8 @@ function drawSkyAndFloor() {
         canvas.height * 0.85
     );
 
-    glow.addColorStop(0, "rgba(255, 255, 255, 0.12)");
-    glow.addColorStop(0.45, "rgba(250, 204, 21, 0.07)");
+    glow.addColorStop(0, "rgba(255, 255, 255, 0.14)");
+    glow.addColorStop(0.45, "rgba(250, 204, 21, 0.08)");
     glow.addColorStop(1, "rgba(0, 0, 0, 0)");
 
     context.fillStyle = glow;
@@ -700,6 +773,104 @@ function getSmoothRemoteWeaponAim(player, self) {
     aimState.updatedAt = now;
 
     return aimState;
+}
+
+function getProjectedFarmRoofs(self) {
+    return state.obstacles.flatMap((obstacle, obstacleIndex) => {
+        const palette = getFarmWallPalette(obstacleIndex);
+
+        if (!["barn", "wood", "garage", "hay"].includes(palette.kind)) {
+            return [];
+        }
+
+        const x = obstacle.x;
+        const y = obstacle.y;
+        const right = obstacle.x + obstacle.width;
+        const bottom = obstacle.y + obstacle.height;
+
+        const corners = [
+            { x, y },
+            { x: right, y },
+            { x: right, y: bottom },
+            { x, y: bottom }
+        ];
+
+        const projectedCorners = corners
+            .map(point => {
+                const projected = projectWorldPoint(self, point.x, point.y);
+
+                return {
+                    x: projected.x,
+                    depth: projected.depth,
+                    groundY: getGroundScreenY(projected.depth),
+                    topY: getGroundScreenY(projected.depth) - getProjectedHeight(projected.depth, WALL_HEIGHT)
+                };
+            })
+            .filter(point => point.depth > NEAR_PLANE);
+
+        if (projectedCorners.length < 3) {
+            return [];
+        }
+
+        const avgDepth = projectedCorners.reduce((sum, point) => sum + point.depth, 0) / projectedCorners.length;
+
+        return [{
+            type: "roof",
+            depth: avgDepth + 2,
+            points: projectedCorners,
+            color: palette.roof,
+            accent: palette.trim,
+            kind: palette.kind
+        }];
+    });
+}
+
+function drawProjectedRoof(roof) {
+    if (!roof.points || roof.points.length < 3) {
+        return;
+    }
+
+    context.save();
+
+    const centerX = roof.points.reduce((sum, point) => sum + point.x, 0) / roof.points.length;
+    const centerY = roof.points.reduce((sum, point) => sum + point.topY, 0) / roof.points.length;
+
+    const gradient = context.createLinearGradient(centerX, centerY - 40, centerX, centerY + 80);
+    gradient.addColorStop(0, roof.accent);
+    gradient.addColorStop(0.45, roof.color);
+    gradient.addColorStop(1, "#111827");
+
+    context.fillStyle = gradient;
+    context.strokeStyle = roof.accent;
+    context.lineWidth = 2;
+
+    context.beginPath();
+    context.moveTo(roof.points[0].x, roof.points[0].topY);
+
+    for (let i = 1; i < roof.points.length; i++) {
+        context.lineTo(roof.points[i].x, roof.points[i].topY);
+    }
+
+    context.closePath();
+    context.fill();
+
+    context.globalAlpha = 0.55;
+    context.stroke();
+
+    context.globalAlpha = 0.25;
+    context.strokeStyle = "rgba(255, 255, 255, 0.7)";
+    context.lineWidth = 1;
+
+    context.beginPath();
+
+    for (const point of roof.points) {
+        context.moveTo(centerX, centerY);
+        context.lineTo(point.x, point.topY);
+    }
+
+    context.stroke();
+
+    context.restore();
 }
 
 
@@ -1275,15 +1446,19 @@ function drawMinimap() {
     context.fillRect(x, y, width, height);
     context.strokeRect(x, y, width, height);
 
-    context.fillStyle = "rgba(148, 163, 184, 0.35)";
+    for (const [index, obstacle] of state.obstacles.entries()) {
+        const palette = getFarmWallPalette(index);
 
-    for (const obstacle of state.obstacles) {
+        context.fillStyle = palette.color;
+        context.globalAlpha = 0.72;
         context.fillRect(
             x + obstacle.x / WORLD_WIDTH * width,
             y + obstacle.y / WORLD_HEIGHT * height,
             obstacle.width / WORLD_WIDTH * width,
             obstacle.height / WORLD_HEIGHT * height
         );
+
+        context.globalAlpha = 1;
     }
 
     for (const player of getRenderablePlayers()) {
@@ -1325,29 +1500,30 @@ function getBoundaryWallSegments() {
 }
 
 function getObstacleWallSegments() {
-    return state.obstacles.flatMap(obstacle => {
+    return state.obstacles.flatMap((obstacle, obstacleIndex) => {
         const x = obstacle.x;
         const y = obstacle.y;
         const right = obstacle.x + obstacle.width;
         const bottom = obstacle.y + obstacle.height;
 
         return [
-            createWall(x, y, right, y),
-            createWall(right, y, right, bottom),
-            createWall(right, bottom, x, bottom),
-            createWall(x, bottom, x, y)
+            createWall(x, y, right, y, obstacleIndex),
+            createWall(right, y, right, bottom, obstacleIndex),
+            createWall(right, bottom, x, bottom, obstacleIndex),
+            createWall(x, bottom, x, y, obstacleIndex)
         ];
     });
 }
 
-function createWall(x1, y1, x2, y2) {
+function createWall(x1, y1, x2, y2, obstacleIndex = -1) {
     return {
         type: "wall",
         x1,
         y1,
         x2,
         y2,
-        depth: 0
+        depth: 0,
+        obstacleIndex
     };
 }
 
@@ -1357,6 +1533,7 @@ function getWallDepth(self, wall) {
 
     return projectWorldPoint(self, midpointX, midpointY).depth;
 }
+
 
 function getWallSortDepth(self, wall) {
     const start = getCameraSpacePoint(self, wall.x1, wall.y1);

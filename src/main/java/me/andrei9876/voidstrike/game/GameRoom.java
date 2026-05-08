@@ -46,16 +46,45 @@ public class GameRoom {
     private static final long ROUND_END_DISPLAY_MS = 10_000;
 
     private static final List<Obstacle> OBSTACLES = List.of(
-            new Obstacle(360, 130, 150, 130),
-            new Obstacle(650, 80, 140, 240),
-            new Obstacle(1010, 130, 220, 120),
-            new Obstacle(220, 390, 210, 130),
-            new Obstacle(590, 390, 160, 160),
-            new Obstacle(850, 380, 160, 170),
-            new Obstacle(1180, 390, 210, 130),
-            new Obstacle(370, 660, 220, 115),
-            new Obstacle(780, 650, 160, 140),
-            new Obstacle(1080, 660, 150, 115)
+            // Garduri / cover la spawn RED
+            new Obstacle(120, 120, 34, 210),
+            new Obstacle(120, 570, 34, 210),
+            new Obstacle(190, 210, 145, 34),
+            new Obstacle(190, 655, 145, 34),
+
+            // Hambar mare rosu
+            new Obstacle(405, 120, 255, 190),
+            new Obstacle(465, 310, 68, 95),
+            new Obstacle(592, 310, 68, 95),
+
+            // Sopron / zona de lemn
+            new Obstacle(250, 405, 235, 42),
+            new Obstacle(250, 405, 36, 160),
+            new Obstacle(449, 405, 36, 160),
+
+            // Baloți de fan si lazi in curte
+            new Obstacle(560, 515, 95, 55),
+            new Obstacle(705, 420, 70, 70),
+            new Obstacle(770, 570, 125, 58),
+            new Obstacle(930, 455, 72, 72),
+
+            // Garaj rosu in dreapta
+            new Obstacle(1085, 185, 270, 155),
+            new Obstacle(1135, 340, 80, 70),
+
+            // Garduri / cover dreapta
+            new Obstacle(1110, 555, 320, 35),
+            new Obstacle(1190, 655, 155, 38),
+            new Obstacle(1370, 120, 34, 210),
+            new Obstacle(1370, 570, 34, 210),
+
+            // Garduri / cover la spawn BLUE
+            new Obstacle(1280, 210, 145, 34),
+            new Obstacle(1280, 655, 145, 34),
+
+            // Props mici pentru cover extra
+            new Obstacle(650, 720, 75, 45),
+            new Obstacle(870, 230, 80, 45)
     );
 
     private final String id;
@@ -99,8 +128,8 @@ public class GameRoom {
         String playerId = session.getId();
         String team = chooseTeam();
 
-        double spawnX = team.equals("RED") ? 160 : MAP_WIDTH - 160;
-        double spawnY = 140 + Math.random() * (MAP_HEIGHT - 280);
+        double spawnX = team.equals("RED") ? 85 : MAP_WIDTH - 85;
+        double spawnY = 260 + Math.random() * 380;
 
         sessions.put(playerId, session);
         players.put(playerId, new PlayerState(playerId, playerName, team, spawnX, spawnY));
@@ -460,8 +489,8 @@ public class GameRoom {
     }
 
     private void respawnPlayer(PlayerState player) {
-        double spawnX = player.getTeam().equals("RED") ? 160 : MAP_WIDTH - 160;
-        double spawnY = 140 + Math.random() * (MAP_HEIGHT - 280);
+        double spawnX = player.getTeam().equals("RED") ? 85 : MAP_WIDTH - 85;
+        double spawnY = 260 + Math.random() * 380;
 
         player.respawn(spawnX, spawnY);
     }
