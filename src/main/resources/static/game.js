@@ -27,6 +27,10 @@ const WORLD_HEIGHT = 900;
 
 const PLAYER_RADIUS = 20;
 const BULLET_RADIUS = 5;
+const FOV = Math.PI / 3;
+const WALL_HEIGHT = 170;
+const NEAR_PLANE = 8;
+const MOUSE_SENSITIVITY = 0.0024;
 
 const MIN_NAME_LENGTH = 3;
 const MAX_NAME_LENGTH = 16;
@@ -49,6 +53,8 @@ let scoreboardVisible = false;
 let lastSelfAmmo = null;
 let recoilKick = 0;
 let lastReloading = false;
+let viewAngle = 0;
+let bobTime = 0;
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -200,12 +206,17 @@ canvas.addEventListener("mousemove", event => {
     mouse.x = event.clientX - rect.left;
     mouse.y = event.clientY - rect.top;
 
+    if (document.pointerLockElement === canvas) {
+        viewAngle = normalizeAngle(viewAngle + event.movementX * MOUSE_SENSITIVITY);
+    }
+
     updateMouseWorldPosition();
 });
 
 canvas.addEventListener("mousedown", event => {
     if (event.button === 0) {
         resumeAudio();
+        canvas.requestPointerLock();
         mouse.down = true;
     }
 });
@@ -383,6 +394,12 @@ function gameLoop() {
     updateMouseWorldPosition();
     updateAimAngle();
 
+    if (keys.up || keys.down || keys.left || keys.right) {
+        bobTime += 0.12;
+    } else {
+        bobTime *= 0.9;
+    }
+
     recoilKick *= 0.88;
 
     render();
@@ -415,24 +432,21 @@ function updateAimAngle() {
     const self = getSelfPlayer();
 
     if (!self) {
-        mouse.angle = 0;
+        mouse.angle = viewAngle;
         return;
     }
 
-    mouse.angle = Math.atan2(mouse.worldY - self.y, mouse.worldX - self.x);
+    if (viewAngle === 0 && self.angle !== 0) {
+        viewAngle = self.angle;
+    }
+
+    mouse.angle = viewAngle;
 }
 
 function render() {
     context.clearRect(0, 0, canvas.width, canvas.height);
 
-    drawBackground();
-    drawFloorLighting();
-    drawGrid();
-    drawSpawnZones();
-    drawObstacles();
-    drawMapBorder();
-    drawBullets();
-    drawPlayers();
+    drawFirstPersonScene();
     drawGunOverlay();
     drawCrosshair();
     drawMinimap();
@@ -442,6 +456,276 @@ function render() {
 function drawBackground() {
     context.fillStyle = "#080b12";
     context.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawFirstPersonScene() {
+    const self = getSelfPlayer();
+
+    if (!self) {
+        drawBackground();
+        drawFloorLighting();
+        drawGrid();
+        return;
+    }
+
+    drawSkyAndFloor();
+    drawProjectedGrid(self);
+
+    const objects = [
+        ...getBoundaryWallSegments().map(segment => ({
+            ...segment,
+            depth: getWallDepth(self, segment),
+            color: "#1f3a55",
+            accent: "#38bdf8"
+        })),
+        ...getObstacleWallSegments().map(segment => ({
+            ...segment,
+            depth: getWallDepth(self, segment),
+            color: "#26364f",
+            accent: "#94a3b8"
+        })),
+        ...getProjectedPlayers(self),
+        ...getProjectedBullets(self)
+    ];
+
+    objects
+        .filter(object => object.depth > NEAR_PLANE)
+        .sort((a, b) => b.depth - a.depth)
+        .forEach(object => {
+            if (object.type === "sprite") {
+                drawProjectedSprite(object);
+            } else {
+                drawProjectedWall(self, object);
+            }
+        });
+}
+
+function drawSkyAndFloor() {
+    const horizon = canvas.height * 0.48;
+    const sky = context.createLinearGradient(0, 0, 0, horizon);
+    sky.addColorStop(0, "#7dd3fc");
+    sky.addColorStop(0.55, "#93c5fd");
+    sky.addColorStop(1, "#dbeafe");
+
+    context.fillStyle = sky;
+    context.fillRect(0, 0, canvas.width, horizon);
+
+    const floor = context.createLinearGradient(0, horizon, 0, canvas.height);
+    floor.addColorStop(0, "#475569");
+    floor.addColorStop(0.35, "#334155");
+    floor.addColorStop(1, "#111827");
+
+    context.fillStyle = floor;
+    context.fillRect(0, horizon, canvas.width, canvas.height - horizon);
+}
+
+function drawProjectedGrid(self) {
+    const spacing = 120;
+
+    context.save();
+    context.strokeStyle = "rgba(226, 232, 240, 0.12)";
+    context.lineWidth = 1;
+
+    for (let x = 0; x <= WORLD_WIDTH; x += spacing) {
+        drawProjectedFloorLine(self, x, 0, x, WORLD_HEIGHT);
+    }
+
+    for (let y = 0; y <= WORLD_HEIGHT; y += spacing) {
+        drawProjectedFloorLine(self, 0, y, WORLD_WIDTH, y);
+    }
+
+    context.restore();
+}
+
+function drawProjectedFloorLine(self, ax, ay, bx, by) {
+    const start = projectWorldPoint(self, ax, ay);
+    const end = projectWorldPoint(self, bx, by);
+
+    if (start.depth <= NEAR_PLANE || end.depth <= NEAR_PLANE) {
+        return;
+    }
+
+    const y1 = getGroundScreenY(start.depth);
+    const y2 = getGroundScreenY(end.depth);
+
+    context.beginPath();
+    context.moveTo(start.x, y1);
+    context.lineTo(end.x, y2);
+    context.stroke();
+}
+
+function drawProjectedWall(self, wall) {
+    const start = projectWorldPoint(self, wall.x1, wall.y1);
+    const end = projectWorldPoint(self, wall.x2, wall.y2);
+
+    if (start.depth <= NEAR_PLANE || end.depth <= NEAR_PLANE) {
+        return;
+    }
+
+    const bottomA = getGroundScreenY(start.depth);
+    const bottomB = getGroundScreenY(end.depth);
+    const topA = bottomA - getProjectedHeight(start.depth, WALL_HEIGHT);
+    const topB = bottomB - getProjectedHeight(end.depth, WALL_HEIGHT);
+    const shade = clamp(1 - wall.depth / 1300, 0.28, 0.95);
+
+    context.save();
+    context.globalAlpha = shade;
+    context.fillStyle = wall.color;
+    context.beginPath();
+    context.moveTo(start.x, topA);
+    context.lineTo(end.x, topB);
+    context.lineTo(end.x, bottomB);
+    context.lineTo(start.x, bottomA);
+    context.closePath();
+    context.fill();
+
+    context.globalAlpha = clamp(shade + 0.15, 0.35, 1);
+    context.strokeStyle = wall.accent;
+    context.lineWidth = 2;
+    context.stroke();
+    context.restore();
+}
+
+function drawProjectedSprite(sprite) {
+    context.save();
+    context.translate(sprite.x, sprite.y);
+
+    context.globalAlpha = sprite.alpha;
+    context.fillStyle = sprite.shadow || "rgba(0, 0, 0, 0.32)";
+    context.beginPath();
+    context.ellipse(0, sprite.height * 0.42, sprite.width * 0.42, sprite.height * 0.08, 0, 0, Math.PI * 2);
+    context.fill();
+
+    context.fillStyle = sprite.color;
+    context.strokeStyle = sprite.accent;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.ellipse(0, 0, sprite.width * 0.34, sprite.height * 0.5, 0, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+
+    if (sprite.label) {
+        context.fillStyle = "#f8fafc";
+        context.font = `${Math.max(10, Math.min(15, sprite.width * 0.12))}px Arial`;
+        context.textAlign = "center";
+        context.fillText(sprite.label, 0, -sprite.height * 0.62);
+    }
+
+    context.restore();
+}
+
+function getProjectedPlayers(self) {
+    return players
+        .filter(player => player.id !== playerId)
+        .map(player => {
+            const projected = projectWorldPoint(self, player.x, player.y);
+            const height = getProjectedHeight(projected.depth, 130);
+            const width = height * 0.42;
+
+            return {
+                type: "sprite",
+                depth: projected.depth,
+                x: projected.x,
+                y: getGroundScreenY(projected.depth) - height / 2,
+                width,
+                height,
+                color: player.team === "RED" ? "#ef4444" : "#3b82f6",
+                accent: player.team === "RED" ? "#fecaca" : "#bfdbfe",
+                alpha: clamp(1 - projected.depth / 1700, 0.35, 1),
+                label: player.name
+            };
+        });
+}
+
+function getProjectedBullets(self) {
+    return bullets.map(bullet => {
+        const projected = projectWorldPoint(self, bullet.x, bullet.y);
+        const size = getProjectedHeight(projected.depth, 18);
+
+        return {
+            type: "sprite",
+            depth: projected.depth,
+            x: projected.x,
+            y: getGroundScreenY(projected.depth) - size,
+            width: size,
+            height: size,
+            color: "#facc15",
+            accent: "#fef3c7",
+            shadow: "rgba(250, 204, 21, 0.22)",
+            alpha: 1
+        };
+    });
+}
+
+function getBoundaryWallSegments() {
+    return [
+        createWall(0, 0, WORLD_WIDTH, 0),
+        createWall(WORLD_WIDTH, 0, WORLD_WIDTH, WORLD_HEIGHT),
+        createWall(WORLD_WIDTH, WORLD_HEIGHT, 0, WORLD_HEIGHT),
+        createWall(0, WORLD_HEIGHT, 0, 0)
+    ];
+}
+
+function getObstacleWallSegments() {
+    return obstacles.flatMap(obstacle => {
+        const x = obstacle.x;
+        const y = obstacle.y;
+        const right = obstacle.x + obstacle.width;
+        const bottom = obstacle.y + obstacle.height;
+
+        return [
+            createWall(x, y, right, y),
+            createWall(right, y, right, bottom),
+            createWall(right, bottom, x, bottom),
+            createWall(x, bottom, x, y)
+        ];
+    });
+}
+
+function createWall(x1, y1, x2, y2) {
+    return {
+        type: "wall",
+        x1,
+        y1,
+        x2,
+        y2,
+        depth: 0
+    };
+}
+
+function getWallDepth(self, wall) {
+    const midpointX = (wall.x1 + wall.x2) / 2;
+    const midpointY = (wall.y1 + wall.y2) / 2;
+
+    return projectWorldPoint(self, midpointX, midpointY).depth;
+}
+
+function projectWorldPoint(self, worldX, worldY) {
+    const dx = worldX - self.x;
+    const dy = worldY - self.y;
+    const cos = Math.cos(viewAngle);
+    const sin = Math.sin(viewAngle);
+    const side = -sin * dx + cos * dy;
+    const depth = cos * dx + sin * dy;
+    const projection = canvas.width / (2 * Math.tan(FOV / 2));
+
+    return {
+        x: canvas.width / 2 + side / Math.max(depth, NEAR_PLANE) * projection,
+        depth
+    };
+}
+
+function getGroundScreenY(depth) {
+    const horizon = canvas.height * 0.48;
+    const projection = canvas.width / (2 * Math.tan(FOV / 2));
+
+    return horizon + 70 / Math.max(depth, NEAR_PLANE) * projection;
+}
+
+function getProjectedHeight(depth, worldHeight) {
+    const projection = canvas.width / (2 * Math.tan(FOV / 2));
+
+    return worldHeight / Math.max(depth, NEAR_PLANE) * projection;
 }
 
 function drawFloorLighting() {
@@ -654,6 +938,8 @@ function drawBullets() {
 
 function drawCrosshair() {
     const size = 10 + recoilKick;
+    const x = canvas.width / 2;
+    const y = canvas.height / 2;
 
     context.save();
 
@@ -661,18 +947,18 @@ function drawCrosshair() {
     context.lineWidth = 2;
 
     context.beginPath();
-    context.moveTo(mouse.x - size, mouse.y);
-    context.lineTo(mouse.x - 4, mouse.y);
-    context.moveTo(mouse.x + 4, mouse.y);
-    context.lineTo(mouse.x + size, mouse.y);
-    context.moveTo(mouse.x, mouse.y - size);
-    context.lineTo(mouse.x, mouse.y - 4);
-    context.moveTo(mouse.x, mouse.y + 4);
-    context.lineTo(mouse.x, mouse.y + size);
+    context.moveTo(x - size, y);
+    context.lineTo(x - 4, y);
+    context.moveTo(x + 4, y);
+    context.lineTo(x + size, y);
+    context.moveTo(x, y - size);
+    context.lineTo(x, y - 4);
+    context.moveTo(x, y + 4);
+    context.lineTo(x, y + size);
     context.stroke();
 
     context.beginPath();
-    context.arc(mouse.x, mouse.y, 14 + recoilKick * 0.4, 0, Math.PI * 2);
+    context.arc(x, y, 14 + recoilKick * 0.4, 0, Math.PI * 2);
     context.stroke();
 
     context.restore();
@@ -685,10 +971,12 @@ function drawGunOverlay() {
         return;
     }
 
-    const sway = Math.sin(performance.now() / 120) * (keys.up || keys.down || keys.left || keys.right ? 2 : 0);
+    const moving = keys.up || keys.down || keys.left || keys.right;
+    const sway = Math.sin(bobTime) * (moving ? 7 : 1.5);
+    const bob = Math.abs(Math.cos(bobTime)) * (moving ? 8 : 2);
     const recoil = recoilKick * 0.9;
     const baseX = canvas.width * 0.64 + sway;
-    const baseY = canvas.height - 92 + recoil;
+    const baseY = canvas.height - 92 + bob + recoil;
 
     context.save();
     context.translate(baseX, baseY);
@@ -762,6 +1050,14 @@ function drawMinimap() {
         context.beginPath();
         context.arc(px, py, 4, 0, Math.PI * 2);
         context.fill();
+
+        if (player.id === playerId) {
+            context.strokeStyle = "#bbf7d0";
+            context.beginPath();
+            context.moveTo(px, py);
+            context.lineTo(px + Math.cos(viewAngle) * 16, py + Math.sin(viewAngle) * 16);
+            context.stroke();
+        }
     }
 
     context.restore();
@@ -946,4 +1242,16 @@ function escapeHtml(value) {
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
+}
+
+function normalizeAngle(angle) {
+    while (angle <= -Math.PI) {
+        angle += Math.PI * 2;
+    }
+
+    while (angle > Math.PI) {
+        angle -= Math.PI * 2;
+    }
+
+    return angle;
 }

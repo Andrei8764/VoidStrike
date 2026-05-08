@@ -22,7 +22,10 @@ public class GameRoom {
 
     private static final double MAP_WIDTH = 1600;
     private static final double MAP_HEIGHT = 900;
-    private static final double PLAYER_SPEED = 260;
+    private static final double PLAYER_MAX_SPEED = 410;
+    private static final double PLAYER_ACCELERATION = 2200;
+    private static final double PLAYER_FRICTION = 9.5;
+    private static final double PLAYER_STOP_SPEED = 90;
     private static final double PLAYER_RADIUS = 20;
     private static final double BULLET_HIT_RADIUS = 28;
     private static final int KILL_FEED_LIMIT = 6;
@@ -139,36 +142,7 @@ public class GameRoom {
                 player.startReload(now);
             }
 
-            double dx = 0;
-            double dy = 0;
-
-            if (player.isUp()) {
-                dy -= 1;
-            }
-
-            if (player.isDown()) {
-                dy += 1;
-            }
-
-            if (player.isLeft()) {
-                dx -= 1;
-            }
-
-            if (player.isRight()) {
-                dx += 1;
-            }
-
-            double length = Math.sqrt(dx * dx + dy * dy);
-
-            if (length > 0) {
-                dx /= length;
-                dy /= length;
-            }
-
-            double nextX = player.getX() + dx * PLAYER_SPEED * deltaSeconds;
-            double nextY = player.getY() + dy * PLAYER_SPEED * deltaSeconds;
-
-            movePlayerWithCollision(player, nextX, nextY);
+            updatePlayerMovement(player, deltaSeconds);
 
             if (canShoot(player, now)) {
                 spawnBullet(player);
@@ -180,6 +154,95 @@ public class GameRoom {
                 }
             }
         }
+    }
+
+    private void updatePlayerMovement(PlayerState player, double deltaSeconds) {
+        double forward = 0;
+        double strafe = 0;
+
+        if (player.isUp()) {
+            forward += 1;
+        }
+
+        if (player.isDown()) {
+            forward -= 1;
+        }
+
+        if (player.isLeft()) {
+            strafe -= 1;
+        }
+
+        if (player.isRight()) {
+            strafe += 1;
+        }
+
+        applyFriction(player, deltaSeconds);
+
+        double length = Math.sqrt(forward * forward + strafe * strafe);
+
+        if (length > 0) {
+            forward /= length;
+            strafe /= length;
+
+            double cos = Math.cos(player.getAngle());
+            double sin = Math.sin(player.getAngle());
+
+            double wishDirectionX = cos * forward - sin * strafe;
+            double wishDirectionY = sin * forward + cos * strafe;
+
+            accelerate(player, wishDirectionX, wishDirectionY, PLAYER_MAX_SPEED, PLAYER_ACCELERATION, deltaSeconds);
+        }
+
+        double nextX = player.getX() + player.getVelocityX() * deltaSeconds;
+        double nextY = player.getY() + player.getVelocityY() * deltaSeconds;
+
+        movePlayerWithCollision(player, nextX, nextY);
+    }
+
+    private void applyFriction(PlayerState player, double deltaSeconds) {
+        double speed = Math.sqrt(
+                player.getVelocityX() * player.getVelocityX()
+                        + player.getVelocityY() * player.getVelocityY()
+        );
+
+        if (speed < 0.001) {
+            player.setVelocityX(0);
+            player.setVelocityY(0);
+            return;
+        }
+
+        double control = Math.max(speed, PLAYER_STOP_SPEED);
+        double drop = control * PLAYER_FRICTION * deltaSeconds;
+        double newSpeed = Math.max(speed - drop, 0);
+        double scale = newSpeed / speed;
+
+        player.setVelocityX(player.getVelocityX() * scale);
+        player.setVelocityY(player.getVelocityY() * scale);
+    }
+
+    private void accelerate(
+            PlayerState player,
+            double wishDirectionX,
+            double wishDirectionY,
+            double maxSpeed,
+            double acceleration,
+            double deltaSeconds
+    ) {
+        double currentSpeed = player.getVelocityX() * wishDirectionX + player.getVelocityY() * wishDirectionY;
+        double addSpeed = maxSpeed - currentSpeed;
+
+        if (addSpeed <= 0) {
+            return;
+        }
+
+        double accelerationSpeed = acceleration * deltaSeconds;
+
+        if (accelerationSpeed > addSpeed) {
+            accelerationSpeed = addSpeed;
+        }
+
+        player.setVelocityX(player.getVelocityX() + accelerationSpeed * wishDirectionX);
+        player.setVelocityY(player.getVelocityY() + accelerationSpeed * wishDirectionY);
     }
 
     private void handleWeaponSwitch(PlayerState player) {
@@ -310,10 +373,14 @@ public class GameRoom {
 
         if (!collidesWithObstacle(clampedX, player.getY(), PLAYER_RADIUS)) {
             player.setX(clampedX);
+        } else {
+            player.setVelocityX(0);
         }
 
         if (!collidesWithObstacle(player.getX(), clampedY, PLAYER_RADIUS)) {
             player.setY(clampedY);
+        } else {
+            player.setVelocityY(0);
         }
     }
 

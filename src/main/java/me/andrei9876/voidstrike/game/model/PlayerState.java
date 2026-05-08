@@ -8,6 +8,8 @@ public class PlayerState {
 
     private double x;
     private double y;
+    private double velocityX;
+    private double velocityY;
     private double angle;
     private int hp;
 
@@ -35,6 +37,8 @@ public class PlayerState {
         this.team = team;
         this.x = x;
         this.y = y;
+        this.velocityX = 0.0;
+        this.velocityY = 0.0;
         this.angle = 0.0;
         this.hp = 100;
         this.kills = 0;
@@ -59,6 +63,8 @@ public class PlayerState {
     public void respawn(double x, double y) {
         this.x = x;
         this.y = y;
+        this.velocityX = 0.0;
+        this.velocityY = 0.0;
         this.hp = 100;
         this.ammo = weapon.getMagazineSize();
         this.reloading = false;
@@ -129,6 +135,14 @@ public class PlayerState {
         return y;
     }
 
+    public double getVelocityX() {
+        return velocityX;
+    }
+
+    public double getVelocityY() {
+        return velocityY;
+    }
+
     public double getAngle() {
         return angle;
     }
@@ -195,6 +209,14 @@ public class PlayerState {
 
     public void setY(double y) {
         this.y = y;
+    }
+
+    public void setVelocityX(double velocityX) {
+        this.velocityX = velocityX;
+    }
+
+    public void setVelocityY(double velocityY) {
+        this.velocityY = velocityY;
     }
 
     public void setHp(int hp) {
