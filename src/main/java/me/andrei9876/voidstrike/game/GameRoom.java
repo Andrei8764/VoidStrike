@@ -27,13 +27,14 @@ public class GameRoom {
     private static final double PLAYER_FRICTION = 9.5;
     private static final double PLAYER_STOP_SPEED = 90;
     private static final double PLAYER_RADIUS = 20;
-    private static final double PLAYER_HEIGHT = 145;
+    private static final double PLAYER_HEIGHT = 105;
     private static final double MAX_BULLET_Z = 700;
-    private static final double PLAYER_HEAD_MIN_Z = 108;
-    private static final double PLAYER_HEAD_MAX_Z = 152;
-    private static final double BULLET_SPAWN_Z = 92;
+    private static final double PLAYER_BODY_MAX_Z = 78;
+    private static final double PLAYER_HEAD_MIN_Z = 72;
+    private static final double PLAYER_HEAD_MAX_Z = 126;
+    private static final double BULLET_SPAWN_Z = 68;
     private static final double BULLET_HIT_RADIUS = 28;
-    private static final double HEADSHOT_RADIUS = 19;
+    private static final double HEADSHOT_RADIUS = 26;
     private static final int KILL_FEED_LIMIT = 6;
     private static final long KILL_FEED_TTL_MS = 8_000;
 
@@ -347,8 +348,9 @@ public class GameRoom {
 
                 double bodyDistance = distance(bullet.getX(), bullet.getY(), player.getX(), player.getY());
                 boolean headshot = isHeadshot(bullet, player);
+                boolean bodyshot = bodyDistance <= BULLET_HIT_RADIUS && bullet.getZ() <= PLAYER_BODY_MAX_Z;
 
-                if (headshot || bodyDistance <= BULLET_HIT_RADIUS) {
+                if (headshot || bodyshot) {
                     player.setHp(headshot ? 0 : player.getHp() - bullet.getDamage());
                     bulletIterator.remove();
 

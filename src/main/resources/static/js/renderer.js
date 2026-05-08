@@ -444,7 +444,7 @@ function getProjectedBullets(self) {
     return getRenderableBullets().map(bullet => {
         const projected = projectWorldPoint(self, bullet.x, bullet.y);
         const size = getProjectedHeight(projected.depth, 18);
-        const bulletZ = bullet.z ?? 8;
+        const bulletZ = (bullet.z ?? 8) * 0.62;
 
         return {
             type: "sprite",
@@ -491,7 +491,8 @@ function drawProjectedBulletTrail(self, bullet, alpha) {
     const directionZ = velocityZ / speed;
     const trailLength = clamp(speed * 0.035, 16, 95);
 
-    const bulletZ = bullet.z ?? 8;
+    const visualZScale = 0.62;
+    const bulletZ = (bullet.z ?? 8) * visualZScale;
     const head = projectWorldPoint(self, bullet.x, bullet.y);
     const tail = projectWorldPoint(
         self,
@@ -503,7 +504,7 @@ function drawProjectedBulletTrail(self, bullet, alpha) {
         return;
     }
 
-    const tailZ = bulletZ - directionZ * trailLength;
+    const tailZ = (bullet.z ?? 8) * visualZScale - directionZ * trailLength * visualZScale;
     const headY = getGroundScreenY(head.depth) - getProjectedHeight(head.depth, bulletZ);
     const tailY = getGroundScreenY(tail.depth) - getProjectedHeight(tail.depth, tailZ);
 
