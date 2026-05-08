@@ -43,6 +43,7 @@ public class GameRoom {
     private static final long KILL_FEED_TTL_MS = 8_000;
 
     private static final long ROUND_DURATION_MS = 180_000;
+    private static final long ROUND_END_DISPLAY_MS = 10_000;
 
     private static final List<Obstacle> OBSTACLES = List.of(
             new Obstacle(360, 130, 150, 130),
@@ -69,6 +70,8 @@ public class GameRoom {
     private int redScore = 0;
     private int blueScore = 0;
     private long roundEndsAt = System.currentTimeMillis() + ROUND_DURATION_MS;
+    private boolean roundEnding = false;
+    private long nextRoundStartsAt = 0;
 
     public GameRoom(
             String id,
@@ -144,12 +147,21 @@ public class GameRoom {
     private void updateRound() {
         long now = System.currentTimeMillis();
 
-        if (now < roundEndsAt) {
+        if (!roundEnding && now >= roundEndsAt) {
+            roundEnding = true;
+            nextRoundStartsAt = now + ROUND_END_DISPLAY_MS;
+            bullets.clear();
+            return;
+        }
+
+        if (!roundEnding || now < nextRoundStartsAt) {
             return;
         }
 
         roundNumber++;
         roundEndsAt = now + ROUND_DURATION_MS;
+        roundEnding = false;
+        nextRoundStartsAt = 0;
         bullets.clear();
 
         for (PlayerState player : players.values()) {
@@ -159,6 +171,10 @@ public class GameRoom {
     }
 
     private void updatePlayers(double deltaSeconds) {
+        if (roundEnding) {
+            return;
+        }
+
         long now = System.currentTimeMillis();
 
         for (PlayerState player : players.values()) {
@@ -516,7 +532,10 @@ public class GameRoom {
 
     private void broadcastSnapshot() {
         long now = System.currentTimeMillis();
-        long timeLeftSeconds = Math.max(0, (roundEndsAt - now) / 1000);
+        long timeLeftSeconds = roundEnding
+                ? Math.max(0, (nextRoundStartsAt - now) / 1000)
+                : Math.max(0, (roundEndsAt - now) / 1000);
+
         pruneKillFeed(now);
 
         GameSnapshot snapshot = new GameSnapshot(
@@ -582,7 +601,9 @@ public class GameRoom {
                         roundNumber,
                         timeLeftSeconds,
                         redScore,
-                        blueScore
+                        blueScore,
+                        roundEnding ? "ENDING" : "PLAYING",
+                        getTopPlayersByKd()
                 )
         );
 
@@ -598,6 +619,34 @@ public class GameRoom {
         } catch (IOException exception) {
             throw new IllegalStateException("Could not broadcast game snapshot", exception);
         }
+    }
+
+    private List<GameSnapshot.TopPlayerView> getTopPlayersByKd() {
+        return players.values()
+                .stream()
+                .sorted(
+                        Comparator.comparingDouble(this::calculateKd)
+                                .reversed()
+                                .thenComparing(PlayerState::getKills, Comparator.reverseOrder())
+                                .thenComparing(PlayerState::getDeaths)
+                )
+                .limit(3)
+                .map(player -> new GameSnapshot.TopPlayerView(
+                        player.getName(),
+                        player.getTeam(),
+                        player.getKills(),
+                        player.getDeaths(),
+                        calculateKd(player)
+                ))
+                .toList();
+    }
+
+    private double calculateKd(PlayerState player) {
+        if (player.getDeaths() == 0) {
+            return player.getKills();
+        }
+
+        return Math.round(((double) player.getKills() / player.getDeaths()) * 100.0) / 100.0;
     }
 
     private double distance(double ax, double ay, double bx, double by) {

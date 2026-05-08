@@ -13,7 +13,16 @@ import {
     MIN_NAME_LENGTH,
     NAME_PATTERN
 } from "./config.js";
-import { getRecoilKick, playReloadSound, playShootSound, resumeAudio } from "./audio.js";
+import {
+    getRecoilKick,
+    playDoubleKillSound,
+    playHeadshotSound,
+    playInfinitySound,
+    playMvpSound,
+    playReloadSound,
+    playShootSound,
+    resumeAudio
+} from "./audio.js";
 import {
     setConnectionStatus,
     showPurchaseNotification,
@@ -79,6 +88,9 @@ export function connectWebSocket() {
             addRemoteInterpolationSnapshot(message.players);
             addBulletInterpolationSnapshot(message.bullets);
             detectWeaponPurchase();
+            detectLocalKillSounds();
+            detectMvpSound();
+            detectRoundEndSound();
             reconcileLocalPlayer();
 
             detectLocalShot();
@@ -95,11 +107,12 @@ export function connectWebSocket() {
         state.pendingInputs = [];
         state.inputSequence = 0;
         state.lastUnlockedWeapons = [];
+        state.lastKillFeedEventIds.clear();
+        state.lastLocalKillAt = 0;
+        state.lastRoundNumber = null;
+        state.lastRoundStatus = null;
+        state.roundEndSoundPlayedForRound = null;
         state.remotePlayerStates.clear();
-        state.interpolatedRemotePlayers.clear();
-        state.bulletStates.clear();
-        state.interpolatedBullets.clear();
-        state.fadingBulletTrails = [];
 
         setConnectionStatus("disconnected");
         stopSendingInput();
@@ -228,6 +241,91 @@ function detectReloadSound() {
     }
 
     state.lastReloading = self.reloading;
+}
+
+function detectLocalKillSounds() {
+    const selfName = state.playerName;
+
+    if (!selfName || !state.killFeed.length) {
+        return;
+    }
+
+    const activeEventIds = new Set();
+
+    for (const event of state.killFeed) {
+        const eventId = `${event.attacker}-${event.victim}-${event.weapon}-${event.createdAt}`;
+        activeEventIds.add(eventId);
+
+        if (state.lastKillFeedEventIds.has(eventId)) {
+            continue;
+        }
+
+        if (event.attacker !== selfName) {
+            continue;
+        }
+
+        const now = Date.now();
+        const isHeadshot = event.weapon.includes("HEADSHOT");
+        const isDoubleKill = now - state.lastLocalKillAt <= 4000;
+
+        if (isHeadshot) {
+            playHeadshotSound();
+        }
+
+        if (isDoubleKill) {
+            playDoubleKillSound();
+        }
+
+        state.lastLocalKillAt = now;
+    }
+
+    state.lastKillFeedEventIds = activeEventIds;
+}
+
+function detectMvpSound() {
+    if (!state.round) {
+        return;
+    }
+
+    if (state.lastRoundNumber === null) {
+        state.lastRoundNumber = state.round.roundNumber;
+        return;
+    }
+
+    if (state.round.roundNumber === state.lastRoundNumber) {
+        return;
+    }
+
+    const self = state.players.find(player => player.id === state.playerId);
+
+    if (!self) {
+        state.lastRoundNumber = state.round.roundNumber;
+        return;
+    }
+
+    const highestKills = Math.max(...state.players.map(player => player.kills));
+
+    if (self.kills > 0 && self.kills === highestKills) {
+        playMvpSound();
+    }
+
+    state.lastRoundNumber = state.round.roundNumber;
+}
+
+function detectRoundEndSound() {
+    if (!state.round) {
+        return;
+    }
+
+    if (
+        state.round.status === "ENDING"
+        && state.roundEndSoundPlayedForRound !== state.round.roundNumber
+    ) {
+        playInfinitySound();
+        state.roundEndSoundPlayedForRound = state.round.roundNumber;
+    }
+
+    state.lastRoundStatus = state.round.status;
 }
 
 function detectWeaponPurchase() {

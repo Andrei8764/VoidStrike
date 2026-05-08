@@ -6,9 +6,12 @@ import {
     hpElement,
     killFeedElement,
     magazineElement,
+    nextRoundCountdownElement,
     purchaseNotificationElement,
     redScoreElement,
     reloadStatusElement,
+    roundEndBodyElement,
+    roundEndOverlayElement,
     roundNumberElement,
     roundTimerElement,
     scoreboardBodyElement,
@@ -43,12 +46,33 @@ export function updateHud() {
         roundTimerElement.textContent = formatTime(state.round.timeLeftSeconds);
         redScoreElement.textContent = state.round.redScore;
         blueScoreElement.textContent = state.round.blueScore;
+        updateRoundEndOverlay();
     }
+}
+
+function updateRoundEndOverlay() {
+    if (state.round.status !== "ENDING") {
+        roundEndOverlayElement.classList.add("hidden");
+        return;
+    }
+
+    nextRoundCountdownElement.textContent = state.round.timeLeftSeconds;
+    roundEndBodyElement.innerHTML = (state.round.topPlayers || []).map((player, index) => `
+        <tr class="${player.team.toLowerCase()}">
+            <td>${index + 1}</td>
+            <td>${escapeHtml(player.name)}</td>
+            <td>${player.team}</td>
+            <td>${player.kills}</td>
+            <td>${player.deaths}</td>
+            <td>${Number(player.kd).toFixed(2)}</td>
+        </tr>
+    `).join("");
+
+    roundEndOverlayElement.classList.remove("hidden");
 }
 
 export function showPurchaseNotification(weaponName) {
     purchaseNotificationElement.textContent = `Ai cumpărat ${weaponName}! Arma a fost echipată.`;
-    purchaseNotificationElement.classList.remove("hidden");
 
     if (state.purchaseNotificationTimeoutId !== null) {
         clearTimeout(state.purchaseNotificationTimeoutId);

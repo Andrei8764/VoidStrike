@@ -27,3 +27,7 @@ export const killFeedElement = document.getElementById("killFeed");
 export const weaponShopElement = document.getElementById("weaponShop");
 export const weaponShopButtons = document.querySelectorAll("#weaponShop button[data-weapon-slot]");
 export const purchaseNotificationElement = document.getElementById("purchaseNotification");
+
+export const roundEndOverlayElement = document.getElementById("roundEndOverlay");
+export const roundEndBodyElement = document.getElementById("roundEndBody");
+export const nextRoundCountdownElement = document.getElementById("nextRoundCountdown");

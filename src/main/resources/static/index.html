@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>VoidStrike</title>
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -114,6 +115,31 @@
 <div id="killFeed"></div>
 
 <div id="purchaseNotification" class="hidden"></div>
+
+<div id="roundEndOverlay" class="hidden">
+    <div class="roundEndPanel">
+        <h2>Round Finished</h2>
+        <p>Top 3 players by K/D</p>
+
+        <table>
+            <thead>
+            <tr>
+                <th>#</th>
+                <th>Player</th>
+                <th>Team</th>
+                <th>K</th>
+                <th>D</th>
+                <th>K/D</th>
+            </tr>
+            </thead>
+            <tbody id="roundEndBody"></tbody>
+        </table>
+
+        <div class="nextRoundText">
+            Next round starts in <span id="nextRoundCountdown">5</span>s
+        </div>
+    </div>
+</div>
 
 <canvas id="gameCanvas" width="1280" height="720"></canvas>
 

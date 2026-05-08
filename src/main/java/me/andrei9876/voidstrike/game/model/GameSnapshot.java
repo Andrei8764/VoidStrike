@@ -103,7 +103,18 @@ public class GameSnapshot {
             int roundNumber,
             long timeLeftSeconds,
             int redScore,
-            int blueScore
+            int blueScore,
+            String status,
+            List<TopPlayerView> topPlayers
+    ) {
+    }
+
+    public record TopPlayerView(
+            String name,
+            String team,
+            int kills,
+            int deaths,
+            double kd
     ) {
     }
 }
