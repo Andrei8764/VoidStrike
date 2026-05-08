@@ -55,7 +55,10 @@ public class GameSnapshot {
             String team,
             double x,
             double y,
+            double velocityX,
+            double velocityY,
             double angle,
+            long lastProcessedInputSequence,
             int hp,
             int kills,
             int deaths,
@@ -69,7 +72,9 @@ public class GameSnapshot {
     public record BulletView(
             String id,
             double x,
-            double y
+            double y,
+            double velocityX,
+            double velocityY
     ) {
     }
 

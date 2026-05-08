@@ -29,6 +29,7 @@ public class PlayerState {
     private boolean reload;
     private int weaponSlot;
 
+    private long lastProcessedInputSequence;
     private long lastShotAt;
 
     public PlayerState(String id, String name, String team, double x, double y) {
@@ -47,6 +48,7 @@ public class PlayerState {
         this.ammo = weapon.getMagazineSize();
         this.reloading = false;
         this.reloadEndsAt = 0;
+        this.lastProcessedInputSequence = 0;
     }
 
     public void applyInput(ClientInputMessage input) {
@@ -58,6 +60,7 @@ public class PlayerState {
         this.reload = input.isReload();
         this.weaponSlot = input.getWeaponSlot();
         this.angle = input.getAngle();
+        this.lastProcessedInputSequence = input.getSequence();
     }
 
     public void respawn(double x, double y) {
@@ -197,6 +200,10 @@ public class PlayerState {
 
     public int getWeaponSlot() {
         return weaponSlot;
+    }
+
+    public long getLastProcessedInputSequence() {
+        return lastProcessedInputSequence;
     }
 
     public long getLastShotAt() {

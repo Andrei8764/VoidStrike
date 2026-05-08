@@ -53,4 +53,12 @@ public class BulletState {
     public double getY() {
         return y;
     }
+
+    public double getVelocityX() {
+        return velocityX;
+    }
+
+    public double getVelocityY() {
+        return velocityY;
+    }
 }

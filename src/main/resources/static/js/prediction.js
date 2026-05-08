@@ -1,0 +1,200 @@
+import {
+    CLIENT_DELTA_SECONDS,
+    PLAYER_ACCELERATION,
+    PLAYER_FRICTION,
+    PLAYER_MAX_SPEED,
+    PLAYER_RADIUS,
+    PLAYER_STOP_SPEED,
+    PREDICTION_ERROR_THRESHOLD,
+    WORLD_HEIGHT,
+    WORLD_WIDTH
+} from "./config.js";
+import { state } from "./state.js";
+import { clamp } from "./utils.js";
+
+export function reconcileLocalPlayer() {
+    const serverSelf = state.players.find(player => player.id === state.playerId);
+
+    if (!serverSelf) {
+        state.predictedSelf = null;
+        state.pendingInputs = [];
+        return;
+    }
+
+    if (!state.predictedSelf) {
+        state.predictedSelf = {
+            ...serverSelf
+        };
+        return;
+    }
+
+    state.pendingInputs = state.pendingInputs.filter(
+        input => input.sequence > serverSelf.lastProcessedInputSequence
+    );
+
+    const errorX = serverSelf.x - state.predictedSelf.x;
+    const errorY = serverSelf.y - state.predictedSelf.y;
+    const errorDistance = Math.sqrt(errorX * errorX + errorY * errorY);
+
+    state.predictedSelf = {
+        ...serverSelf
+    };
+
+    for (const input of state.pendingInputs) {
+        simulatePredictedMovement(state.predictedSelf, input, CLIENT_DELTA_SECONDS);
+    }
+
+    if (errorDistance > PREDICTION_ERROR_THRESHOLD) {
+        state.predictedSelf.x = state.predictedSelf.x * 0.85 + serverSelf.x * 0.15;
+        state.predictedSelf.y = state.predictedSelf.y * 0.85 + serverSelf.y * 0.15;
+    }
+}
+
+export function predictLocalPlayer(input, deltaSeconds) {
+    if (!state.predictedSelf) {
+        const serverSelf = state.players.find(player => player.id === state.playerId);
+
+        if (!serverSelf) {
+            return;
+        }
+
+        state.predictedSelf = {
+            ...serverSelf
+        };
+    }
+
+    state.predictedSelf.angle = input.angle;
+    simulatePredictedMovement(state.predictedSelf, input, deltaSeconds);
+
+    const selfIndex = state.players.findIndex(player => player.id === state.playerId);
+
+    if (selfIndex >= 0) {
+        state.players[selfIndex] = {
+            ...state.players[selfIndex],
+            x: state.predictedSelf.x,
+            y: state.predictedSelf.y,
+            velocityX: state.predictedSelf.velocityX,
+            velocityY: state.predictedSelf.velocityY,
+            angle: state.predictedSelf.angle
+        };
+    }
+}
+
+function simulatePredictedMovement(player, input, deltaSeconds) {
+    let forward = 0;
+    let strafe = 0;
+
+    if (input.up) {
+        forward += 1;
+    }
+
+    if (input.down) {
+        forward -= 1;
+    }
+
+    if (input.left) {
+        strafe -= 1;
+    }
+
+    if (input.right) {
+        strafe += 1;
+    }
+
+    applyPredictedFriction(player, deltaSeconds);
+
+    const length = Math.sqrt(forward * forward + strafe * strafe);
+
+    if (length > 0) {
+        forward /= length;
+        strafe /= length;
+
+        const cos = Math.cos(input.angle);
+        const sin = Math.sin(input.angle);
+
+        const wishDirectionX = cos * forward - sin * strafe;
+        const wishDirectionY = sin * forward + cos * strafe;
+
+        acceleratePredictedPlayer(
+            player,
+            wishDirectionX,
+            wishDirectionY,
+            PLAYER_MAX_SPEED,
+            PLAYER_ACCELERATION,
+            deltaSeconds
+        );
+    }
+
+    const nextX = player.x + player.velocityX * deltaSeconds;
+    const nextY = player.y + player.velocityY * deltaSeconds;
+
+    movePredictedPlayerWithCollision(player, nextX, nextY);
+}
+
+function applyPredictedFriction(player, deltaSeconds) {
+    const velocityX = player.velocityX || 0;
+    const velocityY = player.velocityY || 0;
+    const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+
+    if (speed < 0.001) {
+        player.velocityX = 0;
+        player.velocityY = 0;
+        return;
+    }
+
+    const control = Math.max(speed, PLAYER_STOP_SPEED);
+    const drop = control * PLAYER_FRICTION * deltaSeconds;
+    const newSpeed = Math.max(speed - drop, 0);
+    const scale = newSpeed / speed;
+
+    player.velocityX = velocityX * scale;
+    player.velocityY = velocityY * scale;
+}
+
+function acceleratePredictedPlayer(player, wishDirectionX, wishDirectionY, maxSpeed, acceleration, deltaSeconds) {
+    const velocityX = player.velocityX || 0;
+    const velocityY = player.velocityY || 0;
+
+    const currentSpeed = velocityX * wishDirectionX + velocityY * wishDirectionY;
+    const addSpeed = maxSpeed - currentSpeed;
+
+    if (addSpeed <= 0) {
+        return;
+    }
+
+    let accelerationSpeed = acceleration * deltaSeconds;
+
+    if (accelerationSpeed > addSpeed) {
+        accelerationSpeed = addSpeed;
+    }
+
+    player.velocityX = velocityX + accelerationSpeed * wishDirectionX;
+    player.velocityY = velocityY + accelerationSpeed * wishDirectionY;
+}
+
+function movePredictedPlayerWithCollision(player, nextX, nextY) {
+    const clampedX = clamp(nextX, PLAYER_RADIUS, WORLD_WIDTH - PLAYER_RADIUS);
+    const clampedY = clamp(nextY, PLAYER_RADIUS, WORLD_HEIGHT - PLAYER_RADIUS);
+
+    if (!predictedCircleCollidesWithObstacle(clampedX, player.y, PLAYER_RADIUS)) {
+        player.x = clampedX;
+    } else {
+        player.velocityX = 0;
+    }
+
+    if (!predictedCircleCollidesWithObstacle(player.x, clampedY, PLAYER_RADIUS)) {
+        player.y = clampedY;
+    } else {
+        player.velocityY = 0;
+    }
+}
+
+function predictedCircleCollidesWithObstacle(circleX, circleY, radius) {
+    return state.obstacles.some(obstacle => {
+        const closestX = clamp(circleX, obstacle.x, obstacle.x + obstacle.width);
+        const closestY = clamp(circleY, obstacle.y, obstacle.y + obstacle.height);
+        const dx = circleX - closestX;
+        const dy = circleY - closestY;
+
+        return dx * dx + dy * dy <= radius * radius;
+    });
+}

@@ -439,7 +439,10 @@ public class GameRoom {
                                 player.getTeam(),
                                 player.getX(),
                                 player.getY(),
+                                player.getVelocityX(),
+                                player.getVelocityY(),
                                 player.getAngle(),
+                                player.getLastProcessedInputSequence(),
                                 player.getHp(),
                                 player.getKills(),
                                 player.getDeaths(),
@@ -453,7 +456,9 @@ public class GameRoom {
                         .map(bullet -> new GameSnapshot.BulletView(
                                 bullet.getId(),
                                 bullet.getX(),
-                                bullet.getY()
+                                bullet.getY(),
+                                bullet.getVelocityX(),
+                                bullet.getVelocityY()
                         ))
                         .toList(),
                 OBSTACLES.stream()

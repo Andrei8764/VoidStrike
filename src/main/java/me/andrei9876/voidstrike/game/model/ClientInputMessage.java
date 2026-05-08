@@ -3,6 +3,7 @@ package me.andrei9876.voidstrike.game.model;
 public class ClientInputMessage {
 
     private String type;
+    private long sequence;
     private boolean up;
     private boolean down;
     private boolean left;
@@ -14,6 +15,10 @@ public class ClientInputMessage {
 
     public String getType() {
         return type;
+    }
+
+    public long getSequence() {
+        return sequence;
     }
 
     public boolean isUp() {
@@ -50,6 +55,10 @@ public class ClientInputMessage {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public void setSequence(long sequence) {
+        this.sequence = sequence;
     }
 
     public void setUp(boolean up) {
