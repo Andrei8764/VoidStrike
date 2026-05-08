@@ -44,6 +44,7 @@
     <div>Player: <span id="playerName">-</span></div>
     <div>Team: <span id="team">-</span></div>
     <div>HP: <span id="hp">100</span></div>
+    <div>Money: $<span id="balance">0</span></div>
     <div>Weapon: <span id="weapon">Rifle</span></div>
     <div>Ammo: <span id="ammo">30</span>/<span id="magazine">30</span></div>
     <div id="reloadStatus"></div>
@@ -54,9 +55,43 @@
         Click canvas - lock mouse<br>
         Click - shoot<br>
         R - reload<br>
+        B - shop<br>
         1-5 - switch weapon<br>
         TAB - scoreboard
     </div>
+</div>
+
+<div id="weaponShop" class="hidden" tabindex="-1">
+    <div class="shopHeader">
+        <span>Arsenal</span>
+        <kbd>ESC</kbd>
+    </div>
+
+    <h2>Weapon Shop</h2>
+    <p>Primești $150 pentru fiecare kill. Balanța se resetează la final de rundă.</p>
+
+    <button data-weapon-slot="1">
+        <span>Pistol</span>
+        <strong>Free</strong>
+    </button>
+    <button data-weapon-slot="2">
+        <span>Rifle</span>
+        <strong>Free</strong>
+    </button>
+    <button data-weapon-slot="3">
+        <span>SMG</span>
+        <strong>$250</strong>
+    </button>
+    <button data-weapon-slot="4">
+        <span>Shotgun</span>
+        <strong>$400</strong>
+    </button>
+    <button data-weapon-slot="5">
+        <span>Sniper</span>
+        <strong>$650</strong>
+    </button>
+
+    <div class="shopHint">Apasă B ca să deschizi shop-ul, ESC ca să ieși.</div>
 </div>
 
 <div id="scoreboard" class="hidden">
@@ -77,6 +112,8 @@
 </div>
 
 <div id="killFeed"></div>
+
+<div id="purchaseNotification" class="hidden"></div>
 
 <canvas id="gameCanvas" width="1280" height="720"></canvas>
 

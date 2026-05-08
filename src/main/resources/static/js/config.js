@@ -2,8 +2,7 @@ export const WORLD_WIDTH = 1600;
 export const WORLD_HEIGHT = 900;
 
 export const PLAYER_RADIUS = 20;
-export const BULLET_RADIUS = 5;
-export const FOV = Math.PI / 3;
+export const FOV = 100 * Math.PI / 180;
 export const WALL_HEIGHT = 170;
 export const NEAR_PLANE = 8;
 export const MOUSE_SENSITIVITY = 0.0024;

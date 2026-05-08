@@ -3,7 +3,9 @@ import {
     joinButton,
     nameError,
     nameInput,
-    scoreboardElement
+    scoreboardElement,
+    weaponShopButtons,
+    weaponShopElement
 } from "./dom.js";
 import { keys, mouse, state } from "./state.js";
 import { resumeAudio } from "./audio.js";
@@ -14,6 +16,33 @@ import { clamp, normalizeAngle } from "./utils.js";
 
 export function registerInputHandlers() {
     joinButton.addEventListener("click", joinGame);
+
+    weaponShopButtons.forEach(button => {
+        button.addEventListener("pointerdown", event => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const weaponSlot = Number(button.dataset.weaponSlot);
+
+            buyWeaponImmediately(weaponSlot);
+            setShopVisible(false);
+        });
+    });
+
+    weaponShopElement.addEventListener("pointerdown", event => {
+        event.preventDefault();
+        event.stopPropagation();
+    });
+
+    weaponShopElement.addEventListener("mousedown", event => {
+        event.preventDefault();
+        event.stopPropagation();
+    });
+
+    weaponShopElement.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+    });
 
     nameInput.addEventListener("keydown", event => {
         if (event.code === "Enter") {
@@ -35,7 +64,7 @@ export function registerInputHandlers() {
         mouse.x = event.clientX - rect.left;
         mouse.y = event.clientY - rect.top;
 
-        if (document.pointerLockElement === canvas) {
+        if (document.pointerLockElement === canvas && !state.shopVisible) {
             state.viewAngle = normalizeAngle(state.viewAngle + event.movementX * MOUSE_SENSITIVITY);
             state.viewPitch = clamp(state.viewPitch - event.movementY * MOUSE_SENSITIVITY, -0.55, 0.55);
         }
@@ -44,6 +73,11 @@ export function registerInputHandlers() {
     });
 
     canvas.addEventListener("mousedown", event => {
+        if (state.shopVisible) {
+            event.preventDefault();
+            return;
+        }
+
         if (event.button === 0) {
             resumeAudio();
             canvas.requestPointerLock();
@@ -72,7 +106,58 @@ export function registerInputHandlers() {
     });
 }
 
+function buyWeaponImmediately(weaponSlot) {
+    state.selectedWeaponSlot = weaponSlot;
+
+    if (!state.joined || !state.socket || state.socket.readyState !== WebSocket.OPEN) {
+        return;
+    }
+
+    state.socket.send(JSON.stringify({
+        type: "buyWeapon",
+        weaponSlot: weaponSlot
+    }));
+}
+
+function setShopVisible(visible) {
+    state.shopVisible = visible;
+    weaponShopElement.classList.toggle("hidden", !visible);
+
+    if (visible) {
+        mouse.down = false;
+        state.ads = false;
+
+        if (document.pointerLockElement) {
+            document.exitPointerLock();
+        }
+
+        weaponShopElement.focus();
+    }
+}
+
 function handleKeyDown(event) {
+    if (event.repeat && (event.code === "KeyB" || event.code === "Escape")) {
+        event.preventDefault();
+        return;
+    }
+
+    if (event.code === "Escape" && state.shopVisible) {
+        event.preventDefault();
+        setShopVisible(false);
+        return;
+    }
+
+    if (event.code === "KeyB") {
+        event.preventDefault();
+        setShopVisible(!state.shopVisible);
+        return;
+    }
+
+    if (state.shopVisible) {
+        event.preventDefault();
+        return;
+    }
+
     switch (event.code) {
         case "KeyW":
         case "ArrowUp":
@@ -113,6 +198,7 @@ function handleKeyDown(event) {
         case "Numpad5":
             state.selectedWeaponSlot = 5;
             break;
+
         case "Tab":
             event.preventDefault();
             state.scoreboardVisible = true;

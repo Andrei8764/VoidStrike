@@ -63,10 +63,12 @@ public class GameSnapshot {
             int hp,
             int kills,
             int deaths,
+            int balance,
             String weapon,
             int ammo,
             int magazineSize,
-            boolean reloading
+            boolean reloading,
+            List<String> unlockedWeapons
     ) {
     }
 

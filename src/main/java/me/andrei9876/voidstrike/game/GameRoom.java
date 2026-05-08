@@ -20,6 +20,8 @@ public class GameRoom {
 
     public static final int MAX_PLAYERS = 32;
 
+    private static final int KILL_REWARD = 150;
+
     private static final double MAP_WIDTH = 1600;
     private static final double MAP_HEIGHT = 900;
     private static final double PLAYER_MAX_SPEED = 410;
@@ -27,7 +29,6 @@ public class GameRoom {
     private static final double PLAYER_FRICTION = 9.5;
     private static final double PLAYER_STOP_SPEED = 90;
     private static final double PLAYER_RADIUS = 20;
-    private static final double PLAYER_HEIGHT = 105;
     private static final double MAX_BULLET_Z = 700;
     private static final double PLAYER_BODY_MAX_Z = 96;
     private static final double PLAYER_HEAD_MIN_Z = 78;
@@ -42,6 +43,7 @@ public class GameRoom {
     private static final long KILL_FEED_TTL_MS = 8_000;
 
     private static final long ROUND_DURATION_MS = 180_000;
+
     private static final List<Obstacle> OBSTACLES = List.of(
             new Obstacle(360, 130, 150, 130),
             new Obstacle(650, 80, 140, 240),
@@ -117,6 +119,20 @@ public class GameRoom {
         player.applyInput(input);
     }
 
+    public synchronized void handleWeaponBuy(String playerId, int weaponSlot) {
+        PlayerState player = players.get(playerId);
+
+        if (player == null) {
+            return;
+        }
+
+        WeaponType weapon = getWeaponBySlot(weaponSlot);
+
+        if (weapon != null && player.buyWeapon(weapon)) {
+            player.switchWeapon(weapon);
+        }
+    }
+
     public synchronized void tick(double deltaSeconds) {
         updateRound();
         updatePlayers(deltaSeconds);
@@ -138,6 +154,7 @@ public class GameRoom {
 
         for (PlayerState player : players.values()) {
             respawnPlayer(player);
+            player.resetBalance();
         }
     }
 
@@ -146,6 +163,7 @@ public class GameRoom {
 
         for (PlayerState player : players.values()) {
             player.finishReloadIfNeeded(now);
+            handleWeaponPurchase(player);
             handleWeaponSwitch(player);
 
             if (player.isReload()) {
@@ -164,6 +182,22 @@ public class GameRoom {
                 }
             }
         }
+    }
+
+    private void handleWeaponPurchase(PlayerState player) {
+        Integer buyWeaponSlot = player.getBuyWeaponSlot();
+
+        if (buyWeaponSlot == null) {
+            return;
+        }
+
+        WeaponType weapon = getWeaponBySlot(buyWeaponSlot);
+
+        if (weapon != null && player.buyWeapon(weapon)) {
+            player.switchWeapon(weapon);
+        }
+
+        player.clearBuyWeaponSlot();
     }
 
     private void updatePlayerMovement(PlayerState player, double deltaSeconds) {
@@ -256,7 +290,15 @@ public class GameRoom {
     }
 
     private void handleWeaponSwitch(PlayerState player) {
-        WeaponType weapon = switch (player.getWeaponSlot()) {
+        WeaponType weapon = getWeaponBySlot(player.getWeaponSlot());
+
+        if (weapon != null) {
+            player.switchWeapon(weapon);
+        }
+    }
+
+    private WeaponType getWeaponBySlot(int slot) {
+        return switch (slot) {
             case 1 -> WeaponType.PISTOL;
             case 2 -> WeaponType.RIFLE;
             case 3 -> WeaponType.SMG;
@@ -264,10 +306,6 @@ public class GameRoom {
             case 5 -> WeaponType.SNIPER;
             default -> null;
         };
-
-        if (weapon != null) {
-            player.switchWeapon(weapon);
-        }
     }
 
     private boolean canShoot(PlayerState player, long now) {
@@ -292,19 +330,21 @@ public class GameRoom {
             double velocityY = Math.sin(finalAngle) * horizontalSpeed;
             double velocityZ = Math.sin(finalPitch) * weapon.getBulletSpeed();
 
-            
             double forwardX = Math.cos(player.getAngle());
             double forwardY = Math.sin(player.getAngle());
             double rightX = -Math.sin(player.getAngle());
             double rightY = Math.cos(player.getAngle());
 
             double muzzleForwardOffset = Math.cos(finalPitch) * BULLET_MUZZLE_FORWARD_OFFSET;
+
             double muzzleX = player.getX()
                     + forwardX * muzzleForwardOffset
                     + rightX * BULLET_MUZZLE_SIDE_OFFSET;
+
             double muzzleY = player.getY()
                     + forwardY * muzzleForwardOffset
                     + rightY * BULLET_MUZZLE_SIDE_OFFSET;
+
             double muzzleZ = BULLET_SPAWN_Z + Math.sin(finalPitch) * BULLET_MUZZLE_PITCH_OFFSET;
 
             BulletState bullet = new BulletState(
@@ -374,6 +414,7 @@ public class GameRoom {
 
                     if (player.getHp() <= 0) {
                         attacker.addKill();
+                        attacker.addKillReward(KILL_REWARD);
                         player.addDeath();
                         addTeamScore(attacker.getTeam());
                         addKillFeedEvent(attacker, player, headshot);
@@ -495,31 +536,39 @@ public class GameRoom {
                                 player.getHp(),
                                 player.getKills(),
                                 player.getDeaths(),
+                                player.getBalance(),
                                 player.getWeapon().getDisplayName(),
                                 player.getAmmo(),
                                 player.getWeapon().getMagazineSize(),
-                                player.isReloading()
+                                player.isReloading(),
+                                player.getUnlockedWeapons()
+                                        .stream()
+                                        .map(WeaponType::getDisplayName)
+                                        .toList()
                         ))
                         .toList(),
-                    bullets.stream()
-                            .map(bullet -> new GameSnapshot.BulletView(
-                                    bullet.getId(),
-                                    bullet.getX(),
-                                    bullet.getY(),
-                                    bullet.getZ(),
-                                    bullet.getVelocityX(),
-                                    bullet.getVelocityY(),
-                                    bullet.getVelocityZ()
-                            ))
-                            .toList(),
-                    OBSTACLES.stream()
-                            .map(obstacle -> new GameSnapshot.ObstacleView(
-                                    obstacle.x(),
-                                    obstacle.y(),
-                                    obstacle.width(),
-                                    obstacle.height()
-                            ))
-                            .toList(),
+
+                bullets.stream()
+                        .map(bullet -> new GameSnapshot.BulletView(
+                                bullet.getId(),
+                                bullet.getX(),
+                                bullet.getY(),
+                                bullet.getZ(),
+                                bullet.getVelocityX(),
+                                bullet.getVelocityY(),
+                                bullet.getVelocityZ()
+                        ))
+                        .toList(),
+
+                OBSTACLES.stream()
+                        .map(obstacle -> new GameSnapshot.ObstacleView(
+                                obstacle.x(),
+                                obstacle.y(),
+                                obstacle.width(),
+                                obstacle.height()
+                        ))
+                        .toList(),
+
                 killFeed.stream()
                         .map(event -> new GameSnapshot.KillFeedView(
                                 event.attacker(),
@@ -528,6 +577,7 @@ public class GameRoom {
                                 event.createdAt()
                         ))
                         .toList(),
+
                 new GameSnapshot.RoundView(
                         roundNumber,
                         timeLeftSeconds,

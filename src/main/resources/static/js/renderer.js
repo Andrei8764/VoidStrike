@@ -1009,15 +1009,34 @@ function drawGunOverlay() {
     context.translate(baseX, baseY);
     context.rotate(-0.045);
 
+    switch (self.weapon) {
+        case "Pistol":
+            drawPistolOverlay(self);
+            break;
+        case "SMG":
+            drawSmgOverlay(self);
+            break;
+        case "Shotgun":
+            drawShotgunOverlay(self);
+            break;
+        case "Sniper":
+            drawSniperOverlay(self);
+            break;
+        case "Rifle":
+        default:
+            drawRifleOverlay(self);
+            break;
+    }
+
+    context.restore();
+}
+
+function drawRifleOverlay(self) {
     context.fillStyle = "rgba(0, 0, 0, 0.42)";
     context.fillRect(-28, 46, 330, 28);
 
     context.fillStyle = "#0f172a";
     roundRect(14, -18, 218, 38, 8);
-    context.fill();
-
-    context.fillStyle = "#1e293b";
-    roundRect(56, -34, 98, 18, 5);
     context.fill();
 
     context.fillStyle = "#334155";
@@ -1028,47 +1047,114 @@ function drawGunOverlay() {
     roundRect(232, -10, 118, 16, 3);
     context.fill();
 
-    context.fillStyle = "#475569";
-    context.fillRect(252, -17, 76, 5);
+    context.fillStyle = self.team === "RED" ? "#ef4444" : "#3b82f6";
+    context.fillRect(24, -11, 9, 24);
+}
+
+function drawPistolOverlay(self) {
+    context.fillStyle = "rgba(0, 0, 0, 0.38)";
+    context.fillRect(-10, 48, 180, 22);
 
     context.fillStyle = "#111827";
-    roundRect(-24, -4, 46, 30, 8);
+    roundRect(18, -10, 145, 32, 7);
+    context.fill();
+
+    context.fillStyle = "#020617";
+    roundRect(150, -4, 54, 12, 3);
     context.fill();
 
     context.strokeStyle = "#020617";
     context.lineWidth = 8;
     context.lineCap = "round";
     context.beginPath();
-    context.moveTo(80, 18);
-    context.lineTo(48, 82);
-    context.stroke();
-
-    context.fillStyle = "#020617";
-    roundRect(42, 68, 54, 18, 5);
-    context.fill();
-
-    context.fillStyle = "#111827";
-    context.beginPath();
-    context.moveTo(116, 20);
-    context.lineTo(158, 20);
-    context.lineTo(146, 88);
-    context.lineTo(104, 88);
-    context.closePath();
-    context.fill();
-
-    context.fillStyle = "#334155";
-    context.fillRect(118, 26, 30, 6);
-
-    context.strokeStyle = "#020617";
-    context.lineWidth = 5;
-    context.beginPath();
-    context.arc(171, 22, 15, 0.1, Math.PI * 0.95);
+    context.moveTo(62, 20);
+    context.lineTo(48, 78);
     context.stroke();
 
     context.fillStyle = self.team === "RED" ? "#ef4444" : "#3b82f6";
-    context.fillRect(24, -11, 9, 24);
+    context.fillRect(26, -4, 8, 20);
+}
 
-    context.restore();
+function drawSmgOverlay(self) {
+    context.fillStyle = "rgba(0, 0, 0, 0.42)";
+    context.fillRect(-26, 48, 285, 24);
+
+    context.fillStyle = "#1e293b";
+    roundRect(10, -14, 190, 34, 7);
+    context.fill();
+
+    context.fillStyle = "#020617";
+    roundRect(190, -8, 92, 14, 3);
+    context.fill();
+
+    context.fillStyle = "#334155";
+    roundRect(60, -36, 82, 16, 5);
+    context.fill();
+
+    context.fillStyle = "#020617";
+    roundRect(92, 20, 42, 70, 5);
+    context.fill();
+
+    context.fillStyle = self.team === "RED" ? "#ef4444" : "#3b82f6";
+    context.fillRect(22, -7, 8, 22);
+}
+
+function drawShotgunOverlay(self) {
+    context.fillStyle = "rgba(0, 0, 0, 0.45)";
+    context.fillRect(-34, 48, 370, 25);
+
+    context.fillStyle = "#3f2412";
+    roundRect(0, -12, 170, 34, 8);
+    context.fill();
+
+    context.fillStyle = "#020617";
+    roundRect(160, -10, 210, 12, 3);
+    context.fill();
+
+    context.fillStyle = "#111827";
+    roundRect(160, 8, 210, 10, 3);
+    context.fill();
+
+    context.strokeStyle = "#020617";
+    context.lineWidth = 9;
+    context.lineCap = "round";
+    context.beginPath();
+    context.moveTo(72, 20);
+    context.lineTo(50, 84);
+    context.stroke();
+
+    context.fillStyle = self.team === "RED" ? "#ef4444" : "#3b82f6";
+    context.fillRect(22, -4, 9, 22);
+}
+
+function drawSniperOverlay(self) {
+    context.fillStyle = "rgba(0, 0, 0, 0.48)";
+    context.fillRect(-46, 50, 430, 24);
+
+    context.fillStyle = "#0f172a";
+    roundRect(8, -14, 230, 32, 7);
+    context.fill();
+
+    context.fillStyle = "#020617";
+    roundRect(224, -8, 190, 11, 3);
+    context.fill();
+
+    context.fillStyle = "#111827";
+    roundRect(70, -58, 128, 26, 8);
+    context.fill();
+
+    context.strokeStyle = "#475569";
+    context.lineWidth = 5;
+    context.beginPath();
+    context.arc(134, -45, 32, 0, Math.PI * 2);
+    context.stroke();
+
+    context.fillStyle = "#020617";
+    roundRect(112, 18, 38, 74, 5);
+    context.fill();
+
+    context.fillStyle = self.team === "RED" ? "#ef4444" : "#3b82f6";
+    context.fillRect(22, -6, 8, 22);
 }
 
 function drawAdsGunOverlay(self, recoil) {

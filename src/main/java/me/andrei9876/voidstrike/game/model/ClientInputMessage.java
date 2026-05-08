@@ -11,6 +11,7 @@ public class ClientInputMessage {
     private boolean shoot;
     private boolean reload;
     private int weaponSlot;
+    private Integer buyWeaponSlot;
     private double angle;
     private double pitch;
 
@@ -48,6 +49,10 @@ public class ClientInputMessage {
 
     public int getWeaponSlot() {
         return weaponSlot;
+    }
+
+    public Integer getBuyWeaponSlot() {
+        return buyWeaponSlot;
     }
 
     public double getAngle() {
@@ -92,6 +97,10 @@ public class ClientInputMessage {
 
     public void setWeaponSlot(int weaponSlot) {
         this.weaponSlot = weaponSlot;
+    }
+
+    public void setBuyWeaponSlot(Integer buyWeaponSlot) {
+        this.buyWeaponSlot = buyWeaponSlot;
     }
 
     public void setAngle(double angle) {

@@ -1,10 +1,12 @@
 import {
     ammoElement,
+    balanceElement,
     blueScoreElement,
     connectionStatusElement,
     hpElement,
     killFeedElement,
     magazineElement,
+    purchaseNotificationElement,
     redScoreElement,
     reloadStatusElement,
     roundNumberElement,
@@ -29,6 +31,7 @@ export function updateHud() {
         hpElement.textContent = self.hp;
         teamElement.textContent = self.team;
         teamElement.className = self.team.toLowerCase();
+        balanceElement.textContent = self.balance ?? 0;
         weaponElement.textContent = self.weapon;
         ammoElement.textContent = self.ammo;
         magazineElement.textContent = self.magazineSize;
@@ -41,6 +44,20 @@ export function updateHud() {
         redScoreElement.textContent = state.round.redScore;
         blueScoreElement.textContent = state.round.blueScore;
     }
+}
+
+export function showPurchaseNotification(weaponName) {
+    purchaseNotificationElement.textContent = `Ai cumpărat ${weaponName}! Arma a fost echipată.`;
+    purchaseNotificationElement.classList.remove("hidden");
+
+    if (state.purchaseNotificationTimeoutId !== null) {
+        clearTimeout(state.purchaseNotificationTimeoutId);
+    }
+
+    state.purchaseNotificationTimeoutId = setTimeout(() => {
+        purchaseNotificationElement.classList.add("hidden");
+        state.purchaseNotificationTimeoutId = null;
+    }, 2500);
 }
 
 export function updateScoreboard() {

@@ -1,21 +1,29 @@
 package me.andrei9876.voidstrike.game.model;
 
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.Set;
+
 public class PlayerState {
 
     private final String id;
     private final String name;
     private final String team;
 
+    private Integer buyWeaponSlot;
+
     private double x;
     private double y;
     private double velocityX;
     private double velocityY;
     private double angle;
-private double pitch;
+    private double pitch;
     private int hp;
 
     private int kills;
     private int deaths;
+    private int balance;
+    private final Set<WeaponType> unlockedWeapons;
 
     private WeaponType weapon;
     private int ammo;
@@ -39,22 +47,31 @@ private double pitch;
         this.team = team;
         this.x = x;
         this.y = y;
+
         this.velocityX = 0.0;
         this.velocityY = 0.0;
         this.angle = 0.0;
         this.pitch = 0.0;
         this.hp = 100;
+
         this.kills = 0;
         this.deaths = 0;
+        this.balance = 0;
+
+        this.unlockedWeapons = EnumSet.of(WeaponType.PISTOL, WeaponType.RIFLE);
+
         this.weapon = WeaponType.RIFLE;
         this.ammo = weapon.getMagazineSize();
         this.reloading = false;
         this.reloadEndsAt = 0;
+
         this.lastProcessedInputSequence = 0;
+        this.lastShotAt = 0;
     }
 
     public void applyInput(ClientInputMessage input) {
         this.lastProcessedInputSequence = input.getSequence();
+
         this.up = input.isUp();
         this.down = input.isDown();
         this.left = input.isLeft();
@@ -62,8 +79,17 @@ private double pitch;
         this.shoot = input.isShoot();
         this.reload = input.isReload();
         this.weaponSlot = input.getWeaponSlot();
+        this.buyWeaponSlot = input.getBuyWeaponSlot();
         this.angle = input.getAngle();
         this.pitch = Math.max(-0.55, Math.min(0.55, input.getPitch()));
+    }
+
+    public Integer getBuyWeaponSlot() {
+        return buyWeaponSlot;
+    }
+
+    public void clearBuyWeaponSlot() {
+        this.buyWeaponSlot = null;
     }
 
     public void respawn(double x, double y) {
@@ -71,10 +97,13 @@ private double pitch;
         this.y = y;
         this.velocityX = 0.0;
         this.velocityY = 0.0;
+
         this.hp = 100;
         this.ammo = weapon.getMagazineSize();
+
         this.reloading = false;
         this.reloadEndsAt = 0;
+
         this.up = false;
         this.down = false;
         this.left = false;
@@ -84,7 +113,11 @@ private double pitch;
     }
 
     public void switchWeapon(WeaponType newWeapon) {
-        if (this.weapon == newWeapon || this.reloading) {
+        if (newWeapon == null) {
+            return;
+        }
+
+        if (this.weapon == newWeapon || this.reloading || !unlockedWeapons.contains(newWeapon)) {
             return;
         }
 
@@ -119,6 +152,36 @@ private double pitch;
 
     public void addDeath() {
         this.deaths++;
+    }
+
+    public void addKillReward(int amount) {
+        if (amount <= 0) {
+            return;
+        }
+
+        this.balance += amount;
+    }
+
+    public void resetBalance() {
+        this.balance = 0;
+    }
+
+    public boolean buyWeapon(WeaponType weaponType) {
+        if (weaponType == null) {
+            return false;
+        }
+
+        if (unlockedWeapons.contains(weaponType)) {
+            return true;
+        }
+
+        if (balance < weaponType.getPrice()) {
+            return false;
+        }
+
+        balance -= weaponType.getPrice();
+        unlockedWeapons.add(weaponType);
+        return true;
     }
 
     public String getId() {
@@ -169,6 +232,14 @@ private double pitch;
         return deaths;
     }
 
+    public int getBalance() {
+        return balance;
+    }
+
+    public Set<WeaponType> getUnlockedWeapons() {
+        return Collections.unmodifiableSet(unlockedWeapons);
+    }
+
     public WeaponType getWeapon() {
         return weapon;
     }
@@ -217,6 +288,10 @@ private double pitch;
         return lastShotAt;
     }
 
+    public long getReloadEndsAt() {
+        return reloadEndsAt;
+    }
+
     public void setX(double x) {
         this.x = x;
     }
@@ -234,10 +309,14 @@ private double pitch;
     }
 
     public void setHp(int hp) {
-        this.hp = hp;
+        this.hp = Math.max(0, Math.min(100, hp));
     }
 
     public void setLastShotAt(long lastShotAt) {
         this.lastShotAt = lastShotAt;
+    }
+
+    public void setBalance(int balance) {
+        this.balance = Math.max(0, balance);
     }
 }

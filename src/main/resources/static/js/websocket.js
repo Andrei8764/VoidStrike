@@ -14,7 +14,13 @@ import {
     NAME_PATTERN
 } from "./config.js";
 import { getRecoilKick, playReloadSound, playShootSound, resumeAudio } from "./audio.js";
-import { setConnectionStatus, updateHud, updateKillFeed, updateScoreboard } from "./hud.js";
+import {
+    setConnectionStatus,
+    showPurchaseNotification,
+    updateHud,
+    updateKillFeed,
+    updateScoreboard
+} from "./hud.js";
 import { updateAimAngle } from "./renderer.js";
 import { predictLocalPlayer, reconcileLocalPlayer } from "./prediction.js";
 import { addBulletInterpolationSnapshot, addRemoteInterpolationSnapshot } from "./interpolation.js";
@@ -72,6 +78,7 @@ export function connectWebSocket() {
 
             addRemoteInterpolationSnapshot(message.players);
             addBulletInterpolationSnapshot(message.bullets);
+            detectWeaponPurchase();
             reconcileLocalPlayer();
 
             detectLocalShot();
@@ -87,6 +94,7 @@ export function connectWebSocket() {
         state.predictedSelf = null;
         state.pendingInputs = [];
         state.inputSequence = 0;
+        state.lastUnlockedWeapons = [];
         state.remotePlayerStates.clear();
         state.interpolatedRemotePlayers.clear();
         state.bulletStates.clear();
@@ -170,6 +178,7 @@ function startSendingInput() {
             shoot: mouse.down,
             reload: state.reloadRequested,
             weaponSlot: state.selectedWeaponSlot,
+            buyWeaponSlot: state.buyWeaponSlot,
             angle: mouse.angle,
             pitch: mouse.pitch
         };
@@ -180,6 +189,7 @@ function startSendingInput() {
         state.socket.send(JSON.stringify(input));
 
         state.reloadRequested = false;
+        state.buyWeaponSlot = null;
     }, 1000 / CLIENT_TICK_RATE);
 }
 
@@ -218,4 +228,30 @@ function detectReloadSound() {
     }
 
     state.lastReloading = self.reloading;
+}
+
+function detectWeaponPurchase() {
+    const serverSelf = state.players.find(player => player.id === state.playerId);
+
+    if (!serverSelf) {
+        state.lastUnlockedWeapons = [];
+        return;
+    }
+
+    const unlockedWeapons = serverSelf.unlockedWeapons || [];
+
+    if (state.lastUnlockedWeapons.length === 0) {
+        state.lastUnlockedWeapons = [...unlockedWeapons];
+        return;
+    }
+
+    const newlyUnlockedWeapon = unlockedWeapons.find(
+        weapon => !state.lastUnlockedWeapons.includes(weapon)
+    );
+
+    if (newlyUnlockedWeapon) {
+        showPurchaseNotification(newlyUnlockedWeapon);
+    }
+
+    state.lastUnlockedWeapons = [...unlockedWeapons];
 }

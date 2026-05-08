@@ -9,6 +9,7 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Component
@@ -40,40 +41,43 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         String payload = message.getPayload();
 
-        if (payload.contains("\"type\":\"join\"") || payload.contains("\"type\": \"join\"")) {
-            handleJoinMessage(session, payload);
+        JsonNode json;
+        try {
+            json = objectMapper.readTree(payload);
+        } catch (Exception e) {
+            sendError(session, "Invalid JSON.");
             return;
         }
 
-        ClientInputMessage input = objectMapper.readValue(payload, ClientInputMessage.class);
+        String type = json.has("type") ? json.get("type").asText() : "";
 
-        if (!"input".equals(input.getType())) {
+        if ("join".equals(type)) {
+            handleJoinMessage(session, payload);
             return;
         }
 
         GameRoom room = gameRoomManager.getRoomForPlayer(session.getId());
 
         if (room == null) {
-            session.sendMessage(new TextMessage("""
-                    {
-                      "type": "error",
-                      "message": "You must join with a valid name before playing."
-                    }
-                    """));
+            sendError(session, "You must join with a valid name before playing.");
             return;
         }
 
-        room.handleInput(session.getId(), input);
+        if ("buyWeapon".equals(type)) {
+            int weaponSlot = json.has("weaponSlot") ? json.get("weaponSlot").asInt() : 0;
+            room.handleWeaponBuy(session.getId(), weaponSlot);
+            return;
+        }
+
+        if ("input".equals(type)) {
+            ClientInputMessage input = objectMapper.readValue(payload, ClientInputMessage.class);
+            room.handleInput(session.getId(), input);
+        }
     }
 
     private void handleJoinMessage(WebSocketSession session, String payload) throws Exception {
         if (gameRoomManager.getRoomForPlayer(session.getId()) != null) {
-            session.sendMessage(new TextMessage("""
-                    {
-                      "type": "error",
-                      "message": "You are already in a room."
-                    }
-                    """));
+            sendError(session, "You are already in a room.");
             return;
         }
 
@@ -88,30 +92,28 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                       "type": "nameRejected",
                       "message": "%s"
                     }
-                    """.formatted(validationError)));
+                    """.formatted(escapeJson(validationError))));
             return;
         }
 
         GameRoom room = gameRoomManager.joinRoom(session, playerName);
 
-        String welcomeMessage = """
+        session.sendMessage(new TextMessage("""
                 {
                   "type": "joined",
                   "playerId": "%s",
                   "roomId": "%s",
                   "name": "%s"
                 }
-                """.formatted(session.getId(), room.getId(), playerName);
-
-        session.sendMessage(new TextMessage(welcomeMessage));
+                """.formatted(
+                escapeJson(session.getId()),
+                escapeJson(room.getId()),
+                escapeJson(playerName)
+        )));
     }
 
     private String normalizeName(String name) {
-        if (name == null) {
-            return "";
-        }
-
-        return name.trim();
+        return name == null ? "" : name.trim();
     }
 
     private String validatePlayerName(String name) {
@@ -128,6 +130,25 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         }
 
         return null;
+    }
+
+    private void sendError(WebSocketSession session, String message) throws Exception {
+        session.sendMessage(new TextMessage("""
+                {
+                  "type": "error",
+                  "message": "%s"
+                }
+                """.formatted(escapeJson(message))));
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        return value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"");
     }
 
     @Override

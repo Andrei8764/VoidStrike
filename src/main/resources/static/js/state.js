@@ -12,10 +12,14 @@ export const state = {
     round: null,
 
     selectedWeaponSlot: 2,
+    buyWeaponSlot: null,
     reloadRequested: false,
     scoreboardVisible: false,
+    shopVisible: false,
 
     lastSelfAmmo: null,
+    lastUnlockedWeapons: [],
+    purchaseNotificationTimeoutId: null,
     recoilKick: 0,
     lastReloading: false,
     viewAngle: 0,
