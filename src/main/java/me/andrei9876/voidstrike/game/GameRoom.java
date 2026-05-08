@@ -27,7 +27,12 @@ public class GameRoom {
     private static final double PLAYER_FRICTION = 9.5;
     private static final double PLAYER_STOP_SPEED = 90;
     private static final double PLAYER_RADIUS = 20;
+    private static final double PLAYER_HEIGHT = 145;
+    private static final double PLAYER_HEAD_MIN_Z = 108;
+    private static final double PLAYER_HEAD_MAX_Z = 152;
+    private static final double BULLET_SPAWN_Z = 92;
     private static final double BULLET_HIT_RADIUS = 28;
+    private static final double HEADSHOT_RADIUS = 19;
     private static final int KILL_FEED_LIMIT = 6;
     private static final long KILL_FEED_TTL_MS = 8_000;
 
@@ -275,9 +280,12 @@ public class GameRoom {
         for (int i = 0; i < bulletCount; i++) {
             double spread = (Math.random() - 0.5) * weapon.getSpread();
             double finalAngle = player.getAngle() + spread;
+            double finalPitch = player.getPitch();
 
-            double velocityX = Math.cos(finalAngle) * weapon.getBulletSpeed();
-            double velocityY = Math.sin(finalAngle) * weapon.getBulletSpeed();
+            double horizontalSpeed = Math.cos(finalPitch) * weapon.getBulletSpeed();
+            double velocityX = Math.cos(finalAngle) * horizontalSpeed;
+            double velocityY = Math.sin(finalAngle) * horizontalSpeed;
+            double velocityZ = Math.sin(finalPitch) * weapon.getBulletSpeed();
 
             BulletState bullet = new BulletState(
                     "b-" + System.nanoTime() + "-" + i,
@@ -285,8 +293,10 @@ public class GameRoom {
                     weapon.getDamage(),
                     player.getX() + Math.cos(player.getAngle()) * PLAYER_RADIUS,
                     player.getY() + Math.sin(player.getAngle()) * PLAYER_RADIUS,
+                    BULLET_SPAWN_Z,
                     velocityX,
-                    velocityY
+                    velocityY,
+                    velocityZ
             );
 
             bullets.add(bullet);
@@ -303,7 +313,9 @@ public class GameRoom {
             boolean outsideMap = bullet.getX() < 0
                     || bullet.getX() > MAP_WIDTH
                     || bullet.getY() < 0
-                    || bullet.getY() > MAP_HEIGHT;
+                    || bullet.getY() > MAP_HEIGHT
+                    || bullet.getZ() < 0
+                    || bullet.getZ() > PLAYER_HEIGHT + 80;
 
             if (bullet.isExpired() || outsideMap || collidesWithObstacle(bullet.getX(), bullet.getY())) {
                 iterator.remove();
@@ -332,17 +344,18 @@ public class GameRoom {
                     continue;
                 }
 
-                double distance = distance(bullet.getX(), bullet.getY(), player.getX(), player.getY());
+                double bodyDistance = distance(bullet.getX(), bullet.getY(), player.getX(), player.getY());
+                boolean headshot = isHeadshot(bullet, player);
 
-                if (distance <= BULLET_HIT_RADIUS) {
-                    player.setHp(player.getHp() - bullet.getDamage());
+                if (headshot || bodyDistance <= BULLET_HIT_RADIUS) {
+                    player.setHp(headshot ? 0 : player.getHp() - bullet.getDamage());
                     bulletIterator.remove();
 
                     if (player.getHp() <= 0) {
                         attacker.addKill();
                         player.addDeath();
                         addTeamScore(attacker.getTeam());
-                        addKillFeedEvent(attacker, player);
+                        addKillFeedEvent(attacker, player, headshot);
                         respawnPlayer(player);
                     }
 
@@ -350,6 +363,14 @@ public class GameRoom {
                 }
             }
         }
+    }
+
+    private boolean isHeadshot(BulletState bullet, PlayerState player) {
+        double distance = distance(bullet.getX(), bullet.getY(), player.getX(), player.getY());
+
+        return distance <= HEADSHOT_RADIUS
+                && bullet.getZ() >= PLAYER_HEAD_MIN_Z
+                && bullet.getZ() <= PLAYER_HEAD_MAX_Z;
     }
 
     private void addTeamScore(String team) {
@@ -392,11 +413,17 @@ public class GameRoom {
         return OBSTACLES.stream().anyMatch(obstacle -> obstacle.intersectsCircle(x, y, radius));
     }
 
-    private void addKillFeedEvent(PlayerState attacker, PlayerState victim) {
+    private void addKillFeedEvent(PlayerState attacker, PlayerState victim, boolean headshot) {
+        String weaponName = attacker.getWeapon().getDisplayName();
+
+        if (headshot) {
+            weaponName = weaponName + " HEADSHOT";
+        }
+
         killFeed.add(new KillFeedEvent(
                 attacker.getName(),
                 victim.getName(),
-                attacker.getWeapon().getDisplayName(),
+                weaponName,
                 System.currentTimeMillis()
         ));
 
@@ -452,23 +479,25 @@ public class GameRoom {
                                 player.isReloading()
                         ))
                         .toList(),
-                bullets.stream()
-                        .map(bullet -> new GameSnapshot.BulletView(
-                                bullet.getId(),
-                                bullet.getX(),
-                                bullet.getY(),
-                                bullet.getVelocityX(),
-                                bullet.getVelocityY()
-                        ))
-                        .toList(),
-                OBSTACLES.stream()
-                        .map(obstacle -> new GameSnapshot.ObstacleView(
-                                obstacle.x(),
-                                obstacle.y(),
-                                obstacle.width(),
-                                obstacle.height()
-                        ))
-                        .toList(),
+                    bullets.stream()
+                            .map(bullet -> new GameSnapshot.BulletView(
+                                    bullet.getId(),
+                                    bullet.getX(),
+                                    bullet.getY(),
+                                    bullet.getZ(),
+                                    bullet.getVelocityX(),
+                                    bullet.getVelocityY(),
+                                    bullet.getVelocityZ()
+                            ))
+                            .toList(),
+                    OBSTACLES.stream()
+                            .map(obstacle -> new GameSnapshot.ObstacleView(
+                                    obstacle.x(),
+                                    obstacle.y(),
+                                    obstacle.width(),
+                                    obstacle.height()
+                            ))
+                            .toList(),
                 killFeed.stream()
                         .map(event -> new GameSnapshot.KillFeedView(
                                 event.attacker(),

@@ -170,7 +170,8 @@ function startSendingInput() {
             shoot: mouse.down,
             reload: state.reloadRequested,
             weaponSlot: state.selectedWeaponSlot,
-            angle: mouse.angle
+            angle: mouse.angle,
+            pitch: mouse.pitch
         };
 
         predictLocalPlayer(input, CLIENT_DELTA_SECONDS);

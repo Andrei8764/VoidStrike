@@ -12,6 +12,7 @@ public class ClientInputMessage {
     private boolean reload;
     private int weaponSlot;
     private double angle;
+    private double pitch;
 
     public String getType() {
         return type;
@@ -53,6 +54,10 @@ public class ClientInputMessage {
         return angle;
     }
 
+    public double getPitch() {
+        return pitch;
+    }
+
     public void setType(String type) {
         this.type = type;
     }
@@ -91,5 +96,9 @@ public class ClientInputMessage {
 
     public void setAngle(double angle) {
         this.angle = angle;
+    }
+
+    public void setPitch(double pitch) {
+        this.pitch = pitch;
     }
 }

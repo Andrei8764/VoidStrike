@@ -8,25 +8,40 @@ public class BulletState {
 
     private double x;
     private double y;
+    private double z;
     private final double velocityX;
     private final double velocityY;
+    private final double velocityZ;
 
     private long lifeMs;
 
-    public BulletState(String id, String ownerId, int damage, double x, double y, double velocityX, double velocityY) {
+    public BulletState(
+            String id,
+            String ownerId,
+            int damage,
+            double x,
+            double y,
+            double z,
+            double velocityX,
+            double velocityY,
+            double velocityZ
+    ) {
         this.id = id;
         this.ownerId = ownerId;
         this.damage = damage;
         this.x = x;
         this.y = y;
+        this.z = z;
         this.velocityX = velocityX;
         this.velocityY = velocityY;
+        this.velocityZ = velocityZ;
         this.lifeMs = 1200;
     }
 
     public void update(double deltaSeconds) {
         x += velocityX * deltaSeconds;
         y += velocityY * deltaSeconds;
+        z += velocityZ * deltaSeconds;
         lifeMs -= (long) (deltaSeconds * 1000);
     }
 
@@ -54,11 +69,19 @@ public class BulletState {
         return y;
     }
 
+    public double getZ() {
+        return z;
+    }
+
     public double getVelocityX() {
         return velocityX;
     }
 
     public double getVelocityY() {
         return velocityY;
+    }
+
+    public double getVelocityZ() {
+        return velocityZ;
     }
 }

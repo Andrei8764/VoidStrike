@@ -1,4 +1,5 @@
 export const state = {
+    ads: false,
     socket: null,
     playerId: null,
     playerName: null,
@@ -18,6 +19,7 @@ export const state = {
     recoilKick: 0,
     lastReloading: false,
     viewAngle: 0,
+    viewPitch: 0,
     bobTime: 0,
 
     inputSequence: 0,
@@ -47,7 +49,8 @@ export const mouse = {
     worldX: 0,
     worldY: 0,
     down: false,
-    angle: 0
+    angle: 0,
+    pitch: 0
 };
 
 export const camera = {

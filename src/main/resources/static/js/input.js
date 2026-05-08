@@ -10,7 +10,7 @@ import { resumeAudio } from "./audio.js";
 import { joinGame } from "./websocket.js";
 import { updateMouseWorldPosition } from "./renderer.js";
 import { MOUSE_SENSITIVITY } from "./config.js";
-import { normalizeAngle } from "./utils.js";
+import { clamp, normalizeAngle } from "./utils.js";
 
 export function registerInputHandlers() {
     joinButton.addEventListener("click", joinGame);
@@ -37,6 +37,7 @@ export function registerInputHandlers() {
 
         if (document.pointerLockElement === canvas) {
             state.viewAngle = normalizeAngle(state.viewAngle + event.movementX * MOUSE_SENSITIVITY);
+            state.viewPitch = clamp(state.viewPitch - event.movementY * MOUSE_SENSITIVITY, -0.55, 0.55);
         }
 
         updateMouseWorldPosition();
@@ -48,11 +49,21 @@ export function registerInputHandlers() {
             canvas.requestPointerLock();
             mouse.down = true;
         }
+
+        if (event.button === 2) {
+            resumeAudio();
+            canvas.requestPointerLock();
+            state.ads = true;
+        }
     });
 
     canvas.addEventListener("mouseup", event => {
         if (event.button === 0) {
             mouse.down = false;
+        }
+
+        if (event.button === 2) {
+            state.ads = false;
         }
     });
 

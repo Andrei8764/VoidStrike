@@ -11,6 +11,7 @@ public class PlayerState {
     private double velocityX;
     private double velocityY;
     private double angle;
+private double pitch;
     private int hp;
 
     private int kills;
@@ -60,7 +61,7 @@ public class PlayerState {
         this.reload = input.isReload();
         this.weaponSlot = input.getWeaponSlot();
         this.angle = input.getAngle();
-        this.lastProcessedInputSequence = input.getSequence();
+        this.pitch = Math.max(-0.55, Math.min(0.55, input.getPitch()));
     }
 
     public void respawn(double x, double y) {
@@ -148,6 +149,10 @@ public class PlayerState {
 
     public double getAngle() {
         return angle;
+    }
+
+    public double getPitch() {
+        return pitch;
     }
 
     public int getHp() {

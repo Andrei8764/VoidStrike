@@ -70,13 +70,15 @@ public class GameSnapshot {
     }
 
     public record BulletView(
-            String id,
-            double x,
-            double y,
-            double velocityX,
-            double velocityY
-    ) {
-    }
+        String id,
+        double x,
+        double y,
+        double z,
+        double velocityX,
+        double velocityY,
+        double velocityZ
+) {
+}
 
     public record ObstacleView(
             double x,
