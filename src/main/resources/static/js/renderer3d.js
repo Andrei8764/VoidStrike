@@ -1,6 +1,6 @@
 import * as THREE from "/vendor/three/build/three.module.js";
 import { GLTFLoader } from "/vendor/three/examples/jsm/loaders/GLTFLoader.js";
-import { canvas, nameLabelsElement } from "./dom.js";
+import { adsScopeElement, canvas, crosshairElement, nameLabelsElement } from "./dom.js";
 import {
     getRenderableBullets,
     getRenderableRemotePlayers,
@@ -37,6 +37,14 @@ const WEAPON_MODEL_SCALE = 1.75;
 const WEAPON_MODEL_LOCAL_X = 0.2;
 const WEAPON_MODEL_LOCAL_Y = 0.02;
 const WEAPON_MODEL_LOCAL_Z = 0.55;
+const VIEWMODEL_HIP_POS = new THREE.Vector3(0.36, -0.36, -0.85);
+const VIEWMODEL_ADS_POS = new THREE.Vector3(0.0, -0.22, -0.58);
+const VIEWMODEL_HIP_ROT = new THREE.Euler(-0.24, Math.PI + 0.05, 0.02);
+const VIEWMODEL_ADS_ROT = new THREE.Euler(-0.1, Math.PI, 0);
+const VIEWMODEL_BLEND_SPEED = 0.18;
+const CAMERA_FOV_HIP = 75;
+const CAMERA_FOV_ADS = 62;
+const CAMERA_FOV_BLEND = 0.16;
 const WALK_ARM_SWING = 0.14;
 const WALK_LEG_SWING = 0.48;
 const WALK_SWING_SPEED = 4.4;
@@ -140,6 +148,28 @@ let modularCharacterTemplatePromise = null;
 let obstaclesCacheKey = "";
 let worldSceneLoaded = false;
 let lastAnimationTimeMs = performance.now();
+let localViewModelPath = null;
+let localViewModelObject = null;
+let localFirstPersonBody = null;
+const localViewModelPivot = new THREE.Group();
+camera3d.add(localViewModelPivot);
+localViewModelPivot.position.copy(VIEWMODEL_HIP_POS);
+localViewModelPivot.rotation.copy(VIEWMODEL_HIP_ROT);
+const localBodyPivot = new THREE.Group();
+camera3d.add(localBodyPivot);
+localBodyPivot.position.set(0, -1.05, -0.38);
+
+function createLocalViewModelFallback() {
+    const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.26, 0.16, 0.72),
+        new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.45, metalness: 0.22 })
+    );
+    mesh.position.set(0.12, -0.02, 0.1);
+    mesh.rotation.set(-0.06, Math.PI, 0);
+    mesh.renderOrder = 50;
+    mesh.frustumCulled = false;
+    return mesh;
+}
 
 function toRadians(value) {
     return (value || 0) * Math.PI / 180;
@@ -445,6 +475,125 @@ function syncPlayerWeapon(player, root) {
                 weaponAnchor.add(fallback);
             }
         });
+}
+
+function getWeaponPathForSelf(self) {
+    return getWeaponModelPathByName(self?.weapon);
+}
+
+function syncLocalViewModel(self) {
+    if (!self) {
+        if (localViewModelObject) {
+            localViewModelPivot.remove(localViewModelObject);
+            localViewModelObject = null;
+            localViewModelPath = null;
+        }
+        if (localFirstPersonBody) {
+            localBodyPivot.remove(localFirstPersonBody);
+            localFirstPersonBody = null;
+        }
+        if (adsScopeElement) {
+            adsScopeElement.classList.add("hidden");
+        }
+        return;
+    }
+
+    const weaponPath = getWeaponPathForSelf(self);
+    if (!weaponPath) {
+        return;
+    }
+
+    if (localViewModelPath === weaponPath && localViewModelObject) {
+        return;
+    }
+
+    if (!localViewModelObject) {
+        localViewModelObject = createLocalViewModelFallback();
+        localViewModelPivot.add(localViewModelObject);
+    }
+
+    localViewModelPath = weaponPath;
+    loadWeaponTemplate(weaponPath)
+        .then(template => {
+            if (localViewModelPath !== weaponPath) {
+                return;
+            }
+
+            const model = template.clone(true);
+            normalizeWeaponModel(model, WEAPON_MODEL_SCALE);
+            model.position.set(WEAPON_MODEL_LOCAL_X, WEAPON_MODEL_LOCAL_Y, WEAPON_MODEL_LOCAL_Z);
+            model.rotation.set(WEAPON_MODEL_ROT_X, WEAPON_MODEL_ROT_Y, WEAPON_MODEL_ROT_Z);
+            model.traverse(node => {
+                if (!node.isMesh || !node.material) {
+                    return;
+                }
+                node.frustumCulled = false;
+                node.renderOrder = 50;
+                node.material.depthTest = true;
+                node.material.depthWrite = true;
+            });
+
+            if (localViewModelObject) {
+                localViewModelPivot.remove(localViewModelObject);
+            }
+
+            localViewModelObject = model;
+            localViewModelPivot.add(localViewModelObject);
+        })
+        .catch(() => {
+        });
+
+    if (!localFirstPersonBody) {
+        loadModularCharacterTemplate()
+            .then(template => {
+                if (!getSelfPlayer()) {
+                    return;
+                }
+
+                const model = template.clone(true);
+                model.traverse(node => {
+                    if (!node.isMesh || !node.material) {
+                        return;
+                    }
+                    node.frustumCulled = false;
+                    node.renderOrder = 45;
+                });
+
+                model.scale.setScalar(0.42);
+                model.position.set(0.0, -0.58, -0.15);
+                model.rotation.set(0, Math.PI, 0);
+
+                localFirstPersonBody = model;
+                localBodyPivot.add(localFirstPersonBody);
+            })
+            .catch(() => {
+            });
+    }
+}
+
+function updateLocalViewModel(self) {
+    const adsWeight = state.ads ? 1 : 0;
+    const targetPos = adsWeight > 0.5 ? VIEWMODEL_ADS_POS : VIEWMODEL_HIP_POS;
+    const targetRot = adsWeight > 0.5 ? VIEWMODEL_ADS_ROT : VIEWMODEL_HIP_ROT;
+
+    localViewModelPivot.position.lerp(targetPos, VIEWMODEL_BLEND_SPEED);
+    localViewModelPivot.rotation.x += (targetRot.x - localViewModelPivot.rotation.x) * VIEWMODEL_BLEND_SPEED;
+    localViewModelPivot.rotation.y += (targetRot.y - localViewModelPivot.rotation.y) * VIEWMODEL_BLEND_SPEED;
+    localViewModelPivot.rotation.z += (targetRot.z - localViewModelPivot.rotation.z) * VIEWMODEL_BLEND_SPEED;
+
+    if (localViewModelObject) {
+        const recoilOffset = Math.min(1, state.recoilKick / 18);
+        localViewModelObject.position.z = WEAPON_MODEL_LOCAL_Z - recoilOffset * 0.22;
+        localViewModelObject.position.y = WEAPON_MODEL_LOCAL_Y + recoilOffset * 0.06;
+    }
+
+    if (crosshairElement) {
+        crosshairElement.classList.toggle("hidden", !self);
+    }
+
+    if (adsScopeElement) {
+        adsScopeElement.classList.toggle("hidden", !state.ads || !self);
+    }
 }
 
 function normalizeAngle(angle) {
@@ -936,6 +1085,8 @@ function updateCameraFromSelf() {
     if (!self) {
         camera3d.position.set(WORLD_WIDTH / 2, 180, WORLD_HEIGHT / 2 + 220);
         camera3d.lookAt(WORLD_WIDTH / 2, 0, WORLD_HEIGHT / 2);
+        camera3d.fov += (CAMERA_FOV_HIP - camera3d.fov) * CAMERA_FOV_BLEND;
+        camera3d.updateProjectionMatrix();
         return;
     }
 
@@ -962,6 +1113,10 @@ function updateCameraFromSelf() {
     );
 
     camera3d.lookAt(lookTarget);
+
+    const targetFov = state.ads ? CAMERA_FOV_ADS : CAMERA_FOV_HIP;
+    camera3d.fov += (targetFov - camera3d.fov) * CAMERA_FOV_BLEND;
+    camera3d.updateProjectionMatrix();
 }
 
 export function resizeCanvas() {
@@ -1015,6 +1170,9 @@ export function render() {
     syncObstacles();
     syncRemotePlayers();
     syncBullets();
+    const self = getSelfPlayer();
+    syncLocalViewModel(self);
+    updateLocalViewModel(self);
     updateCameraFromSelf();
     renderer.render(scene, camera3d);
 }

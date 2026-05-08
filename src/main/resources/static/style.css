@@ -483,6 +483,74 @@ input {
     white-space: nowrap;
 }
 
+#crosshair {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    z-index: 20;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+#crosshair span {
+    position: absolute;
+    display: block;
+    background: rgba(238, 242, 255, 0.92);
+    box-shadow: 0 0 6px rgba(2, 6, 23, 0.8);
+}
+
+#crosshair .crosshairH {
+    width: 9px;
+    height: 2px;
+    top: -1px;
+}
+
+#crosshair .crosshairH:nth-child(1) {
+    left: -16px;
+}
+
+#crosshair .crosshairH:nth-child(2) {
+    left: 7px;
+}
+
+#crosshair .crosshairV {
+    width: 2px;
+    height: 9px;
+    left: -1px;
+}
+
+#crosshair .crosshairV:nth-child(3) {
+    top: -16px;
+}
+
+#crosshair .crosshairV:nth-child(4) {
+    top: 7px;
+}
+
+#crosshair .crosshairDot {
+    width: 3px;
+    height: 3px;
+    left: -1.5px;
+    top: -1.5px;
+    border-radius: 50%;
+}
+
+#adsScope {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    z-index: 19;
+    width: min(38vw, 280px);
+    aspect-ratio: 1 / 1;
+    transform: translate(-50%, -50%);
+    border: 10px solid rgba(0, 0, 0, 0.92);
+    border-radius: 50%;
+    box-shadow:
+            0 0 0 2px rgba(12, 18, 28, 0.95),
+            0 0 0 16px rgba(0, 0, 0, 0.22);
+    pointer-events: none;
+}
+
 #chatPanel {
     position: fixed;
     left: 18px;

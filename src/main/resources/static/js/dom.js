@@ -1,5 +1,7 @@
 export const canvas = document.getElementById("gameCanvas");
 export const nameLabelsElement = document.getElementById("nameLabels");
+export const crosshairElement = document.getElementById("crosshair");
+export const adsScopeElement = document.getElementById("adsScope");
 
 export const nameOverlay = document.getElementById("nameOverlay");
 export const nameInput = document.getElementById("nameInput");
