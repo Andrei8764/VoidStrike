@@ -58,6 +58,7 @@ public class GameSnapshot {
             double velocityX,
             double velocityY,
             double angle,
+            double pitch,
             long lastProcessedInputSequence,
             int hp,
             int kills,

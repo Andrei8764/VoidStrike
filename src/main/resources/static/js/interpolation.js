@@ -92,8 +92,9 @@ export function updateRemoteInterpolation() {
             x: lerp(older.player.x, newer.player.x, progress),
             y: lerp(older.player.y, newer.player.y, progress),
             velocityX: lerp(older.player.velocityX || 0, newer.player.velocityX || 0, progress),
-            velocityY: lerp(older.player.velocityY || 0, newer.player.velocityY || 0, progress),
-            angle: lerpAngle(older.player.angle, newer.player.angle, progress)
+            velocityY: lerp(older.player.velocityY || 0, newer.playerVelocityY || 0, progress),
+            angle: lerpAngle(older.player.angle, newer.player.angle, progress),
+            pitch: lerp(older.player.pitch || 0, newer.player.pitch || 0, progress)
         });
     }
 }

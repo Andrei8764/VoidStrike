@@ -368,33 +368,17 @@ function drawProjectedEnemy(sprite) {
     context.lineTo(sprite.width * 0.46, bodyY + bodyHeight * 0.1);
     context.stroke();
 
-    context.strokeStyle = dark;
-    context.lineWidth = Math.max(2, sprite.width * 0.045);
-
     context.beginPath();
-    context.moveTo(sprite.width * 0.22, bodyY + bodyHeight * 0.02);
-    context.lineTo(sprite.width * 0.72, bodyY - bodyHeight * 0.1);
+    context.moveTo(bodyWidth * 0.45, bodyY - bodyHeight * 0.12);
+    context.lineTo(sprite.width * 0.46, bodyY + bodyHeight * 0.1);
     context.stroke();
 
-    context.fillStyle = dark;
-    roundRect(
-        sprite.width * 0.5,
-        bodyY - bodyHeight * 0.17,
-        sprite.width * 0.28,
-        sprite.height * 0.045,
-        sprite.width * 0.02
-    );
-    context.fill();
+    drawEnemyAimedWeapon(sprite, bodyY, bodyHeight, dark, armor);
 
-    context.fillStyle = armor;
-    roundRect(
-        sprite.width * 0.18,
-        bodyY + bodyHeight * 0.02,
-        sprite.width * 0.16,
-        sprite.height * 0.09,
-        sprite.width * 0.02
-    );
-    context.fill();
+    context.strokeStyle = dark;
+    context.lineWidth = Math.max(2, sprite.width * 0.075);
+
+    context.beginPath();
 
     context.strokeStyle = dark;
     context.lineWidth = Math.max(2, sprite.width * 0.075);
@@ -418,11 +402,129 @@ function drawProjectedEnemy(sprite) {
     );
 }
 
+function drawEnemyAimedWeapon(sprite, bodyY, bodyHeight, dark, armor) {
+    const shoulderX = sprite.width * 0.28;
+    const shoulderY = bodyY - bodyHeight * 0.08;
+
+    if (sprite.aimingAtSelf) {
+        drawEnemyWeaponPointingAtViewer(sprite, shoulderX, shoulderY, dark, armor);
+        return;
+    }
+
+    const sideAim = Math.sin(sprite.relativeAimAngle || 0);
+    const weaponLength = sprite.width * 0.72;
+    const weaponAngle = sideAim * 0.45 - (sprite.pitch || 0) * 0.22;
+
+    context.save();
+    context.translate(shoulderX, shoulderY);
+    context.rotate(weaponAngle);
+
+    context.strokeStyle = armor;
+    context.lineWidth = Math.max(2, sprite.width * 0.065);
+    context.lineCap = "round";
+
+    context.beginPath();
+    context.moveTo(-sprite.width * 0.08, sprite.height * 0.04);
+    context.lineTo(sprite.width * 0.1, sprite.height * 0.12);
+    context.stroke();
+
+    context.strokeStyle = dark;
+    context.lineWidth = Math.max(2, sprite.width * 0.055);
+
+    context.beginPath();
+    context.moveTo(0, 0);
+    context.lineTo(weaponLength, 0);
+    context.stroke();
+
+    context.fillStyle = dark;
+    roundRect(
+        weaponLength * 0.58,
+        -sprite.height * 0.028,
+        sprite.width * 0.28,
+        sprite.height * 0.056,
+        sprite.width * 0.018
+    );
+    context.fill();
+
+    context.fillStyle = armor;
+    roundRect(
+        sprite.width * 0.08,
+        sprite.height * 0.025,
+        sprite.width * 0.18,
+        sprite.height * 0.08,
+        sprite.width * 0.018
+    );
+    context.fill();
+
+    context.restore();
+}
+
+function drawEnemyWeaponPointingAtViewer(sprite, shoulderX, shoulderY, dark, armor) {
+    const centerX = shoulderX + sprite.width * 0.14;
+    const centerY = shoulderY - (sprite.pitch || 0) * sprite.height * 0.18;
+
+    context.save();
+    context.translate(centerX, centerY);
+
+    context.strokeStyle = armor;
+    context.lineWidth = Math.max(2, sprite.width * 0.06);
+    context.lineCap = "round";
+
+    context.beginPath();
+    context.moveTo(-sprite.width * 0.18, sprite.height * 0.08);
+    context.lineTo(-sprite.width * 0.03, sprite.height * 0.02);
+    context.stroke();
+
+    context.beginPath();
+    context.moveTo(sprite.width * 0.18, sprite.height * 0.08);
+    context.lineTo(sprite.width * 0.03, sprite.height * 0.02);
+    context.stroke();
+
+    context.fillStyle = dark;
+    roundRect(
+        -sprite.width * 0.18,
+        -sprite.height * 0.055,
+        sprite.width * 0.36,
+        sprite.height * 0.11,
+        sprite.width * 0.035
+    );
+    context.fill();
+
+    context.fillStyle = "#020617";
+    context.beginPath();
+    context.arc(0, 0, sprite.width * 0.105, 0, Math.PI * 2);
+    context.fill();
+
+    context.strokeStyle = "#475569";
+    context.lineWidth = Math.max(1, sprite.width * 0.025);
+    context.beginPath();
+    context.arc(0, 0, sprite.width * 0.12, 0, Math.PI * 2);
+    context.stroke();
+
+    context.fillStyle = "#111827";
+    roundRect(
+        -sprite.width * 0.08,
+        sprite.height * 0.055,
+        sprite.width * 0.16,
+        sprite.height * 0.15,
+        sprite.width * 0.025
+    );
+    context.fill();
+
+    context.restore();
+}
+
 function getProjectedPlayers(self) {
     return getRenderableRemotePlayers().map(player => {
         const projected = projectWorldPoint(self, player.x, player.y);
         const height = getProjectedHeight(projected.depth, 80);
         const width = height * 0.42;
+
+        const angleToSelf = Math.atan2(self.y - player.y, self.x - player.x);
+        const aimDifferenceToSelf = Math.abs(normalizeAngle((player.angle || 0) - angleToSelf));
+        const aimingAtSelf = aimDifferenceToSelf < 0.18;
+
+        const relativeAimAngle = normalizeAngle((player.angle || 0) - state.viewAngle);
 
         return {
             type: "sprite",
@@ -435,7 +537,10 @@ function getProjectedPlayers(self) {
             color: player.team === "RED" ? "#ef4444" : "#3b82f6",
             accent: player.team === "RED" ? "#fecaca" : "#bfdbfe",
             alpha: clamp(1 - projected.depth / 1700, 0.35, 1),
-            label: player.name
+            label: player.name,
+            relativeAimAngle,
+            aimingAtSelf,
+            pitch: player.pitch || 0
         };
     });
 }
@@ -934,6 +1039,20 @@ function getProjectedHeight(depth, worldHeight) {
 
 function getHorizon() {
     return canvas.height * 0.48 + state.viewPitch * canvas.height * 0.55;
+}
+
+function normalizeAngle(angle) {
+    let normalized = angle;
+
+    while (normalized > Math.PI) {
+        normalized -= Math.PI * 2;
+    }
+
+    while (normalized < -Math.PI) {
+        normalized += Math.PI * 2;
+    }
+
+    return normalized;
 }
 
 function roundRect(x, y, width, height, radius) {

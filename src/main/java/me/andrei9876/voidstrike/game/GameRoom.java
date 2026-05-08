@@ -472,6 +472,7 @@ public class GameRoom {
                                 player.getVelocityX(),
                                 player.getVelocityY(),
                                 player.getAngle(),
+                                player.getPitch(),
                                 player.getLastProcessedInputSequence(),
                                 player.getHp(),
                                 player.getKills(),
