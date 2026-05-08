@@ -29,12 +29,15 @@ public class GameRoom {
     private static final double PLAYER_RADIUS = 20;
     private static final double PLAYER_HEIGHT = 105;
     private static final double MAX_BULLET_Z = 700;
-    private static final double PLAYER_BODY_MAX_Z = 78;
-    private static final double PLAYER_HEAD_MIN_Z = 72;
-    private static final double PLAYER_HEAD_MAX_Z = 126;
-    private static final double BULLET_SPAWN_Z = 68;
-    private static final double BULLET_HIT_RADIUS = 28;
-    private static final double HEADSHOT_RADIUS = 26;
+    private static final double PLAYER_BODY_MAX_Z = 96;
+    private static final double PLAYER_HEAD_MIN_Z = 78;
+    private static final double PLAYER_HEAD_MAX_Z = 132;
+    private static final double BULLET_SPAWN_Z = 82;
+    private static final double BULLET_MUZZLE_FORWARD_OFFSET = 58;
+    private static final double BULLET_MUZZLE_SIDE_OFFSET = -8;
+    private static final double BULLET_MUZZLE_PITCH_OFFSET = 24;
+    private static final double BULLET_HIT_RADIUS = 18;
+    private static final double HEADSHOT_RADIUS = 16;
     private static final int KILL_FEED_LIMIT = 6;
     private static final long KILL_FEED_TTL_MS = 8_000;
 
@@ -289,13 +292,28 @@ public class GameRoom {
             double velocityY = Math.sin(finalAngle) * horizontalSpeed;
             double velocityZ = Math.sin(finalPitch) * weapon.getBulletSpeed();
 
+            
+            double forwardX = Math.cos(player.getAngle());
+            double forwardY = Math.sin(player.getAngle());
+            double rightX = -Math.sin(player.getAngle());
+            double rightY = Math.cos(player.getAngle());
+
+            double muzzleForwardOffset = Math.cos(finalPitch) * BULLET_MUZZLE_FORWARD_OFFSET;
+            double muzzleX = player.getX()
+                    + forwardX * muzzleForwardOffset
+                    + rightX * BULLET_MUZZLE_SIDE_OFFSET;
+            double muzzleY = player.getY()
+                    + forwardY * muzzleForwardOffset
+                    + rightY * BULLET_MUZZLE_SIDE_OFFSET;
+            double muzzleZ = BULLET_SPAWN_Z + Math.sin(finalPitch) * BULLET_MUZZLE_PITCH_OFFSET;
+
             BulletState bullet = new BulletState(
                     "b-" + System.nanoTime() + "-" + i,
                     player.getId(),
                     weapon.getDamage(),
-                    player.getX() + Math.cos(player.getAngle()) * PLAYER_RADIUS,
-                    player.getY() + Math.sin(player.getAngle()) * PLAYER_RADIUS,
-                    BULLET_SPAWN_Z,
+                    muzzleX,
+                    muzzleY,
+                    muzzleZ,
                     velocityX,
                     velocityY,
                     velocityZ

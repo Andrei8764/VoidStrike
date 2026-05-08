@@ -403,58 +403,103 @@ function drawProjectedEnemy(sprite) {
 }
 
 function drawEnemyAimedWeapon(sprite, bodyY, bodyHeight, dark, armor) {
-    const shoulderX = sprite.width * 0.28;
-    const shoulderY = bodyY - bodyHeight * 0.08;
-
-    if (sprite.aimingAtSelf) {
-        drawEnemyWeaponPointingAtViewer(sprite, shoulderX, shoulderY, dark, armor);
-        return;
-    }
+    const frontAmount = clamp(sprite.aimAtSelfAmount || 0, 0, 1);
+    const sideAmount = 1 - frontAmount;
 
     const sideAim = Math.sin(sprite.relativeAimAngle || 0);
-    const weaponLength = sprite.width * 0.72;
-    const weaponAngle = sideAim * 0.45 - (sprite.pitch || 0) * 0.22;
+
+    const sideShoulderX = sprite.width * 0.28;
+    const sideShoulderY = bodyY - bodyHeight * 0.08;
+
+    const frontCenterX = sprite.width * 0.16;
+    const frontCenterY = bodyY - bodyHeight * 0.08 - (sprite.pitch || 0) * sprite.height * 0.12;
+
+    const weaponX = sideShoulderX * sideAmount + frontCenterX * frontAmount;
+    const weaponY = sideShoulderY * sideAmount + frontCenterY * frontAmount;
+
+    const sideWeaponLength = sprite.width * 0.68;
+    const frontWeaponLength = sprite.width * 0.14;
+    const weaponLength = sideWeaponLength * sideAmount + frontWeaponLength * frontAmount;
+
+    const sideWeaponAngle = sideAim * 0.42 - (sprite.pitch || 0) * 0.18;
+    const weaponAngle = sideWeaponAngle * sideAmount;
 
     context.save();
-    context.translate(shoulderX, shoulderY);
+    context.translate(weaponX, weaponY);
     context.rotate(weaponAngle);
 
+    context.globalAlpha = sprite.alpha;
+
     context.strokeStyle = armor;
-    context.lineWidth = Math.max(2, sprite.width * 0.065);
+    context.lineWidth = Math.max(2, sprite.width * 0.055);
     context.lineCap = "round";
 
     context.beginPath();
-    context.moveTo(-sprite.width * 0.08, sprite.height * 0.04);
-    context.lineTo(sprite.width * 0.1, sprite.height * 0.12);
+    context.moveTo(-sprite.width * (0.08 + frontAmount * 0.06), sprite.height * 0.04);
+    context.lineTo(sprite.width * 0.1, sprite.height * (0.12 - frontAmount * 0.06));
     context.stroke();
 
+    if (frontAmount > 0.15) {
+        context.beginPath();
+        context.moveTo(sprite.width * 0.12 * frontAmount, sprite.height * 0.07 * frontAmount);
+        context.lineTo(sprite.width * 0.03 * frontAmount, sprite.height * 0.02 * frontAmount);
+        context.stroke();
+    }
+
     context.strokeStyle = dark;
-    context.lineWidth = Math.max(2, sprite.width * 0.055);
+    context.lineWidth = Math.max(2, sprite.width * (0.05 + frontAmount * 0.008));
 
     context.beginPath();
     context.moveTo(0, 0);
     context.lineTo(weaponLength, 0);
     context.stroke();
 
-    context.fillStyle = dark;
-    roundRect(
-        weaponLength * 0.58,
-        -sprite.height * 0.028,
-        sprite.width * 0.28,
-        sprite.height * 0.056,
-        sprite.width * 0.018
-    );
-    context.fill();
+    if (frontAmount < 0.8) {
+        context.fillStyle = dark;
+        roundRect(
+            weaponLength * 0.58,
+            -sprite.height * 0.025,
+            sprite.width * 0.24 * sideAmount,
+            sprite.height * 0.05,
+            sprite.width * 0.016
+        );
+        context.fill();
+    }
 
     context.fillStyle = armor;
     roundRect(
         sprite.width * 0.08,
         sprite.height * 0.025,
-        sprite.width * 0.18,
-        sprite.height * 0.08,
-        sprite.width * 0.018
+        sprite.width * (0.16 - frontAmount * 0.07),
+        sprite.height * 0.075,
+        sprite.width * 0.016
     );
     context.fill();
+
+    if (frontAmount > 0.08) {
+        context.globalAlpha = sprite.alpha * frontAmount;
+
+        context.fillStyle = "#020617";
+        context.beginPath();
+        context.arc(weaponLength, 0, sprite.width * 0.055, 0, Math.PI * 2);
+        context.fill();
+
+        context.strokeStyle = "#475569";
+        context.lineWidth = Math.max(1, sprite.width * 0.018);
+        context.beginPath();
+        context.arc(weaponLength, 0, sprite.width * 0.068, 0, Math.PI * 2);
+        context.stroke();
+
+        context.fillStyle = "#111827";
+        roundRect(
+            weaponLength - sprite.width * 0.045,
+            sprite.height * 0.04,
+            sprite.width * 0.09,
+            sprite.height * 0.11,
+            sprite.width * 0.018
+        );
+        context.fill();
+    }
 
     context.restore();
 }
@@ -514,17 +559,66 @@ function drawEnemyWeaponPointingAtViewer(sprite, shoulderX, shoulderY, dark, arm
     context.restore();
 }
 
+function getSmoothRemoteWeaponAim(player, self) {
+    const targetAngle = player.angle || 0;
+    const targetPitch = player.pitch || 0;
+    const now = performance.now();
+
+    const angleToSelf = Math.atan2(self.y - player.y, self.x - player.x);
+    const aimDifferenceToSelf = Math.abs(normalizeAngle(targetAngle - angleToSelf));
+
+    const fullFrontAngle = 0.08;
+    const noFrontAngle = 0.32;
+    const targetFrontAmount = clamp(
+        1 - (aimDifferenceToSelf - fullFrontAngle) / (noFrontAngle - fullFrontAngle),
+        0,
+        1
+    );
+
+    if (!state.remoteWeaponAimStates.has(player.id)) {
+        state.remoteWeaponAimStates.set(player.id, {
+            angle: targetAngle,
+            pitch: targetPitch,
+            frontAmount: targetFrontAmount,
+            updatedAt: now
+        });
+    }
+
+    const aimState = state.remoteWeaponAimStates.get(player.id);
+    const deltaSeconds = Math.min((now - aimState.updatedAt) / 1000, 0.05);
+
+    const angleSmoothSpeed = 8;
+    const frontSmoothSpeed = 4;
+
+    const angleBlend = 1 - Math.exp(-angleSmoothSpeed * deltaSeconds);
+    const frontBlend = 1 - Math.exp(-frontSmoothSpeed * deltaSeconds);
+
+    aimState.angle = lerpAngleValue(aimState.angle, targetAngle, angleBlend);
+    aimState.pitch = aimState.pitch + (targetPitch - aimState.pitch) * angleBlend;
+    aimState.frontAmount = aimState.frontAmount + (targetFrontAmount - aimState.frontAmount) * frontBlend;
+    aimState.updatedAt = now;
+
+    return aimState;
+}
+
+
 function getProjectedPlayers(self) {
-    return getRenderableRemotePlayers().map(player => {
+    const remotePlayers = getRenderableRemotePlayers();
+    const remotePlayerIds = new Set(remotePlayers.map(player => player.id));
+
+    for (const playerId of state.remoteWeaponAimStates.keys()) {
+        if (!remotePlayerIds.has(playerId)) {
+            state.remoteWeaponAimStates.delete(playerId);
+        }
+    }
+
+    return remotePlayers.map(player => {
         const projected = projectWorldPoint(self, player.x, player.y);
         const height = getProjectedHeight(projected.depth, 80);
         const width = height * 0.42;
 
-        const angleToSelf = Math.atan2(self.y - player.y, self.x - player.x);
-        const aimDifferenceToSelf = Math.abs(normalizeAngle((player.angle || 0) - angleToSelf));
-        const aimingAtSelf = aimDifferenceToSelf < 0.18;
-
-        const relativeAimAngle = normalizeAngle((player.angle || 0) - state.viewAngle);
+        const smoothAim = getSmoothRemoteWeaponAim(player, self);
+        const relativeAimAngle = normalizeAngle(smoothAim.angle - state.viewAngle);
 
         return {
             type: "sprite",
@@ -539,8 +633,8 @@ function getProjectedPlayers(self) {
             alpha: clamp(1 - projected.depth / 1700, 0.35, 1),
             label: player.name,
             relativeAimAngle,
-            aimingAtSelf,
-            pitch: player.pitch || 0
+            aimAtSelfAmount: smoothAim.frontAmount,
+            pitch: smoothAim.pitch
         };
     });
 }
@@ -548,7 +642,7 @@ function getProjectedPlayers(self) {
 function getProjectedBullets(self) {
     return getRenderableBullets().map(bullet => {
         const projected = projectWorldPoint(self, bullet.x, bullet.y);
-        const size = getProjectedHeight(projected.depth, 18);
+        const size = getProjectedHeight(projected.depth, 8);
         const bulletZ = (bullet.z ?? 8) * 0.62;
 
         return {
@@ -594,7 +688,8 @@ function drawProjectedBulletTrail(self, bullet, alpha) {
     const directionX = velocityX / speed;
     const directionY = velocityY / speed;
     const directionZ = velocityZ / speed;
-    const trailLength = clamp(speed * 0.035, 16, 95);
+    const trailLength = clamp(speed * 0.024, 10, 58);
+
 
     const visualZScale = 0.62;
     const bulletZ = (bullet.z ?? 8) * visualZScale;
@@ -619,10 +714,10 @@ function drawProjectedBulletTrail(self, bullet, alpha) {
     gradient.addColorStop(1, `rgba(254, 243, 199, ${0.95 * alpha})`);
 
     context.strokeStyle = gradient;
-    context.lineWidth = clamp(getProjectedHeight(head.depth, 8), 1.5, 5);
+    context.lineWidth = clamp(getProjectedHeight(head.depth, 4), 0.8, 2.6);
     context.lineCap = "round";
     context.shadowColor = "#facc15";
-    context.shadowBlur = 10;
+    context.shadowBlur = 6;
 
     context.beginPath();
     context.moveTo(tail.x, tailY);
@@ -1039,6 +1134,10 @@ function getProjectedHeight(depth, worldHeight) {
 
 function getHorizon() {
     return canvas.height * 0.48 + state.viewPitch * canvas.height * 0.55;
+}
+
+function lerpAngleValue(from, to, amount) {
+    return from + normalizeAngle(to - from) * amount;
 }
 
 function normalizeAngle(angle) {

@@ -27,6 +27,8 @@ export const state = {
     predictedSelf: null,
 
     remotePlayerStates: new Map(),
+    remoteWeaponAimStates: new Map(),
+
     interpolatedRemotePlayers: new Map(),
 
     bulletStates: new Map(),
