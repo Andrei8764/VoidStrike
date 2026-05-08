@@ -1,8 +1,14 @@
 import {
     CLIENT_DELTA_SECONDS,
     PLAYER_ACCELERATION,
+    PLAYER_AIR_ACCELERATION_MULTIPLIER,
+    PLAYER_BUNNYHOP_SPEED_BOOST,
     PLAYER_FRICTION,
+    PLAYER_GRAVITY,
+    PLAYER_JUMP_VELOCITY,
     PLAYER_MAX_SPEED,
+    PLAYER_SPRINT_ACCELERATION_MULTIPLIER,
+    PLAYER_SPRINT_SPEED_MULTIPLIER,
     PLAYER_RADIUS,
     PLAYER_STOP_SPEED,
     PREDICTION_ERROR_THRESHOLD,
@@ -64,6 +70,7 @@ export function predictLocalPlayer(input, deltaSeconds) {
     }
 
     state.predictedSelf.angle = input.angle;
+    state.predictedSelf.pitch = input.pitch;
     simulatePredictedMovement(state.predictedSelf, input, deltaSeconds);
 
     const selfIndex = state.players.findIndex(player => player.id === state.playerId);
@@ -73,8 +80,10 @@ export function predictLocalPlayer(input, deltaSeconds) {
             ...state.players[selfIndex],
             x: state.predictedSelf.x,
             y: state.predictedSelf.y,
+            z: state.predictedSelf.z,
             velocityX: state.predictedSelf.velocityX,
             velocityY: state.predictedSelf.velocityY,
+            velocityZ: state.predictedSelf.velocityZ,
             angle: state.predictedSelf.angle
         };
     }
@@ -113,13 +122,24 @@ function simulatePredictedMovement(player, input, deltaSeconds) {
 
         const wishDirectionX = cos * forward - sin * strafe;
         const wishDirectionY = sin * forward + cos * strafe;
+        const sprinting = input.sprint && forward > 0;
+        const airborne = (player.z || 0) > 0.001;
+        const maxSpeed = sprinting
+            ? PLAYER_MAX_SPEED * PLAYER_SPRINT_SPEED_MULTIPLIER
+            : PLAYER_MAX_SPEED;
+        const acceleration = sprinting
+            ? PLAYER_ACCELERATION * PLAYER_SPRINT_ACCELERATION_MULTIPLIER
+            : PLAYER_ACCELERATION;
+        const finalAcceleration = airborne
+            ? acceleration * PLAYER_AIR_ACCELERATION_MULTIPLIER
+            : acceleration;
 
         acceleratePredictedPlayer(
             player,
             wishDirectionX,
             wishDirectionY,
-            PLAYER_MAX_SPEED,
-            PLAYER_ACCELERATION,
+            maxSpeed,
+            finalAcceleration,
             deltaSeconds
         );
     }
@@ -128,6 +148,27 @@ function simulatePredictedMovement(player, input, deltaSeconds) {
     const nextY = player.y + player.velocityY * deltaSeconds;
 
     movePredictedPlayerWithCollision(player, nextX, nextY);
+    simulatePredictedVerticalMovement(player, input, deltaSeconds);
+}
+
+function simulatePredictedVerticalMovement(player, input, deltaSeconds) {
+    const z = player.z || 0;
+    let velocityZ = player.velocityZ || 0;
+    const onGround = z <= 0.001;
+
+    if (input.jump && onGround) {
+        velocityZ = PLAYER_JUMP_VELOCITY;
+        player.velocityX = (player.velocityX || 0) * PLAYER_BUNNYHOP_SPEED_BOOST;
+        player.velocityY = (player.velocityY || 0) * PLAYER_BUNNYHOP_SPEED_BOOST;
+    }
+
+    if (z > 0.001 || velocityZ > 0) {
+        velocityZ -= PLAYER_GRAVITY * deltaSeconds;
+    }
+
+    const nextZ = z + velocityZ * deltaSeconds;
+    player.z = Math.max(0, nextZ);
+    player.velocityZ = player.z <= 0 ? 0 : velocityZ;
 }
 
 function applyPredictedFriction(player, deltaSeconds) {

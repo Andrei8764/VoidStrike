@@ -20,7 +20,7 @@ public class GameRoomManager {
         this.objectMapper = objectMapper;
     }
 
-    public synchronized GameRoom joinRoom(WebSocketSession session, String playerName) {
+    public synchronized GameRoom joinRoom(WebSocketSession session, String playerName, String characterModel) {
         Optional<GameRoom> roomWithSlot = rooms.values()
                 .stream()
                 .filter(room -> room.hasFreeSlot() && room.isPlayerNameAvailable(playerName))
@@ -28,7 +28,7 @@ public class GameRoomManager {
 
         GameRoom room = roomWithSlot.orElseGet(this::createRoom);
 
-        room.addPlayer(session, playerName);
+        room.addPlayer(session, playerName, characterModel);
         playerRoomIds.put(session.getId(), room.getId());
 
         return room;

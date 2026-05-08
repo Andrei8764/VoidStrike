@@ -80,6 +80,40 @@ input {
     border-color: #38bdf8;
 }
 
+#characterSelect {
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px 12px;
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    border-radius: 12px;
+    outline: none;
+    background: #020617;
+    color: #f8fafc;
+}
+
+#characterSelect:focus {
+    border-color: #38bdf8;
+}
+
+.characterLabel {
+    display: block;
+    margin-top: 12px;
+    margin-bottom: 6px;
+    color: #cbd5e1;
+    text-align: left;
+    font-size: 13px;
+}
+
+#characterPreviewCanvas {
+    display: block;
+    width: 100%;
+    height: 160px;
+    margin-bottom: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 12px;
+    background: linear-gradient(180deg, #7dd3fc 0%, #5d7a2f 100%);
+}
+
 #joinButton {
     width: 100%;
     margin-top: 14px;
@@ -221,7 +255,8 @@ input {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    width: min(430px, calc(100vw - 32px));
+    width: min(760px, calc(100vw - 32px));
+    max-height: min(84vh, 720px);
     padding: 22px;
     transform: translate(-50%, -50%);
     border: 1px solid rgba(250, 204, 21, 0.55);
@@ -235,6 +270,7 @@ input {
             0 0 52px rgba(250, 204, 21, 0.22);
     backdrop-filter: blur(14px);
     pointer-events: auto;
+    overflow: auto;
 }
 
 #weaponShop.hidden {
@@ -277,25 +313,77 @@ input {
     font-size: 13px;
 }
 
-#weaponShop button {
+#shopCategoryTabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.shopTab {
+    border: 1px solid rgba(125, 211, 252, 0.26);
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.9);
+    color: #cbd5e1;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+.shopTab.active {
+    border-color: rgba(250, 204, 21, 0.72);
+    color: #f8fafc;
+    background: rgba(59, 130, 246, 0.28);
+}
+
+#shopWeaponGrid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.shopWeaponCard {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 16px;
+    gap: 8px;
+    min-height: 180px;
+    padding: 10px 10px 12px;
     border: 1px solid rgba(125, 211, 252, 0.32);
     border-radius: 14px;
     background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
     color: #f8fafc;
-    font-weight: 900;
+    font-weight: 800;
     cursor: pointer;
     transition: transform 120ms ease, border-color 120ms ease, filter 120ms ease;
 }
 
-#weaponShop button strong {
+.shopWeaponCard strong {
     color: #facc15;
+    font-size: 14px;
 }
 
-#weaponShop button:hover {
+.shopWeaponCard span {
+    font-size: 15px;
+    text-align: center;
+}
+
+.shopWeaponCard img {
+    width: 110px;
+    height: 78px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 8px 10px rgba(2, 6, 23, 0.7));
+}
+
+@media (max-width: 700px) {
+    #shopWeaponGrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.shopWeaponCard:hover {
     border-color: #facc15;
     filter: brightness(1.14);
     transform: translateY(-1px);
@@ -379,6 +467,73 @@ input {
 .killFeedItem strong {
     margin: 0 8px;
     color: #facc15;
+}
+
+.nameLabel {
+    position: fixed;
+    z-index: 12;
+    transform: translate(-50%, -100%);
+    padding: 3px 8px;
+    border-radius: 8px;
+    background: rgba(2, 6, 23, 0.78);
+    color: #f8fafc;
+    font-size: 12px;
+    font-weight: 700;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+#chatPanel {
+    position: fixed;
+    left: 18px;
+    bottom: 18px;
+    z-index: 12;
+    width: 320px;
+    border: 1px solid rgba(148, 163, 184, 0.26);
+    border-radius: 12px;
+    background: rgba(2, 6, 23, 0.72);
+    backdrop-filter: blur(8px);
+    overflow: hidden;
+}
+
+#chatMessages {
+    height: 140px;
+    padding: 8px 10px;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.chatLine {
+    margin-bottom: 4px;
+    color: #e2e8f0;
+}
+
+.chatName {
+    font-weight: 800;
+    margin-right: 6px;
+}
+
+#chatInput {
+    width: 100%;
+    border: 0;
+    border-top: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(15, 23, 42, 0.85);
+    color: #f8fafc;
+    padding: 10px;
+    outline: none;
+}
+
+#minimapCanvas {
+    position: fixed;
+    right: 18px;
+    top: 18px;
+    z-index: 12;
+    width: 220px;
+    height: 124px;
+    border: 1px solid rgba(125, 211, 252, 0.45);
+    border-radius: 10px;
+    background: rgba(5, 8, 16, 0.72);
 }
 
 #purchaseNotification {

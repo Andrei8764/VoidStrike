@@ -10,22 +10,28 @@
 <div id="nameOverlay">
     <div id="namePanel">
         <h1>VoidStrike</h1>
-        <p>Alege un nume pentru a intra în joc.</p>
+        <p>Alege un nume pentru a intra in joc.</p>
 
         <input
                 id="nameInput"
                 type="text"
                 maxlength="16"
-                placeholder="Numele tău"
+                placeholder="Numele tau"
                 autocomplete="off"
         >
 
-        <button id="joinButton">Intră în joc</button>
+        <label for="characterSelect" class="characterLabel">Caracter</label>
+        <canvas id="characterPreviewCanvas" width="220" height="160"></canvas>
+        <select id="characterSelect">
+            <option value="a_character_body.glb">Blocky A (Modular)</option>
+        </select>
+
+        <button id="joinButton">Intra in joc</button>
 
         <div id="nameError"></div>
 
         <div class="nameRules">
-            Numele trebuie să aibă 3-16 caractere și poate conține doar litere, cifre, _ și -.
+            Numele trebuie sa aiba 3-16 caractere si poate contine doar litere, cifre, _ si -.
         </div>
     </div>
 </div>
@@ -56,6 +62,8 @@
         Click canvas - lock mouse<br>
         Click - shoot<br>
         R - reload<br>
+        SHIFT - sprint<br>
+        SPACE - jump / bunnyhop<br>
         B - shop<br>
         1-5 - switch weapon<br>
         TAB - scoreboard
@@ -69,30 +77,51 @@
     </div>
 
     <h2>Weapon Shop</h2>
-    <p>Primești $150 pentru fiecare kill. Balanța se resetează la final de rundă.</p>
+    <p>Primesti $150 pentru fiecare kill. Balanta se reseteaza la final de runda.</p>
 
-    <button data-weapon-slot="1">
-        <span>Pistol</span>
-        <strong>Free</strong>
-    </button>
-    <button data-weapon-slot="2">
-        <span>Rifle</span>
-        <strong>Free</strong>
-    </button>
-    <button data-weapon-slot="3">
-        <span>SMG</span>
-        <strong>$250</strong>
-    </button>
-    <button data-weapon-slot="4">
-        <span>Shotgun</span>
-        <strong>$400</strong>
-    </button>
-    <button data-weapon-slot="5">
-        <span>Sniper</span>
-        <strong>$650</strong>
-    </button>
+    <div id="shopCategoryTabs">
+        <button class="shopTab active" data-shop-category="all" type="button">All</button>
+        <button class="shopTab" data-shop-category="sidearm" type="button">Sidearm</button>
+        <button class="shopTab" data-shop-category="assault" type="button">Assault</button>
+        <button class="shopTab" data-shop-category="smg" type="button">SMG</button>
+        <button class="shopTab" data-shop-category="shotgun" type="button">Shotgun</button>
+        <button class="shopTab" data-shop-category="sniper" type="button">Sniper</button>
+    </div>
 
-    <div class="shopHint">Apasă B ca să deschizi shop-ul, ESC ca să ieși.</div>
+    <div id="shopWeaponGrid">
+        <button class="shopWeaponCard" data-weapon-slot="1" data-category="sidearm" data-model="blaster-a.glb" data-preview="blaster-a.png" type="button">
+            <img src="/models/Previews/blaster-a.png" alt="Pistol">
+            <span>Pistol</span>
+            <strong>Free</strong>
+        </button>
+        <button class="shopWeaponCard" data-weapon-slot="2" data-category="assault" data-model="blaster-f.glb" data-preview="blaster-f.png" type="button">
+            <img src="/models/Previews/blaster-f.png" alt="Rifle">
+            <span>Rifle</span>
+            <strong>Free</strong>
+        </button>
+        <button class="shopWeaponCard" data-weapon-slot="3" data-category="smg" data-model="blaster-j.glb" data-preview="blaster-j.png" type="button">
+            <img src="/models/Previews/blaster-j.png" alt="SMG">
+            <span>SMG</span>
+            <strong>$250</strong>
+        </button>
+        <button class="shopWeaponCard" data-weapon-slot="4" data-category="shotgun" data-model="blaster-n.glb" data-preview="blaster-n.png" type="button">
+            <img src="/models/Previews/blaster-n.png" alt="Shotgun">
+            <span>Shotgun</span>
+            <strong>$400</strong>
+        </button>
+        <button class="shopWeaponCard" data-weapon-slot="5" data-category="sniper" data-model="blaster-q.glb" data-preview="blaster-q.png" type="button">
+            <img src="/models/Previews/blaster-q.png" alt="Sniper">
+            <span>Sniper</span>
+            <strong>$650</strong>
+        </button>
+        <button class="shopWeaponCard" data-weapon-slot="2" data-category="assault" data-model="blaster-repeater.glb" data-preview="blaster-r.png" type="button">
+            <img src="/models/Previews/blaster-r.png" alt="Rifle Alt">
+            <span>Rifle Alt</span>
+            <strong>Free</strong>
+        </button>
+    </div>
+
+    <div class="shopHint">Apasa B ca sa deschizi shop-ul, ESC ca sa iesi.</div>
 </div>
 
 <div id="scoreboard" class="hidden">
@@ -115,6 +144,15 @@
 <div id="killFeed"></div>
 
 <div id="purchaseNotification" class="hidden"></div>
+
+<div id="nameLabels"></div>
+
+<div id="chatPanel">
+    <div id="chatMessages"></div>
+    <input id="chatInput" type="text" maxlength="180" placeholder="Chat..." autocomplete="off">
+</div>
+
+<canvas id="minimapCanvas" width="220" height="124"></canvas>
 
 <div id="roundEndOverlay" class="hidden">
     <div class="roundEndPanel">

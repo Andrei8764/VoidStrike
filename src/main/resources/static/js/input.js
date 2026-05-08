@@ -1,23 +1,40 @@
 import {
     canvas,
+    chatInputElement,
+    characterSelect,
     joinButton,
     nameError,
     nameInput,
     scoreboardElement,
+    shopCategoryTabs,
     weaponShopButtons,
     weaponShopElement
 } from "./dom.js";
 import { keys, mouse, state } from "./state.js";
 import { resumeAudio } from "./audio.js";
-import { joinGame } from "./websocket.js";
-import { updateMouseWorldPosition } from "./renderer.js";
+import { joinGame, sendChatMessage } from "./websocket.js";
+import { updateMouseWorldPosition } from "./renderer3d.js";
+import { initWeaponShopPreview, previewWeaponModel } from "./weaponShopPreview.js";
 import { MOUSE_SENSITIVITY } from "./config.js";
 import { clamp, normalizeAngle } from "./utils.js";
 
 export function registerInputHandlers() {
+    initWeaponShopPreview();
+
+    if (characterSelect) {
+        characterSelect.value = state.selectedCharacterModel;
+        characterSelect.addEventListener("change", () => {
+            state.selectedCharacterModel = characterSelect.value;
+        });
+    }
+
     joinButton.addEventListener("click", joinGame);
 
     weaponShopButtons.forEach(button => {
+        button.addEventListener("mouseenter", () => {
+            previewWeaponModel(button.dataset.model, button.dataset.preview);
+        });
+
         button.addEventListener("pointerdown", event => {
             event.preventDefault();
             event.stopPropagation();
@@ -28,6 +45,14 @@ export function registerInputHandlers() {
             setShopVisible(false);
         });
     });
+
+    shopCategoryTabs.forEach(tab => {
+        tab.addEventListener("click", () => {
+            setShopCategory(tab.dataset.shopCategory || "all");
+        });
+    });
+
+    setShopCategory("all");
 
     weaponShopElement.addEventListener("pointerdown", event => {
         event.preventDefault();
@@ -53,6 +78,24 @@ export function registerInputHandlers() {
     nameInput.addEventListener("input", () => {
         nameError.textContent = "";
     });
+
+    if (chatInputElement) {
+        chatInputElement.addEventListener("keydown", event => {
+            if (event.code !== "Enter") {
+                return;
+            }
+
+            event.preventDefault();
+            const text = chatInputElement.value.trim();
+
+            if (text.length === 0) {
+                return;
+            }
+
+            sendChatMessage(text);
+            chatInputElement.value = "";
+        });
+    }
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
@@ -132,6 +175,31 @@ function setShopVisible(visible) {
         }
 
         weaponShopElement.focus();
+        const firstVisibleWeapon = [...weaponShopButtons]
+            .find(button => button.style.display !== "none");
+
+        if (firstVisibleWeapon) {
+            previewWeaponModel(firstVisibleWeapon.dataset.model, firstVisibleWeapon.dataset.preview);
+        }
+    }
+}
+
+function setShopCategory(category) {
+    shopCategoryTabs.forEach(tab => {
+        tab.classList.toggle("active", tab.dataset.shopCategory === category);
+    });
+
+    weaponShopButtons.forEach(button => {
+        const weaponCategory = button.dataset.category;
+        const visible = category === "all" || weaponCategory === category;
+        button.style.display = visible ? "" : "none";
+    });
+
+    const firstVisibleWeapon = [...weaponShopButtons]
+        .find(button => button.style.display !== "none");
+
+    if (firstVisibleWeapon) {
+        previewWeaponModel(firstVisibleWeapon.dataset.model, firstVisibleWeapon.dataset.preview);
     }
 }
 
@@ -158,6 +226,10 @@ function handleKeyDown(event) {
         return;
     }
 
+    if (document.activeElement === chatInputElement) {
+        return;
+    }
+
     switch (event.code) {
         case "KeyW":
         case "ArrowUp":
@@ -174,6 +246,14 @@ function handleKeyDown(event) {
         case "KeyD":
         case "ArrowRight":
             keys.right = true;
+            break;
+        case "ShiftLeft":
+        case "ShiftRight":
+            keys.sprint = true;
+            break;
+        case "Space":
+            keys.jump = true;
+            event.preventDefault();
             break;
         case "KeyR":
             state.reloadRequested = true;
@@ -224,6 +304,14 @@ function handleKeyUp(event) {
         case "KeyD":
         case "ArrowRight":
             keys.right = false;
+            break;
+        case "ShiftLeft":
+        case "ShiftRight":
+            keys.sprint = false;
+            break;
+        case "Space":
+            keys.jump = false;
+            event.preventDefault();
             break;
         case "Tab":
             event.preventDefault();

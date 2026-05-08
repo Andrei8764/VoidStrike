@@ -9,6 +9,7 @@ public class GameSnapshot {
     private final List<BulletView> bullets;
     private final List<ObstacleView> obstacles;
     private final List<KillFeedView> killFeed;
+    private final List<ChatMessageView> chatMessages;
     private final RoundView round;
 
     public GameSnapshot(
@@ -16,12 +17,14 @@ public class GameSnapshot {
             List<BulletView> bullets,
             List<ObstacleView> obstacles,
             List<KillFeedView> killFeed,
+            List<ChatMessageView> chatMessages,
             RoundView round
     ) {
         this.players = players;
         this.bullets = bullets;
         this.obstacles = obstacles;
         this.killFeed = killFeed;
+        this.chatMessages = chatMessages;
         this.round = round;
     }
 
@@ -45,6 +48,10 @@ public class GameSnapshot {
         return killFeed;
     }
 
+    public List<ChatMessageView> getChatMessages() {
+        return chatMessages;
+    }
+
     public RoundView getRound() {
         return round;
     }
@@ -53,10 +60,13 @@ public class GameSnapshot {
             String id,
             String name,
             String team,
+            String characterModel,
             double x,
             double y,
+            double z,
             double velocityX,
             double velocityY,
+            double velocityZ,
             double angle,
             double pitch,
             long lastProcessedInputSequence,
@@ -95,6 +105,14 @@ public class GameSnapshot {
             String attacker,
             String victim,
             String weapon,
+            long createdAt
+    ) {
+    }
+
+    public record ChatMessageView(
+            String player,
+            String team,
+            String text,
             long createdAt
     ) {
     }

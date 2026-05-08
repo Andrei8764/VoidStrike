@@ -9,13 +9,16 @@ public class PlayerState {
     private final String id;
     private final String name;
     private final String team;
+    private final String characterModel;
 
     private Integer buyWeaponSlot;
 
     private double x;
     private double y;
+    private double z;
     private double velocityX;
     private double velocityY;
+    private double velocityZ;
     private double angle;
     private double pitch;
     private int hp;
@@ -34,6 +37,8 @@ public class PlayerState {
     private boolean down;
     private boolean left;
     private boolean right;
+    private boolean sprint;
+    private boolean jump;
     private boolean shoot;
     private boolean reload;
     private int weaponSlot;
@@ -41,15 +46,17 @@ public class PlayerState {
     private long lastProcessedInputSequence;
     private long lastShotAt;
 
-    public PlayerState(String id, String name, String team, double x, double y) {
+    public PlayerState(String id, String name, String team, String characterModel, double x, double y) {
         this.id = id;
         this.name = name;
         this.team = team;
+        this.characterModel = characterModel;
         this.x = x;
         this.y = y;
 
         this.velocityX = 0.0;
         this.velocityY = 0.0;
+        this.velocityZ = 0.0;
         this.angle = 0.0;
         this.pitch = 0.0;
         this.hp = 100;
@@ -67,6 +74,7 @@ public class PlayerState {
 
         this.lastProcessedInputSequence = 0;
         this.lastShotAt = 0;
+        this.z = 0.0;
     }
 
     public void applyInput(ClientInputMessage input) {
@@ -76,6 +84,8 @@ public class PlayerState {
         this.down = input.isDown();
         this.left = input.isLeft();
         this.right = input.isRight();
+        this.sprint = input.isSprint();
+        this.jump = input.isJump();
         this.shoot = input.isShoot();
         this.reload = input.isReload();
         this.weaponSlot = input.getWeaponSlot();
@@ -97,6 +107,8 @@ public class PlayerState {
         this.y = y;
         this.velocityX = 0.0;
         this.velocityY = 0.0;
+        this.velocityZ = 0.0;
+        this.z = 0.0;
 
         this.hp = 100;
         this.ammo = weapon.getMagazineSize();
@@ -108,6 +120,8 @@ public class PlayerState {
         this.down = false;
         this.left = false;
         this.right = false;
+        this.sprint = false;
+        this.jump = false;
         this.shoot = false;
         this.reload = false;
     }
@@ -166,6 +180,11 @@ public class PlayerState {
         this.balance = 0;
     }
 
+    public void resetRoundStats() {
+        this.kills = 0;
+        this.deaths = 0;
+    }
+
     public boolean buyWeapon(WeaponType weaponType) {
         if (weaponType == null) {
             return false;
@@ -196,6 +215,10 @@ public class PlayerState {
         return team;
     }
 
+    public String getCharacterModel() {
+        return characterModel;
+    }
+
     public double getX() {
         return x;
     }
@@ -210,6 +233,14 @@ public class PlayerState {
 
     public double getVelocityY() {
         return velocityY;
+    }
+
+    public double getZ() {
+        return z;
+    }
+
+    public double getVelocityZ() {
+        return velocityZ;
     }
 
     public double getAngle() {
@@ -272,6 +303,14 @@ public class PlayerState {
         return shoot;
     }
 
+    public boolean isSprint() {
+        return sprint;
+    }
+
+    public boolean isJump() {
+        return jump;
+    }
+
     public boolean isReload() {
         return reload;
     }
@@ -306,6 +345,14 @@ public class PlayerState {
 
     public void setVelocityY(double velocityY) {
         this.velocityY = velocityY;
+    }
+
+    public void setZ(double z) {
+        this.z = Math.max(0, z);
+    }
+
+    public void setVelocityZ(double velocityZ) {
+        this.velocityZ = velocityZ;
     }
 
     public void setHp(int hp) {

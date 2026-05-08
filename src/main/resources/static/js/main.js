@@ -1,5 +1,6 @@
 import { connectWebSocket } from "./websocket.js";
 import { registerInputHandlers } from "./input.js";
+import { initCharacterPreview } from "./characterPreview.js";
 import { updateBulletInterpolation, updateRemoteInterpolation } from "./interpolation.js";
 import {
     render,
@@ -7,11 +8,12 @@ import {
     updateAimAngle,
     updateCamera,
     updateMouseWorldPosition
-} from "./renderer.js";
+} from "./renderer3d.js";
 import { keys, state } from "./state.js";
 
 resizeCanvas();
 registerInputHandlers();
+initCharacterPreview();
 connectWebSocket();
 requestAnimationFrame(gameLoop);
 

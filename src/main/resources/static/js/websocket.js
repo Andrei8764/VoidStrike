@@ -1,4 +1,5 @@
 import {
+    characterSelect,
     joinButton,
     nameError,
     nameInput,
@@ -30,9 +31,11 @@ import {
     updateKillFeed,
     updateScoreboard
 } from "./hud.js";
-import { updateAimAngle } from "./renderer.js";
+import { updateAimAngle } from "./renderer3d.js";
 import { predictLocalPlayer, reconcileLocalPlayer } from "./prediction.js";
 import { addBulletInterpolationSnapshot, addRemoteInterpolationSnapshot } from "./interpolation.js";
+
+const ENEMY_SHOT_HEAR_DISTANCE = 520;
 
 export function connectWebSocket() {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -70,6 +73,7 @@ export function connectWebSocket() {
             state.joined = true;
             state.playerId = message.playerId;
             state.playerName = message.name;
+            state.selectedCharacterModel = message.characterModel || state.selectedCharacterModel;
 
             playerNameElement.textContent = state.playerName;
             nameOverlay.classList.add("hidden");
@@ -83,6 +87,7 @@ export function connectWebSocket() {
             state.bullets = message.bullets;
             state.obstacles = message.obstacles || state.obstacles;
             state.killFeed = message.killFeed || [];
+            state.chatMessages = message.chatMessages || [];
             state.round = message.round;
 
             addRemoteInterpolationSnapshot(message.players);
@@ -94,6 +99,7 @@ export function connectWebSocket() {
             reconcileLocalPlayer();
 
             detectLocalShot();
+            detectNearbyEnemyShots();
             detectReloadSound();
             updateHud();
             updateScoreboard();
@@ -112,6 +118,8 @@ export function connectWebSocket() {
         state.lastRoundNumber = null;
         state.lastRoundStatus = null;
         state.roundEndSoundPlayedForRound = null;
+        state.chatMessages = [];
+        state.remotePlayerAmmo.clear();
         state.remotePlayerStates.clear();
 
         setConnectionStatus("disconnected");
@@ -148,10 +156,12 @@ export function joinGame() {
 
     joinButton.disabled = true;
     nameError.textContent = "";
+    state.selectedCharacterModel = characterSelect?.value || state.selectedCharacterModel;
 
     state.socket.send(JSON.stringify({
         type: "join",
-        name: requestedName
+        name: requestedName,
+        characterModel: state.selectedCharacterModel
     }));
 }
 
@@ -188,6 +198,8 @@ function startSendingInput() {
             down: keys.down,
             left: keys.left,
             right: keys.right,
+            sprint: keys.sprint,
+            jump: keys.jump,
             shoot: mouse.down,
             reload: state.reloadRequested,
             weaponSlot: state.selectedWeaponSlot,
@@ -226,6 +238,57 @@ function detectLocalShot() {
     }
 
     state.lastSelfAmmo = self.ammo;
+}
+
+export function sendChatMessage(text) {
+    if (!state.socket || state.socket.readyState !== WebSocket.OPEN || !state.joined) {
+        return;
+    }
+
+    state.socket.send(JSON.stringify({
+        type: "chat",
+        text
+    }));
+}
+
+function detectNearbyEnemyShots() {
+    const self = getSelfPlayer();
+
+    if (!self) {
+        state.remotePlayerAmmo.clear();
+        return;
+    }
+
+    const activeRemotePlayerIds = new Set();
+
+    for (const player of state.players) {
+        if (player.id === state.playerId) {
+            continue;
+        }
+
+        activeRemotePlayerIds.add(player.id);
+
+        const previousAmmo = state.remotePlayerAmmo.get(player.id);
+        state.remotePlayerAmmo.set(player.id, player.ammo);
+
+        if (previousAmmo === undefined || player.ammo >= previousAmmo) {
+            continue;
+        }
+
+        const dx = player.x - self.x;
+        const dy = player.y - self.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance <= ENEMY_SHOT_HEAR_DISTANCE) {
+            playShootSound(player.weapon);
+        }
+    }
+
+    for (const playerId of state.remotePlayerAmmo.keys()) {
+        if (!activeRemotePlayerIds.has(playerId)) {
+            state.remotePlayerAmmo.delete(playerId);
+        }
+    }
 }
 
 function detectReloadSound() {

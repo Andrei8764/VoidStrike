@@ -91,8 +91,10 @@ export function updateRemoteInterpolation() {
             ...newer.player,
             x: lerp(older.player.x, newer.player.x, progress),
             y: lerp(older.player.y, newer.player.y, progress),
+            z: lerp(older.player.z || 0, newer.player.z || 0, progress),
             velocityX: lerp(older.player.velocityX || 0, newer.player.velocityX || 0, progress),
-            velocityY: lerp(older.player.velocityY || 0, newer.playerVelocityY || 0, progress),
+            velocityY: lerp(older.player.velocityY || 0, newer.player.velocityY || 0, progress),
+            velocityZ: lerp(older.player.velocityZ || 0, newer.player.velocityZ || 0, progress),
             angle: lerpAngle(older.player.angle, newer.player.angle, progress),
             pitch: lerp(older.player.pitch || 0, newer.player.pitch || 0, progress)
         });
@@ -106,7 +108,9 @@ function extrapolateRemotePlayer(player, millisecondsSinceSnapshot) {
     return {
         ...player,
         x: clamp(player.x + (player.velocityX || 0) * seconds, PLAYER_RADIUS, WORLD_WIDTH - PLAYER_RADIUS),
-        y: clamp(player.y + (player.velocityY || 0) * seconds, PLAYER_RADIUS, WORLD_HEIGHT - PLAYER_RADIUS)
+        y: clamp(player.y + (player.velocityY || 0) * seconds, PLAYER_RADIUS, WORLD_HEIGHT - PLAYER_RADIUS),
+        z: Math.max(0, (player.z || 0) + (player.velocityZ || 0) * seconds),
+        velocityZ: player.velocityZ || 0
     };
 }
 

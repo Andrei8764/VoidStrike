@@ -8,6 +8,8 @@ public class ClientInputMessage {
     private boolean down;
     private boolean left;
     private boolean right;
+    private boolean sprint;
+    private boolean jump;
     private boolean shoot;
     private boolean reload;
     private int weaponSlot;
@@ -37,6 +39,14 @@ public class ClientInputMessage {
 
     public boolean isRight() {
         return right;
+    }
+
+    public boolean isSprint() {
+        return sprint;
+    }
+
+    public boolean isJump() {
+        return jump;
     }
 
     public boolean isShoot() {
@@ -85,6 +95,14 @@ public class ClientInputMessage {
 
     public void setRight(boolean right) {
         this.right = right;
+    }
+
+    public void setSprint(boolean sprint) {
+        this.sprint = sprint;
+    }
+
+    public void setJump(boolean jump) {
+        this.jump = jump;
     }
 
     public void setShoot(boolean shoot) {

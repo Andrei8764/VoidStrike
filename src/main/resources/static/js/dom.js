@@ -1,8 +1,10 @@
 export const canvas = document.getElementById("gameCanvas");
-export const context = canvas.getContext("2d");
+export const nameLabelsElement = document.getElementById("nameLabels");
 
 export const nameOverlay = document.getElementById("nameOverlay");
 export const nameInput = document.getElementById("nameInput");
+export const characterSelect = document.getElementById("characterSelect");
+export const characterPreviewCanvas = document.getElementById("characterPreviewCanvas");
 export const joinButton = document.getElementById("joinButton");
 export const nameError = document.getElementById("nameError");
 
@@ -24,8 +26,14 @@ export const blueScoreElement = document.getElementById("blueScore");
 export const scoreboardElement = document.getElementById("scoreboard");
 export const scoreboardBodyElement = document.getElementById("scoreboardBody");
 export const killFeedElement = document.getElementById("killFeed");
+export const chatMessagesElement = document.getElementById("chatMessages");
+export const chatInputElement = document.getElementById("chatInput");
+export const minimapCanvas = document.getElementById("minimapCanvas");
+export const minimapContext = minimapCanvas.getContext("2d");
 export const weaponShopElement = document.getElementById("weaponShop");
-export const weaponShopButtons = document.querySelectorAll("#weaponShop button[data-weapon-slot]");
+export const weaponShopButtons = document.querySelectorAll("#weaponShop .shopWeaponCard[data-weapon-slot]");
+export const shopCategoryTabs = document.querySelectorAll("#shopCategoryTabs .shopTab");
+export const weaponPreviewImage = document.getElementById("weaponPreviewImage");
 export const purchaseNotificationElement = document.getElementById("purchaseNotification");
 
 export const roundEndOverlayElement = document.getElementById("roundEndOverlay");

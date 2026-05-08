@@ -18,6 +18,8 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
     private static final int MIN_NAME_LENGTH = 3;
     private static final int MAX_NAME_LENGTH = 16;
     private static final String NAME_PATTERN = "^[a-zA-Z0-9_-]+$";
+    private static final String CHARACTER_PATTERN = "^character-[a-r]\\.glb$";
+    private static final String DEFAULT_CHARACTER_MODEL = "character-a.glb";
 
     private final ObjectMapper objectMapper;
     private final GameRoomManager gameRoomManager;
@@ -69,6 +71,12 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
+        if ("chat".equals(type)) {
+            String text = json.has("text") ? json.get("text").asText() : "";
+            room.handleChatMessage(session.getId(), text);
+            return;
+        }
+
         if ("input".equals(type)) {
             ClientInputMessage input = objectMapper.readValue(payload, ClientInputMessage.class);
             room.handleInput(session.getId(), input);
@@ -83,6 +91,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
         JoinGameMessage joinMessage = objectMapper.readValue(payload, JoinGameMessage.class);
         String playerName = normalizeName(joinMessage.getName());
+        String characterModel = normalizeCharacterModel(joinMessage.getCharacterModel());
 
         String validationError = validatePlayerName(playerName);
 
@@ -96,24 +105,40 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
-        GameRoom room = gameRoomManager.joinRoom(session, playerName);
+        GameRoom room = gameRoomManager.joinRoom(session, playerName, characterModel);
 
         session.sendMessage(new TextMessage("""
                 {
                   "type": "joined",
                   "playerId": "%s",
                   "roomId": "%s",
-                  "name": "%s"
+                  "name": "%s",
+                  "characterModel": "%s"
                 }
                 """.formatted(
                 escapeJson(session.getId()),
                 escapeJson(room.getId()),
-                escapeJson(playerName)
+                escapeJson(playerName),
+                escapeJson(characterModel)
         )));
     }
 
     private String normalizeName(String name) {
         return name == null ? "" : name.trim();
+    }
+
+    private String normalizeCharacterModel(String characterModel) {
+        if (characterModel == null) {
+            return DEFAULT_CHARACTER_MODEL;
+        }
+
+        String normalized = characterModel.trim().toLowerCase();
+
+        if (!normalized.matches(CHARACTER_PATTERN)) {
+            return DEFAULT_CHARACTER_MODEL;
+        }
+
+        return normalized;
     }
 
     private String validatePlayerName(String name) {

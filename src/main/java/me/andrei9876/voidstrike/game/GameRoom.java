@@ -26,6 +26,12 @@ public class GameRoom {
     private static final double MAP_HEIGHT = 900;
     private static final double PLAYER_MAX_SPEED = 410;
     private static final double PLAYER_ACCELERATION = 2200;
+    private static final double PLAYER_SPRINT_SPEED_MULTIPLIER = 1.45;
+    private static final double PLAYER_SPRINT_ACCELERATION_MULTIPLIER = 1.2;
+    private static final double PLAYER_AIR_ACCELERATION_MULTIPLIER = 0.45;
+    private static final double GRAVITY = 1350;
+    private static final double JUMP_VELOCITY = 520;
+    private static final double BUNNYHOP_SPEED_BOOST = 1.09;
     private static final double PLAYER_FRICTION = 9.5;
     private static final double PLAYER_STOP_SPEED = 90;
     private static final double PLAYER_RADIUS = 20;
@@ -41,6 +47,8 @@ public class GameRoom {
     private static final double HEADSHOT_RADIUS = 16;
     private static final int KILL_FEED_LIMIT = 6;
     private static final long KILL_FEED_TTL_MS = 8_000;
+    private static final int CHAT_LIMIT = 40;
+    private static final long CHAT_TTL_MS = 300_000;
 
     private static final long ROUND_DURATION_MS = 180_000;
     private static final long ROUND_END_DISPLAY_MS = 10_000;
@@ -94,6 +102,7 @@ public class GameRoom {
     private final Map<String, PlayerState> players;
     private final List<BulletState> bullets = new ArrayList<>();
     private final List<KillFeedEvent> killFeed = new ArrayList<>();
+    private final List<ChatEvent> chatMessages = new ArrayList<>();
 
     private int roundNumber = 1;
     private int redScore = 0;
@@ -101,6 +110,8 @@ public class GameRoom {
     private long roundEndsAt = System.currentTimeMillis() + ROUND_DURATION_MS;
     private boolean roundEnding = false;
     private long nextRoundStartsAt = 0;
+    private boolean roundTimerPaused = false;
+    private long roundTimerPausedAt = 0;
 
     public GameRoom(
             String id,
@@ -124,7 +135,7 @@ public class GameRoom {
                 .noneMatch(player -> player.getName().equalsIgnoreCase(name));
     }
 
-    public synchronized void addPlayer(WebSocketSession session, String playerName) {
+    public synchronized void addPlayer(WebSocketSession session, String playerName, String characterModel) {
         String playerId = session.getId();
         String team = chooseTeam();
 
@@ -132,7 +143,7 @@ public class GameRoom {
         double spawnY = 260 + Math.random() * 380;
 
         sessions.put(playerId, session);
-        players.put(playerId, new PlayerState(playerId, playerName, team, spawnX, spawnY));
+        players.put(playerId, new PlayerState(playerId, playerName, team, characterModel, spawnX, spawnY));
     }
 
     public synchronized void removePlayer(String playerId) {
@@ -176,6 +187,20 @@ public class GameRoom {
     private void updateRound() {
         long now = System.currentTimeMillis();
 
+        if (!roundEnding && players.size() < 2) {
+            if (!roundTimerPaused) {
+                roundTimerPaused = true;
+                roundTimerPausedAt = now;
+            }
+            return;
+        }
+
+        if (roundTimerPaused) {
+            roundEndsAt += now - roundTimerPausedAt;
+            roundTimerPaused = false;
+            roundTimerPausedAt = 0;
+        }
+
         if (!roundEnding && now >= roundEndsAt) {
             roundEnding = true;
             nextRoundStartsAt = now + ROUND_END_DISPLAY_MS;
@@ -188,14 +213,47 @@ public class GameRoom {
         }
 
         roundNumber++;
+        redScore = 0;
+        blueScore = 0;
         roundEndsAt = now + ROUND_DURATION_MS;
         roundEnding = false;
         nextRoundStartsAt = 0;
         bullets.clear();
+        killFeed.clear();
 
         for (PlayerState player : players.values()) {
             respawnPlayer(player);
+            player.resetRoundStats();
             player.resetBalance();
+        }
+    }
+
+    public synchronized void handleChatMessage(String playerId, String text) {
+        PlayerState player = players.get(playerId);
+
+        if (player == null || text == null) {
+            return;
+        }
+
+        String normalizedText = text.trim();
+
+        if (normalizedText.isEmpty()) {
+            return;
+        }
+
+        if (normalizedText.length() > 180) {
+            normalizedText = normalizedText.substring(0, 180);
+        }
+
+        chatMessages.add(new ChatEvent(
+                player.getName(),
+                player.getTeam(),
+                normalizedText,
+                System.currentTimeMillis()
+        ));
+
+        while (chatMessages.size() > CHAT_LIMIT) {
+            chatMessages.remove(0);
         }
     }
 
@@ -216,6 +274,7 @@ public class GameRoom {
             }
 
             updatePlayerMovement(player, deltaSeconds);
+            updatePlayerVerticalMovement(player, deltaSeconds);
 
             if (canShoot(player, now)) {
                 spawnBullet(player);
@@ -278,14 +337,47 @@ public class GameRoom {
 
             double wishDirectionX = cos * forward - sin * strafe;
             double wishDirectionY = sin * forward + cos * strafe;
+            boolean sprinting = player.isSprint() && forward > 0;
+            boolean airborne = player.getZ() > 0.001;
+            double maxSpeed = sprinting
+                    ? PLAYER_MAX_SPEED * PLAYER_SPRINT_SPEED_MULTIPLIER
+                    : PLAYER_MAX_SPEED;
+            double acceleration = sprinting
+                    ? PLAYER_ACCELERATION * PLAYER_SPRINT_ACCELERATION_MULTIPLIER
+                    : PLAYER_ACCELERATION;
 
-            accelerate(player, wishDirectionX, wishDirectionY, PLAYER_MAX_SPEED, PLAYER_ACCELERATION, deltaSeconds);
+            if (airborne) {
+                acceleration *= PLAYER_AIR_ACCELERATION_MULTIPLIER;
+            }
+
+            accelerate(player, wishDirectionX, wishDirectionY, maxSpeed, acceleration, deltaSeconds);
         }
 
         double nextX = player.getX() + player.getVelocityX() * deltaSeconds;
         double nextY = player.getY() + player.getVelocityY() * deltaSeconds;
 
         movePlayerWithCollision(player, nextX, nextY);
+    }
+
+    private void updatePlayerVerticalMovement(PlayerState player, double deltaSeconds) {
+        boolean onGround = player.getZ() <= 0.001;
+
+        if (player.isJump() && onGround) {
+            player.setVelocityZ(JUMP_VELOCITY);
+            player.setVelocityX(player.getVelocityX() * BUNNYHOP_SPEED_BOOST);
+            player.setVelocityY(player.getVelocityY() * BUNNYHOP_SPEED_BOOST);
+            onGround = false;
+        }
+
+        if (!onGround) {
+            player.setVelocityZ(player.getVelocityZ() - GRAVITY * deltaSeconds);
+            player.setZ(player.getZ() + player.getVelocityZ() * deltaSeconds);
+
+            if (player.getZ() <= 0) {
+                player.setZ(0);
+                player.setVelocityZ(0);
+            }
+        }
     }
 
     private void applyFriction(PlayerState player, double deltaSeconds) {
@@ -451,7 +543,9 @@ public class GameRoom {
 
                 double bodyDistance = distance(bullet.getX(), bullet.getY(), player.getX(), player.getY());
                 boolean headshot = isHeadshot(bullet, player);
-                boolean bodyshot = bodyDistance <= BULLET_HIT_RADIUS && bullet.getZ() <= PLAYER_BODY_MAX_Z;
+                boolean bodyshot = bodyDistance <= BULLET_HIT_RADIUS
+                        && bullet.getZ() >= player.getZ()
+                        && bullet.getZ() <= player.getZ() + PLAYER_BODY_MAX_Z;
 
                 if (headshot || bodyshot) {
                     player.setHp(headshot ? 0 : player.getHp() - bullet.getDamage());
@@ -476,8 +570,8 @@ public class GameRoom {
         double distance = distance(bullet.getX(), bullet.getY(), player.getX(), player.getY());
 
         return distance <= HEADSHOT_RADIUS
-                && bullet.getZ() >= PLAYER_HEAD_MIN_Z
-                && bullet.getZ() <= PLAYER_HEAD_MAX_Z;
+                && bullet.getZ() >= player.getZ() + PLAYER_HEAD_MIN_Z
+                && bullet.getZ() <= player.getZ() + PLAYER_HEAD_MAX_Z;
     }
 
     private void addTeamScore(String team) {
@@ -545,6 +639,10 @@ public class GameRoom {
         killFeed.removeIf(event -> now - event.createdAt() > KILL_FEED_TTL_MS);
     }
 
+    private void pruneChat(long now) {
+        chatMessages.removeIf(event -> now - event.createdAt() > CHAT_TTL_MS);
+    }
+
     private String chooseTeam() {
         long redPlayers = players.values()
                 .stream()
@@ -561,11 +659,13 @@ public class GameRoom {
 
     private void broadcastSnapshot() {
         long now = System.currentTimeMillis();
+        long countdownReferenceTime = roundTimerPaused ? roundTimerPausedAt : now;
         long timeLeftSeconds = roundEnding
                 ? Math.max(0, (nextRoundStartsAt - now) / 1000)
-                : Math.max(0, (roundEndsAt - now) / 1000);
+                : Math.max(0, (roundEndsAt - countdownReferenceTime) / 1000);
 
         pruneKillFeed(now);
+        pruneChat(now);
 
         GameSnapshot snapshot = new GameSnapshot(
                 players.values()
@@ -574,10 +674,13 @@ public class GameRoom {
                                 player.getId(),
                                 player.getName(),
                                 player.getTeam(),
+                                player.getCharacterModel(),
                                 player.getX(),
                                 player.getY(),
+                                player.getZ(),
                                 player.getVelocityX(),
                                 player.getVelocityY(),
+                                player.getVelocityZ(),
                                 player.getAngle(),
                                 player.getPitch(),
                                 player.getLastProcessedInputSequence(),
@@ -623,6 +726,15 @@ public class GameRoom {
                                 event.victim(),
                                 event.weapon(),
                                 event.createdAt()
+                        ))
+                        .toList(),
+
+                chatMessages.stream()
+                        .map(message -> new GameSnapshot.ChatMessageView(
+                                message.player(),
+                                message.team(),
+                                message.text(),
+                                message.createdAt()
                         ))
                         .toList(),
 
@@ -706,6 +818,9 @@ public class GameRoom {
     }
 
     private record KillFeedEvent(String attacker, String victim, String weapon, long createdAt) {
+    }
+
+    private record ChatEvent(String player, String team, String text, long createdAt) {
     }
 
     public String getId() {

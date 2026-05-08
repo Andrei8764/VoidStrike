@@ -3,12 +3,14 @@ export const state = {
     socket: null,
     playerId: null,
     playerName: null,
+    selectedCharacterModel: "a_character_body.glb",
     joined: false,
 
     players: [],
     bullets: [],
     obstacles: [],
     killFeed: [],
+    chatMessages: [],
     round: null,
 
     selectedWeaponSlot: 2,
@@ -27,6 +29,7 @@ export const state = {
     lastRoundNumber: null,
     lastRoundStatus: null,
     roundEndSoundPlayedForRound: null,
+    remotePlayerAmmo: new Map(),
     viewAngle: 0,
     viewPitch: 0,
     bobTime: 0,
@@ -51,7 +54,8 @@ export const keys = {
     up: false,
     down: false,
     left: false,
-    right: false
+    right: false,
+    sprint: false
 };
 
 export const mouse = {
