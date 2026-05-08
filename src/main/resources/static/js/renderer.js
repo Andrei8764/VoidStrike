@@ -421,7 +421,7 @@ function drawProjectedEnemy(sprite) {
 function getProjectedPlayers(self) {
     return getRenderableRemotePlayers().map(player => {
         const projected = projectWorldPoint(self, player.x, player.y);
-        const height = getProjectedHeight(projected.depth, 105);
+        const height = getProjectedHeight(projected.depth, 80);
         const width = height * 0.42;
 
         return {
