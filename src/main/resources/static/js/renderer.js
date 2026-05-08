@@ -93,28 +93,30 @@ function drawFirstPersonScene() {
     }
 
     drawSkyAndFloor();
+    drawProjectedSun(self);
     drawProjectedGrid(self);
+    drawMovementFloorStreaks();
     drawProjectedBulletTrails(self);
 
     const objects = [
-        ...getBoundaryWallSegments().map(segment => ({
+        ...getBoundaryWallSegments().map((segment, index) => ({
             ...segment,
-            depth: getWallDepth(self, segment),
-            color: "#1f3a55",
-            accent: "#38bdf8"
+            depth: getWallSortDepth(self, segment),
+            color: ["#2563eb", "#0891b2", "#7c3aed", "#0f766e"][index % 4],
+            accent: ["#bfdbfe", "#67e8f9", "#ddd6fe", "#99f6e4"][index % 4]
         })),
-        ...getObstacleWallSegments().map(segment => ({
+        ...getObstacleWallSegments().map((segment, index) => ({
             ...segment,
-            depth: getWallDepth(self, segment),
-            color: "#26364f",
-            accent: "#94a3b8"
+            depth: getWallSortDepth(self, segment),
+            color: ["#f97316", "#dc2626", "#16a34a", "#9333ea", "#0284c7"][index % 5],
+            accent: ["#fed7aa", "#fecaca", "#bbf7d0", "#e9d5ff", "#bae6fd"][index % 5]
         })),
         ...getProjectedPlayers(self),
         ...getProjectedBullets(self)
     ];
 
     objects
-        .filter(object => object.depth > NEAR_PLANE)
+        .filter(object => object.type === "wall" || object.depth > NEAR_PLANE)
         .sort((a, b) => b.depth - a.depth)
         .forEach(object => {
             if (object.type === "sprite") {
@@ -127,30 +129,72 @@ function drawFirstPersonScene() {
 
 function drawSkyAndFloor() {
     const horizon = getHorizon();
+    const time = performance.now() * 0.001;
 
     const sky = context.createLinearGradient(0, 0, 0, horizon);
-    sky.addColorStop(0, "#7dd3fc");
-    sky.addColorStop(0.55, "#93c5fd");
+    sky.addColorStop(0, "#38bdf8");
+    sky.addColorStop(0.45, "#7dd3fc");
     sky.addColorStop(1, "#dbeafe");
 
     context.fillStyle = sky;
     context.fillRect(0, 0, canvas.width, horizon);
 
+    drawClouds(horizon, time);
+
     const floor = context.createLinearGradient(0, horizon, 0, canvas.height);
-    floor.addColorStop(0, "#475569");
-    floor.addColorStop(0.35, "#334155");
-    floor.addColorStop(1, "#111827");
+    floor.addColorStop(0, "#86efac");
+    floor.addColorStop(0.3, "#22c55e");
+    floor.addColorStop(0.7, "#15803d");
+    floor.addColorStop(1, "#052e16");
 
     context.fillStyle = floor;
     context.fillRect(0, horizon, canvas.width, canvas.height - horizon);
+
+    const glow = context.createRadialGradient(
+        canvas.width * 0.5,
+        horizon,
+        20,
+        canvas.width * 0.5,
+        horizon,
+        canvas.height * 0.85
+    );
+
+    glow.addColorStop(0, "rgba(255, 255, 255, 0.12)");
+    glow.addColorStop(0.45, "rgba(250, 204, 21, 0.07)");
+    glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+
+    context.fillStyle = glow;
+    context.fillRect(0, horizon, canvas.width, canvas.height - horizon);
+}
+
+function drawClouds(horizon, time) {
+    context.save();
+
+    context.fillStyle = "rgba(255, 255, 255, 0.38)";
+
+    for (let i = 0; i < 7; i++) {
+        const baseX = ((i * 280 + time * 18) % (canvas.width + 260)) - 130;
+        const baseY = horizon * (0.18 + (i % 3) * 0.14);
+        const scale = 0.7 + (i % 4) * 0.18;
+
+        context.beginPath();
+        context.ellipse(baseX, baseY, 52 * scale, 18 * scale, 0, 0, Math.PI * 2);
+        context.ellipse(baseX + 42 * scale, baseY + 4 * scale, 48 * scale, 16 * scale, 0, 0, Math.PI * 2);
+        context.ellipse(baseX - 38 * scale, baseY + 5 * scale, 44 * scale, 15 * scale, 0, 0, Math.PI * 2);
+        context.fill();
+    }
+
+    context.restore();
 }
 
 function drawProjectedGrid(self) {
     const spacing = 120;
+    const moving = keys.up || keys.down || keys.left || keys.right;
+    const pulse = moving ? 0.05 + Math.abs(Math.sin(state.bobTime)) * 0.08 : 0;
 
     context.save();
-    context.strokeStyle = "rgba(226, 232, 240, 0.12)";
-    context.lineWidth = 1;
+    context.strokeStyle = `rgba(240, 253, 244, ${0.13 + pulse})`;
+    context.lineWidth = moving ? 1.4 : 1;
 
     for (let x = 0; x <= WORLD_WIDTH; x += spacing) {
         drawProjectedFloorLine(self, x, 0, x, WORLD_HEIGHT);
@@ -163,13 +207,49 @@ function drawProjectedGrid(self) {
     context.restore();
 }
 
-function drawProjectedFloorLine(self, ax, ay, bx, by) {
-    const start = projectWorldPoint(self, ax, ay);
-    const end = projectWorldPoint(self, bx, by);
+function drawMovementFloorStreaks() {
+    const moving = keys.up || keys.down || keys.left || keys.right;
 
-    if (start.depth <= NEAR_PLANE || end.depth <= NEAR_PLANE) {
+    if (!moving) {
         return;
     }
+
+    const horizon = getHorizon();
+    const time = performance.now() * 0.001;
+
+    context.save();
+    context.globalAlpha = 0.08 + Math.abs(Math.sin(state.bobTime)) * 0.06;
+    context.strokeStyle = "rgba(255, 255, 255, 0.45)";
+    context.lineWidth = 1.4;
+    context.lineCap = "round";
+
+    for (let i = 0; i < 10; i++) {
+        const progress = ((time * 1.35 + i * 0.17) % 1);
+        const y = horizon + progress * (canvas.height - horizon);
+        const centerOffset = (i - 5) * 64;
+        const x = canvas.width / 2 + centerOffset * progress;
+        const length = 12 + progress * 46;
+
+        context.beginPath();
+        context.moveTo(x, y);
+        context.lineTo(x - centerOffset * 0.045, y + length);
+        context.stroke();
+    }
+
+    context.restore();
+}
+
+function drawProjectedFloorLine(self, ax, ay, bx, by) {
+    const startCamera = getCameraSpacePoint(self, ax, ay);
+    const endCamera = getCameraSpacePoint(self, bx, by);
+    const clipped = clipCameraSegment(startCamera, endCamera);
+
+    if (!clipped) {
+        return;
+    }
+
+    const start = projectCameraSpacePoint(clipped.start);
+    const end = projectCameraSpacePoint(clipped.end);
 
     const y1 = getGroundScreenY(start.depth);
     const y2 = getGroundScreenY(end.depth);
@@ -181,23 +261,33 @@ function drawProjectedFloorLine(self, ax, ay, bx, by) {
 }
 
 function drawProjectedWall(self, wall) {
-    const start = projectWorldPoint(self, wall.x1, wall.y1);
-    const end = projectWorldPoint(self, wall.x2, wall.y2);
+    const startCamera = getCameraSpacePoint(self, wall.x1, wall.y1);
+    const endCamera = getCameraSpacePoint(self, wall.x2, wall.y2);
+    const clipped = clipCameraSegment(startCamera, endCamera);
 
-    if (start.depth <= NEAR_PLANE || end.depth <= NEAR_PLANE) {
+    if (!clipped) {
         return;
     }
+
+    const start = projectCameraSpacePoint(clipped.start);
+    const end = projectCameraSpacePoint(clipped.end);
 
     const bottomA = getGroundScreenY(start.depth);
     const bottomB = getGroundScreenY(end.depth);
     const topA = bottomA - getProjectedHeight(start.depth, WALL_HEIGHT);
     const topB = bottomB - getProjectedHeight(end.depth, WALL_HEIGHT);
-    const shade = clamp(1 - wall.depth / 1300, 0.28, 0.95);
+    const shade = clamp(1 - wall.depth / 1300, 0.45, 1);
 
     context.save();
 
-    context.globalAlpha = shade;
-    context.fillStyle = wall.color;
+    context.globalAlpha = 1;
+
+    const wallGradient = context.createLinearGradient(start.x, topA, end.x, bottomB);
+    wallGradient.addColorStop(0, wall.accent);
+    wallGradient.addColorStop(0.42, wall.color);
+    wallGradient.addColorStop(1, "#111827");
+
+    context.fillStyle = wallGradient;
 
     context.beginPath();
     context.moveTo(start.x, topA);
@@ -207,10 +297,21 @@ function drawProjectedWall(self, wall) {
     context.closePath();
     context.fill();
 
-    context.globalAlpha = clamp(shade + 0.15, 0.35, 1);
+    context.globalAlpha = clamp(shade + 0.12, 0.55, 1);
     context.strokeStyle = wall.accent;
     context.lineWidth = 2;
     context.stroke();
+
+    if (Math.min(start.depth, end.depth) > 60) {
+        context.globalAlpha = clamp(shade * 0.32, 0.12, 0.32);
+        context.strokeStyle = "rgba(255, 255, 255, 0.72)";
+        context.lineWidth = 1;
+
+        context.beginPath();
+        context.moveTo(start.x, topA + 12);
+        context.lineTo(end.x, topB + 12);
+        context.stroke();
+    }
 
     context.restore();
 }
@@ -612,13 +713,15 @@ function getProjectedPlayers(self) {
         }
     }
 
-    return remotePlayers.map(player => {
-        const projected = projectWorldPoint(self, player.x, player.y);
-        const height = getProjectedHeight(projected.depth, 80);
-        const width = height * 0.42;
+    return remotePlayers
+        .filter(player => isWorldPointVisibleFromSelf(self, player.x, player.y))
+        .map(player => {
+            const projected = projectWorldPoint(self, player.x, player.y);
+            const height = getProjectedHeight(projected.depth, 80);
+            const width = height * 0.42;
 
-        const smoothAim = getSmoothRemoteWeaponAim(player, self);
-        const relativeAimAngle = normalizeAngle(smoothAim.angle - state.viewAngle);
+            const smoothAim = getSmoothRemoteWeaponAim(player, self);
+            const relativeAimAngle = normalizeAngle(smoothAim.angle - state.viewAngle);
 
         return {
             type: "sprite",
@@ -640,36 +743,101 @@ function getProjectedPlayers(self) {
 }
 
 function getProjectedBullets(self) {
-    return getRenderableBullets().map(bullet => {
-        const projected = projectWorldPoint(self, bullet.x, bullet.y);
-        const size = getProjectedHeight(projected.depth, 8);
-        const bulletZ = (bullet.z ?? 8) * 0.62;
+    return getRenderableBullets()
+        .filter(bullet => isWorldPointVisibleFromSelf(self, bullet.x, bullet.y))
+        .map(bullet => {
+            const projected = projectWorldPoint(self, bullet.x, bullet.y);
+            const size = getProjectedHeight(projected.depth, 8);
+            const bulletZ = (bullet.z ?? 8) * 0.62;
 
-        return {
-            type: "sprite",
-            kind: "bullet",
-            depth: projected.depth,
-            x: projected.x,
-            y: getGroundScreenY(projected.depth) - getProjectedHeight(projected.depth, bulletZ),
-            width: size,
-            height: size,
-            color: "#facc15",
-            accent: "#fef3c7",
-            shadow: "rgba(250, 204, 21, 0.22)",
-            alpha: bullet.alpha ?? 1
-        };
-    });
+            return {
+                type: "sprite",
+                kind: "bullet",
+                depth: projected.depth,
+                x: projected.x,
+                y: getGroundScreenY(projected.depth) - getProjectedHeight(projected.depth, bulletZ),
+                width: size,
+                height: size,
+                color: "#facc15",
+                accent: "#fef3c7",
+                shadow: "rgba(250, 204, 21, 0.22)",
+                alpha: bullet.alpha ?? 1
+            };
+        });
 }
 
 function drawProjectedBulletTrails(self) {
     context.save();
 
     for (const trail of state.fadingBulletTrails) {
-        drawProjectedBulletTrail(self, trail, trail.alpha);
+        if (isWorldPointVisibleFromSelf(self, trail.x, trail.y)) {
+            drawProjectedBulletTrail(self, trail, trail.alpha);
+        }
     }
 
     for (const bullet of getRenderableBullets()) {
-        drawProjectedBulletTrail(self, bullet, bullet.alpha ?? 1);
+        if (isWorldPointVisibleFromSelf(self, bullet.x, bullet.y)) {
+            drawProjectedBulletTrail(self, bullet, bullet.alpha ?? 1);
+        }
+    }
+
+    context.restore();
+}
+
+function drawProjectedSun(self) {
+    const sunWorldX = WORLD_WIDTH * 0.5;
+    const sunWorldY = -900;
+    const projected = projectWorldPoint(self, sunWorldX, sunWorldY);
+    const horizon = getHorizon();
+
+    if (projected.depth <= NEAR_PLANE) {
+        return;
+    }
+
+    const sunX = projected.x;
+    const sunY = Math.max(70, horizon * 0.26);
+    const radius = Math.max(42, Math.min(96, canvas.width * 0.06));
+
+    context.save();
+
+    const glow = context.createRadialGradient(
+        sunX,
+        sunY,
+        radius * 0.15,
+        sunX,
+        sunY,
+        radius * 2.4
+    );
+
+    glow.addColorStop(0, "rgba(254, 240, 138, 0.95)");
+    glow.addColorStop(0.24, "rgba(250, 204, 21, 0.55)");
+    glow.addColorStop(1, "rgba(250, 204, 21, 0)");
+
+    context.fillStyle = glow;
+    context.beginPath();
+    context.arc(sunX, sunY, radius * 2.4, 0, Math.PI * 2);
+    context.fill();
+
+    context.fillStyle = "#fde047";
+    context.beginPath();
+    context.arc(sunX, sunY, radius * 0.52, 0, Math.PI * 2);
+    context.fill();
+
+    context.strokeStyle = "rgba(254, 249, 195, 0.7)";
+    context.lineWidth = 3;
+
+    for (let i = 0; i < 12; i++) {
+        const angle = i / 12 * Math.PI * 2 + performance.now() * 0.0004;
+        context.beginPath();
+        context.moveTo(
+            sunX + Math.cos(angle) * radius * 0.78,
+            sunY + Math.sin(angle) * radius * 0.78
+        );
+        context.lineTo(
+            sunX + Math.cos(angle) * radius * 1.15,
+            sunY + Math.sin(angle) * radius * 1.15
+        );
+        context.stroke();
     }
 
     context.restore();
@@ -1104,19 +1272,114 @@ function getWallDepth(self, wall) {
     return projectWorldPoint(self, midpointX, midpointY).depth;
 }
 
-function projectWorldPoint(self, worldX, worldY) {
+function getWallSortDepth(self, wall) {
+    const start = getCameraSpacePoint(self, wall.x1, wall.y1);
+    const end = getCameraSpacePoint(self, wall.x2, wall.y2);
+
+    return Math.max(start.depth, end.depth);
+}
+
+function isWorldPointVisibleFromSelf(self, targetX, targetY) {
+    for (const obstacle of state.obstacles) {
+        if (lineIntersectsObstacle(self.x, self.y, targetX, targetY, obstacle)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function lineIntersectsObstacle(x1, y1, x2, y2, obstacle) {
+    const left = obstacle.x;
+    const right = obstacle.x + obstacle.width;
+    const top = obstacle.y;
+    const bottom = obstacle.y + obstacle.height;
+
+    if (x1 > left && x1 < right && y1 > top && y1 < bottom) {
+        return false;
+    }
+
+    if (x2 > left && x2 < right && y2 > top && y2 < bottom) {
+        return true;
+    }
+
+    return lineSegmentsIntersect(x1, y1, x2, y2, left, top, right, top)
+        || lineSegmentsIntersect(x1, y1, x2, y2, right, top, right, bottom)
+        || lineSegmentsIntersect(x1, y1, x2, y2, right, bottom, left, bottom)
+        || lineSegmentsIntersect(x1, y1, x2, y2, left, bottom, left, top);
+}
+
+function lineSegmentsIntersect(ax, ay, bx, by, cx, cy, dx, dy) {
+    const denominator = (ax - bx) * (cy - dy) - (ay - by) * (cx - dx);
+
+    if (Math.abs(denominator) < 0.000001) {
+        return false;
+    }
+
+    const t = ((ax - cx) * (cy - dy) - (ay - cy) * (cx - dx)) / denominator;
+    const u = -((ax - bx) * (ay - cy) - (ay - by) * (ax - cx)) / denominator;
+
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}
+
+function getCameraSpacePoint(self, worldX, worldY) {
     const dx = worldX - self.x;
     const dy = worldY - self.y;
     const cos = Math.cos(state.viewAngle);
     const sin = Math.sin(state.viewAngle);
-    const side = -sin * dx + cos * dy;
-    const depth = cos * dx + sin * dy;
+
+    return {
+        side: -sin * dx + cos * dy,
+        depth: cos * dx + sin * dy
+    };
+}
+
+function clipCameraSegment(start, end) {
+    const startInside = start.depth > NEAR_PLANE;
+    const endInside = end.depth > NEAR_PLANE;
+
+    if (!startInside && !endInside) {
+        return null;
+    }
+
+    const clippedStart = { ...start };
+    const clippedEnd = { ...end };
+
+    if (startInside !== endInside) {
+        const amount = (NEAR_PLANE - start.depth) / (end.depth - start.depth);
+        const clippedPoint = {
+            side: start.side + (end.side - start.side) * amount,
+            depth: NEAR_PLANE
+        };
+
+        if (startInside) {
+            clippedEnd.side = clippedPoint.side;
+            clippedEnd.depth = clippedPoint.depth;
+        } else {
+            clippedStart.side = clippedPoint.side;
+            clippedStart.depth = clippedPoint.depth;
+        }
+    }
+
+    return {
+        start: clippedStart,
+        end: clippedEnd
+    };
+}
+
+function projectCameraSpacePoint(point) {
     const projection = canvas.width / (2 * Math.tan(FOV / 2));
 
     return {
-        x: canvas.width / 2 + side / Math.max(depth, NEAR_PLANE) * projection,
-        depth
+        x: canvas.width / 2 + point.side / Math.max(point.depth, NEAR_PLANE) * projection,
+        depth: point.depth
     };
+}
+
+function projectWorldPoint(self, worldX, worldY) {
+    const cameraPoint = getCameraSpacePoint(self, worldX, worldY);
+
+    return projectCameraSpacePoint(cameraPoint);
 }
 
 function getGroundScreenY(depth) {
