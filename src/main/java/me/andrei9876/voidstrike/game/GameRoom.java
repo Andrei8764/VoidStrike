@@ -28,6 +28,7 @@ public class GameRoom {
     private static final double PLAYER_STOP_SPEED = 90;
     private static final double PLAYER_RADIUS = 20;
     private static final double PLAYER_HEIGHT = 145;
+    private static final double MAX_BULLET_Z = 700;
     private static final double PLAYER_HEAD_MIN_Z = 108;
     private static final double PLAYER_HEAD_MAX_Z = 152;
     private static final double BULLET_SPAWN_Z = 92;
@@ -315,7 +316,7 @@ public class GameRoom {
                     || bullet.getY() < 0
                     || bullet.getY() > MAP_HEIGHT
                     || bullet.getZ() < 0
-                    || bullet.getZ() > PLAYER_HEIGHT + 80;
+                    || bullet.getZ() > MAX_BULLET_Z;
 
             if (bullet.isExpired() || outsideMap || collidesWithObstacle(bullet.getX(), bullet.getY())) {
                 iterator.remove();

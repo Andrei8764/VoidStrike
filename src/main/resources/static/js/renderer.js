@@ -444,13 +444,14 @@ function getProjectedBullets(self) {
     return getRenderableBullets().map(bullet => {
         const projected = projectWorldPoint(self, bullet.x, bullet.y);
         const size = getProjectedHeight(projected.depth, 18);
+        const bulletZ = bullet.z ?? 8;
 
         return {
             type: "sprite",
             kind: "bullet",
             depth: projected.depth,
             x: projected.x,
-            y: getGroundScreenY(projected.depth) - size,
+            y: getGroundScreenY(projected.depth) - getProjectedHeight(projected.depth, bulletZ),
             width: size,
             height: size,
             color: "#facc15",
@@ -478,7 +479,8 @@ function drawProjectedBulletTrails(self) {
 function drawProjectedBulletTrail(self, bullet, alpha) {
     const velocityX = bullet.velocityX || 0;
     const velocityY = bullet.velocityY || 0;
-    const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+    const velocityZ = bullet.velocityZ || 0;
+    const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY + velocityZ * velocityZ);
 
     if (speed < 0.001 || alpha <= 0) {
         return;
@@ -486,8 +488,10 @@ function drawProjectedBulletTrail(self, bullet, alpha) {
 
     const directionX = velocityX / speed;
     const directionY = velocityY / speed;
+    const directionZ = velocityZ / speed;
     const trailLength = clamp(speed * 0.035, 16, 95);
 
+    const bulletZ = bullet.z ?? 8;
     const head = projectWorldPoint(self, bullet.x, bullet.y);
     const tail = projectWorldPoint(
         self,
@@ -499,8 +503,9 @@ function drawProjectedBulletTrail(self, bullet, alpha) {
         return;
     }
 
-    const headY = getGroundScreenY(head.depth) - getProjectedHeight(head.depth, 8);
-    const tailY = getGroundScreenY(tail.depth) - getProjectedHeight(tail.depth, 8);
+    const tailZ = bulletZ - directionZ * trailLength;
+    const headY = getGroundScreenY(head.depth) - getProjectedHeight(head.depth, bulletZ);
+    const tailY = getGroundScreenY(tail.depth) - getProjectedHeight(tail.depth, tailZ);
 
     const gradient = context.createLinearGradient(tail.x, tailY, head.x, headY);
     gradient.addColorStop(0, "rgba(250, 204, 21, 0)");

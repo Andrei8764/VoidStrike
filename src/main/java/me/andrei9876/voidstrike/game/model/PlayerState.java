@@ -42,6 +42,7 @@ private double pitch;
         this.velocityX = 0.0;
         this.velocityY = 0.0;
         this.angle = 0.0;
+        this.pitch = 0.0;
         this.hp = 100;
         this.kills = 0;
         this.deaths = 0;
@@ -53,6 +54,7 @@ private double pitch;
     }
 
     public void applyInput(ClientInputMessage input) {
+        this.lastProcessedInputSequence = input.getSequence();
         this.up = input.isUp();
         this.down = input.isDown();
         this.left = input.isLeft();
