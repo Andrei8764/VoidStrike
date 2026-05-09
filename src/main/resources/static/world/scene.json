@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "enabled": true,
+      "path": "/models/platform-large-grass.glb",
+      "position": { "x": 210, "y": 0, "z": 180 },
+      "rotationDegrees": { "y": 0 },
+      "scale": 2.2
+    },
+    {
+      "enabled": true,
+      "path": "/models/platform-large-grass.glb",
+      "position": { "x": 1390, "y": 0, "z": 720 },
+      "rotationDegrees": { "y": 180 },
+      "scale": 2.2
+    },
+    {
+      "enabled": true,
+      "path": "/models/platform.glb",
+      "position": { "x": 520, "y": 0, "z": 240 },
+      "rotationDegrees": { "y": 0 },
+      "scale": 1.5
+    },
+    {
+      "enabled": true,
+      "path": "/models/platform.glb",
+      "position": { "x": 1080, "y": 0, "z": 660 },
+      "rotationDegrees": { "y": 180 },
+      "scale": 1.5
+    },
+    {
+      "enabled": true,
+      "path": "/models/platform.glb",
+      "position": { "x": 790, "y": 0, "z": 430 },
+      "rotationDegrees": { "y": 45 },
+      "scale": 1.25
+    },
+    {
+      "enabled": true,
+      "path": "/models/grass.glb",
+      "position": { "x": 670, "y": 0, "z": 170 },
+      "rotationDegrees": { "y": 25 },
+      "scale": 1.6
+    },
+    {
+      "enabled": true,
+      "path": "/models/grass.glb",
+      "position": { "x": 950, "y": 0, "z": 740 },
+      "rotationDegrees": { "y": 215 },
+      "scale": 1.6
+    },
+    {
+      "enabled": true,
+      "path": "/models/grass-small.glb",
+      "position": { "x": 360, "y": 0, "z": 540 },
+      "rotationDegrees": { "y": 10 },
+      "scale": 1.4
+    },
+    {
+      "enabled": true,
+      "path": "/models/grass-small.glb",
+      "position": { "x": 1240, "y": 0, "z": 360 },
+      "rotationDegrees": { "y": 195 },
+      "scale": 1.4
+    },
+    {
+      "enabled": true,
+      "path": "/models/cloud.glb",
+      "position": { "x": 760, "y": 210, "z": 260 },
+      "rotationDegrees": { "y": 0 },
+      "scale": 3
+    },
+    {
+      "enabled": true,
+      "path": "/models/cloud.glb",
+      "position": { "x": 1040, "y": 260, "z": 620 },
+      "rotationDegrees": { "y": 0 },
+      "scale": 2.4
+    }
+  ],
+  "primitives": []
+}
