@@ -455,6 +455,8 @@ input {
 }
 
 .killFeedItem {
+    display: flex;
+    align-items: center;
     padding: 10px 12px;
     border: 1px solid rgba(148, 163, 184, 0.22);
     border-radius: 12px;
@@ -467,6 +469,22 @@ input {
 .killFeedItem strong {
     margin: 0 8px;
     color: #facc15;
+}
+
+.killHeadTexture {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    margin-right: 6px;
+    border: 1px solid rgba(148, 163, 184, 0.6);
+    border-radius: 50%;
+    background-repeat: no-repeat;
+    background-size: 220% 220%;
+    background-position: 50% 34%;
+    background-color: rgba(30, 41, 59, 0.9);
+    image-rendering: pixelated;
+    vertical-align: -4px;
+    box-shadow: 0 0 0 1px rgba(2, 6, 23, 0.6);
 }
 
 .nameLabel {

@@ -107,13 +107,34 @@ export function updateScoreboard() {
 }
 
 export function updateKillFeed() {
+    const playerByName = new Map(
+        state.players.map(player => [player.name, player])
+    );
+
     killFeedElement.innerHTML = state.killFeed.map(event => `
         <div class="killFeedItem">
-            <span>${escapeHtml(event.attacker)}</span>
+            <span><span class="killHeadTexture" style="background-image:url('${escapeHtml(getHeadTexturePath(playerByName.get(event.attacker)?.characterModel))}')" aria-hidden="true"></span>${escapeHtml(event.attacker)}</span>
             <strong>${escapeHtml(event.weapon)}</strong>
-            <span>${escapeHtml(event.victim)}</span>
+            <span><span class="killHeadTexture" style="background-image:url('${escapeHtml(getHeadTexturePath(playerByName.get(event.victim)?.characterModel))}')" aria-hidden="true"></span>${escapeHtml(event.victim)}</span>
         </div>
     `).join("");
+}
+
+function getHeadTexturePath(characterModel) {
+    const normalized = (characterModel || "").toLowerCase();
+
+    if (normalized.startsWith("character-") && normalized.endsWith(".glb")) {
+        const letter = normalized.substring("character-".length, "character-".length + 1);
+        if (letter >= "a" && letter <= "r") {
+            return `/models/Textures/texture-${letter}.png`;
+        }
+    }
+
+    if (normalized.startsWith("a_character")) {
+        return "/models/Textures/texture-a.png";
+    }
+
+    return "/models/Textures/texture-a.png";
 }
 
 function updateChat() {
