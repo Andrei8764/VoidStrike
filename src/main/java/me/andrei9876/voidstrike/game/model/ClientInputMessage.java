@@ -12,6 +12,7 @@ public class ClientInputMessage {
     private boolean jump;
     private boolean shoot;
     private boolean reload;
+    private boolean climb;
     private int weaponSlot;
     private Integer buyWeaponSlot;
     private double angle;
@@ -55,6 +56,10 @@ public class ClientInputMessage {
 
     public boolean isReload() {
         return reload;
+    }
+
+    public boolean isClimb() {
+        return climb;
     }
 
     public int getWeaponSlot() {
@@ -111,6 +116,10 @@ public class ClientInputMessage {
 
     public void setReload(boolean reload) {
         this.reload = reload;
+    }
+
+    public void setClimb(boolean climb) {
+        this.climb = climb;
     }
 
     public void setWeaponSlot(int weaponSlot) {

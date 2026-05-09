@@ -16,6 +16,7 @@ export const state = {
     selectedWeaponSlot: 2,
     buyWeaponSlot: null,
     reloadRequested: false,
+    climbRequested: false,
     scoreboardVisible: false,
     shopVisible: false,
     consoleVisible: false,

@@ -41,10 +41,12 @@ public class PlayerState {
     private boolean jump;
     private boolean shoot;
     private boolean reload;
+    private boolean climb;
     private int weaponSlot;
 
     private long lastProcessedInputSequence;
     private long lastShotAt;
+    private long lastClimbAt;
 
     public PlayerState(String id, String name, String team, String characterModel, double x, double y) {
         this.id = id;
@@ -88,6 +90,7 @@ public class PlayerState {
         this.jump = input.isJump();
         this.shoot = input.isShoot();
         this.reload = input.isReload();
+        this.climb = input.isClimb();
         this.weaponSlot = input.getWeaponSlot();
         this.buyWeaponSlot = input.getBuyWeaponSlot();
         this.angle = input.getAngle();
@@ -124,6 +127,7 @@ public class PlayerState {
         this.jump = false;
         this.shoot = false;
         this.reload = false;
+        this.climb = false;
     }
 
     public void switchWeapon(WeaponType newWeapon) {
@@ -319,6 +323,10 @@ public class PlayerState {
         return reload;
     }
 
+    public boolean isClimb() {
+        return climb;
+    }
+
     public int getWeaponSlot() {
         return weaponSlot;
     }
@@ -329,6 +337,10 @@ public class PlayerState {
 
     public long getLastShotAt() {
         return lastShotAt;
+    }
+
+    public long getLastClimbAt() {
+        return lastClimbAt;
     }
 
     public long getReloadEndsAt() {
@@ -365,6 +377,10 @@ public class PlayerState {
 
     public void setLastShotAt(long lastShotAt) {
         this.lastShotAt = lastShotAt;
+    }
+
+    public void setLastClimbAt(long lastClimbAt) {
+        this.lastClimbAt = lastClimbAt;
     }
 
     public void setBalance(int balance) {

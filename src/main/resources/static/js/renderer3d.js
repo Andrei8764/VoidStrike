@@ -19,7 +19,7 @@ const BULLET_LENGTH = 10;
 const BULLET_TRAIL_LENGTH = 16;
 const OBSTACLE_HEIGHT = 84;
 const CHARACTER_HEIGHT = 58;
-const CHARACTER_YAW_OFFSET = Math.PI / 2    ;
+const CHARACTER_YAW_OFFSET = Math.PI / 2;
 const REMOTE_RUN_SPEED_THRESHOLD = PLAYER_MAX_SPEED * 1.08;
 const WEAPON_AIM_SMOOTHING = 0.18;
 const WEAPON_IDLE_PITCH = 0.08;
@@ -141,6 +141,7 @@ const remotePlayerBodyYaw = new Map();
 const remotePlayerLocomotionState = new Map();
 const remotePlayerWeaponRot = new Map();
 const remotePlayerMoving = new Map();
+const bulletVisuals = new Map();
 const ARM_ROTATION_SMOOTHING = 0.2;
 const ARM_ROTATION_MAX_DELTA = 0.02;
 const LEG_ROTATION_SMOOTHING = 0.2;
@@ -1175,10 +1176,18 @@ function syncRemotePlayers() {
 }
 
 function syncBullets() {
-    bulletGroup.clear();
+    const activeBulletIds = new Set();
 
     for (const bullet of getRenderableBullets()) {
-        const container = new THREE.Group();
+        activeBulletIds.add(bullet.id);
+
+        let container = bulletVisuals.get(bullet.id);
+        if (!container) {
+            container = createBulletVisual();
+            bulletVisuals.set(bullet.id, container);
+            bulletGroup.add(container);
+        }
+
         container.position.set(
             bullet.x,
             Math.max(2, bullet.z || 2),
@@ -1189,50 +1198,62 @@ function syncBullets() {
             Math.max(2, (bullet.z || 2) + (bullet.velocityZ || 0)),
             bullet.y + (bullet.velocityY || 0)
         );
-
-        const core = new THREE.Mesh(
-            new THREE.CylinderGeometry(BULLET_RADIUS, BULLET_RADIUS * 0.92, BULLET_LENGTH, 10),
-            new THREE.MeshStandardMaterial({
-                color: 0xffffff,
-                emissive: 0xfacc15,
-                emissiveIntensity: 1.6,
-                roughness: 0.08,
-                metalness: 0.85
-            })
-        );
-        core.rotation.x = Math.PI / 2;
-        core.renderOrder = 42;
-        container.add(core);
-
-        const glow = new THREE.Mesh(
-            new THREE.CylinderGeometry(BULLET_RADIUS * 1.7, BULLET_RADIUS * 1.5, BULLET_LENGTH * 0.92, 10),
-            new THREE.MeshBasicMaterial({
-                color: 0xf59e0b,
-                transparent: true,
-                opacity: 0.35,
-                depthWrite: false
-            })
-        );
-        glow.rotation.x = Math.PI / 2;
-        glow.renderOrder = 43;
-        container.add(glow);
-
-        const trail = new THREE.Mesh(
-            new THREE.CylinderGeometry(BULLET_RADIUS * 0.6, BULLET_RADIUS * 1.35, BULLET_TRAIL_LENGTH, 10),
-            new THREE.MeshBasicMaterial({
-                color: 0xfb923c,
-                transparent: true,
-                opacity: 0.24,
-                depthWrite: false
-            })
-        );
-        trail.rotation.x = Math.PI / 2;
-        trail.position.z = -BULLET_TRAIL_LENGTH * 0.72;
-        trail.renderOrder = 41;
-        container.add(trail);
-
-        bulletGroup.add(container);
     }
+
+    for (const [bulletId, visual] of bulletVisuals.entries()) {
+        if (activeBulletIds.has(bulletId)) {
+            continue;
+        }
+        bulletGroup.remove(visual);
+        bulletVisuals.delete(bulletId);
+    }
+}
+
+function createBulletVisual() {
+    const container = new THREE.Group();
+
+    const core = new THREE.Mesh(
+        new THREE.CylinderGeometry(BULLET_RADIUS, BULLET_RADIUS * 0.92, BULLET_LENGTH, 8),
+        new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            emissive: 0xfacc15,
+            emissiveIntensity: 1.6,
+            roughness: 0.08,
+            metalness: 0.85
+        })
+    );
+    core.rotation.x = Math.PI / 2;
+    core.renderOrder = 42;
+    container.add(core);
+
+    const glow = new THREE.Mesh(
+        new THREE.CylinderGeometry(BULLET_RADIUS * 1.7, BULLET_RADIUS * 1.5, BULLET_LENGTH * 0.92, 8),
+        new THREE.MeshBasicMaterial({
+            color: 0xf59e0b,
+            transparent: true,
+            opacity: 0.35,
+            depthWrite: false
+        })
+    );
+    glow.rotation.x = Math.PI / 2;
+    glow.renderOrder = 43;
+    container.add(glow);
+
+    const trail = new THREE.Mesh(
+        new THREE.CylinderGeometry(BULLET_RADIUS * 0.6, BULLET_RADIUS * 1.35, BULLET_TRAIL_LENGTH, 8),
+        new THREE.MeshBasicMaterial({
+            color: 0xfb923c,
+            transparent: true,
+            opacity: 0.24,
+            depthWrite: false
+        })
+    );
+    trail.rotation.x = Math.PI / 2;
+    trail.position.z = -BULLET_TRAIL_LENGTH * 0.72;
+    trail.renderOrder = 41;
+    container.add(trail);
+
+    return container;
 }
 
 function updateCameraFromSelf() {

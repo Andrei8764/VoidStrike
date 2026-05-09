@@ -253,6 +253,10 @@ function handleKeyDown(event) {
         return;
     }
 
+    if (!state.joined) {
+        return;
+    }
+
     if (event.repeat && (event.code === "KeyB" || event.code === "Escape")) {
         event.preventDefault();
         return;
@@ -307,6 +311,9 @@ function handleKeyDown(event) {
         case "KeyR":
             state.reloadRequested = true;
             state.ads = false;
+            break;
+        case "KeyE":
+            state.climbRequested = true;
             break;
         case "Digit1":
         case "Numpad1":

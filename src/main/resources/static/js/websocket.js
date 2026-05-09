@@ -202,6 +202,7 @@ function startSendingInput() {
             jump: keys.jump,
             shoot: mouse.down,
             reload: state.reloadRequested,
+            climb: state.climbRequested,
             weaponSlot: state.selectedWeaponSlot,
             buyWeaponSlot: state.buyWeaponSlot,
             angle: mouse.angle,
@@ -214,6 +215,7 @@ function startSendingInput() {
         state.socket.send(JSON.stringify(input));
 
         state.reloadRequested = false;
+        state.climbRequested = false;
         state.buyWeaponSlot = null;
     }, 1000 / CLIENT_TICK_RATE);
 }

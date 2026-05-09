@@ -38,14 +38,14 @@ public class GameRoom {
     private static final double PLAYER_RADIUS = 20;
     private static final double MAX_BULLET_Z = 700;
     private static final double PLAYER_BODY_MAX_Z = 88;
-    private static final double PLAYER_HEAD_MIN_Z = 52;
-    private static final double PLAYER_HEAD_MAX_Z = 86;
+    private static final double PLAYER_HEAD_MIN_Z = 54;
+    private static final double PLAYER_HEAD_MAX_Z = 88;
     private static final double BULLET_SPAWN_Z = 60;
-    private static final double BULLET_MUZZLE_FORWARD_OFFSET = 58;
+    private static final double BULLET_MUZZLE_FORWARD_OFFSET = 26;
     private static final double BULLET_MUZZLE_SIDE_OFFSET = 0;
     private static final double BULLET_MUZZLE_PITCH_OFFSET = 18;
     private static final double BULLET_HIT_RADIUS = 14;
-    private static final double HEADSHOT_RADIUS = 11;
+    private static final double HEADSHOT_RADIUS = 10;
     private static final int KILL_FEED_LIMIT = 6;
     private static final long KILL_FEED_TTL_MS = 8_000;
     private static final int CHAT_LIMIT = 40;
@@ -53,6 +53,8 @@ public class GameRoom {
 
     private static final long ROUND_DURATION_MS = 180_000;
     private static final long ROUND_END_DISPLAY_MS = 10_000;
+    private static final long CLIMB_COOLDOWN_MS = 700;
+    private static final double CLIMB_TRIGGER_RADIUS = 24;
 
     private static final List<Obstacle> OBSTACLES = List.of(
             // Garduri / cover la spawn RED
@@ -94,6 +96,12 @@ public class GameRoom {
             // Props mici pentru cover extra
             new Obstacle(650, 720, 75, 45),
             new Obstacle(870, 230, 80, 45)
+    );
+
+    private static final List<LadderZone> LADDER_ZONES = List.of(
+            new LadderZone(655, 215, 372, 215, 720, 215),
+            new LadderZone(905, 590, 735, 590, 960, 590),
+            new LadderZone(1208, 340, 1208, 292, 1208, 448)
     );
 
     private final String id;
@@ -305,6 +313,8 @@ public class GameRoom {
                 player.startReload(now);
             }
 
+            tryUseLadder(player, now);
+
             updatePlayerMovement(player, deltaSeconds);
             updatePlayerVerticalMovement(player, deltaSeconds);
 
@@ -409,6 +419,56 @@ public class GameRoom {
                 player.setZ(0);
                 player.setVelocityZ(0);
             }
+        }
+    }
+
+    private void tryUseLadder(PlayerState player, long now) {
+        if (!player.isClimb()) {
+            return;
+        }
+
+        if (now - player.getLastClimbAt() < CLIMB_COOLDOWN_MS) {
+            return;
+        }
+
+        for (LadderZone zone : LADDER_ZONES) {
+            if (!zone.isNear(player.getX(), player.getY(), CLIMB_TRIGGER_RADIUS)) {
+                continue;
+            }
+
+            double toLeftDistanceSq = distanceSquared(player.getX(), player.getY(), zone.leftTargetX(), zone.leftTargetY());
+            double toRightDistanceSq = distanceSquared(player.getX(), player.getY(), zone.rightTargetX(), zone.rightTargetY());
+            double targetX = toLeftDistanceSq <= toRightDistanceSq ? zone.rightTargetX() : zone.leftTargetX();
+            double targetY = toLeftDistanceSq <= toRightDistanceSq ? zone.rightTargetY() : zone.leftTargetY();
+            double fromX = zone.triggerX();
+            double fromY = zone.triggerY();
+            double dirX = targetX - fromX;
+            double dirY = targetY - fromY;
+            double dirLength = Math.sqrt(dirX * dirX + dirY * dirY);
+            if (dirLength > 0.0001) {
+                dirX /= dirLength;
+                dirY /= dirLength;
+            } else {
+                dirX = 1;
+                dirY = 0;
+            }
+
+            // Ensure the landing point is outside collision by pushing forward along ladder direction.
+            int safetySteps = 0;
+            while (collidesWithObstacle(targetX, targetY, PLAYER_RADIUS) && safetySteps < 24) {
+                targetX += dirX * 8;
+                targetY += dirY * 8;
+                safetySteps++;
+            }
+
+            player.setX(targetX);
+            player.setY(targetY);
+            player.setVelocityX(0);
+            player.setVelocityY(0);
+            player.setZ(0);
+            player.setVelocityZ(0);
+            player.setLastClimbAt(now);
+            return;
         }
     }
 
@@ -912,6 +972,12 @@ public class GameRoom {
         return Math.sqrt(dx * dx + dy * dy);
     }
 
+    private double distanceSquared(double ax, double ay, double bx, double by) {
+        double dx = ax - bx;
+        double dy = ay - by;
+        return dx * dx + dy * dy;
+    }
+
     private double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
     }
@@ -933,6 +999,21 @@ public class GameRoom {
     }
 
     private record KillFeedEvent(String attacker, String victim, String weapon, long createdAt) {
+    }
+
+    private record LadderZone(
+            double triggerX,
+            double triggerY,
+            double leftTargetX,
+            double leftTargetY,
+            double rightTargetX,
+            double rightTargetY
+    ) {
+        boolean isNear(double x, double y, double radius) {
+            double dx = x - triggerX;
+            double dy = y - triggerY;
+            return dx * dx + dy * dy <= radius * radius;
+        }
     }
 
     private record ChatEvent(String player, String team, String text, long createdAt) {

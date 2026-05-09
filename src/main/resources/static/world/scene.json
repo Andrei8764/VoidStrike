@@ -77,7 +77,153 @@
       "position": { "x": 1040, "y": 260, "z": 620 },
       "rotationDegrees": { "y": 0 },
       "scale": 2.4
+    },
+    {
+      "enabled": true,
+      "path": "/models/crate-small.glb",
+      "position": { "x": 640, "y": 0, "z": 205 },
+      "rotationDegrees": { "y": 90 },
+      "scale": 1.2
+    },
+    {
+      "enabled": true,
+      "path": "/models/crate-medium.glb",
+      "position": { "x": 652, "y": 16, "z": 214 },
+      "rotationDegrees": { "y": 90 },
+      "scale": 1.1
+    },
+    {
+      "enabled": true,
+      "path": "/models/crate-small.glb",
+      "position": { "x": 906, "y": 0, "z": 598 },
+      "rotationDegrees": { "y": 270 },
+      "scale": 1.2
+    },
+    {
+      "enabled": true,
+      "path": "/models/crate-medium.glb",
+      "position": { "x": 896, "y": 16, "z": 588 },
+      "rotationDegrees": { "y": 270 },
+      "scale": 1.1
+    },
+    {
+      "enabled": true,
+      "path": "/models/crate-small.glb",
+      "position": { "x": 1208, "y": 0, "z": 326 },
+      "rotationDegrees": { "y": 0 },
+      "scale": 1.2
     }
   ],
-  "primitives": []
+  "primitives": [
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 88, "z": 4 },
+      "position": { "x": 655, "y": 44, "z": 208 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 88, "z": 4 },
+      "position": { "x": 655, "y": 44, "z": 222 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 2, "z": 16 },
+      "position": { "x": 655, "y": 20, "z": 215 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 2, "z": 16 },
+      "position": { "x": 655, "y": 34, "z": 215 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 2, "z": 16 },
+      "position": { "x": 655, "y": 48, "z": 215 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 2, "z": 16 },
+      "position": { "x": 655, "y": 62, "z": 215 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 88, "z": 4 },
+      "position": { "x": 905, "y": 44, "z": 583 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 88, "z": 4 },
+      "position": { "x": 905, "y": 44, "z": 597 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 2, "z": 16 },
+      "position": { "x": 905, "y": 20, "z": 590 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 2, "z": 16 },
+      "position": { "x": 905, "y": 34, "z": 590 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 2, "z": 16 },
+      "position": { "x": 905, "y": 48, "z": 590 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 2, "z": 16 },
+      "position": { "x": 905, "y": 62, "z": 590 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 88, "z": 4 },
+      "position": { "x": 1208, "y": 44, "z": 333 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 88, "z": 4 },
+      "position": { "x": 1208, "y": 44, "z": 347 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 2, "z": 16 },
+      "position": { "x": 1208, "y": 20, "z": 340 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 2, "z": 16 },
+      "position": { "x": 1208, "y": 34, "z": 340 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 2, "z": 16 },
+      "position": { "x": 1208, "y": 48, "z": 340 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    },
+    {
+      "type": "box",
+      "size": { "x": 4, "y": 2, "z": 16 },
+      "position": { "x": 1208, "y": 62, "z": 340 },
+      "material": { "color": 16766720, "roughness": 0.5, "metalness": 0.05 }
+    }
+  ]
 }
