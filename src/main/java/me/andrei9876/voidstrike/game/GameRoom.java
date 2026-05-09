@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class GameRoom {
@@ -112,6 +113,7 @@ public class GameRoom {
     private long nextRoundStartsAt = 0;
     private boolean roundTimerPaused = false;
     private long roundTimerPausedAt = 0;
+    private boolean adminRoundFrozen = false;
 
     public GameRoom(
             String id,
@@ -176,6 +178,28 @@ public class GameRoom {
         }
     }
 
+    public synchronized void handleAdminCommand(String playerId, String rawCommand) {
+        PlayerState requester = players.get(playerId);
+        if (requester == null || rawCommand == null) {
+            return;
+        }
+
+        String trimmed = rawCommand.trim();
+        if (trimmed.isEmpty()) {
+            addSystemChat("Usage: freeze on|off|toggle, money <amount>");
+            return;
+        }
+
+        String[] parts = trimmed.split("\\s+");
+        String command = parts[0].toLowerCase(Locale.ROOT);
+
+        switch (command) {
+            case "freeze" -> handleFreezeCommand(parts);
+            case "money" -> handleMoneyCommand(requester, parts);
+            default -> addSystemChat("Unknown command: " + command);
+        }
+    }
+
     public synchronized void tick(double deltaSeconds) {
         updateRound();
         updatePlayers(deltaSeconds);
@@ -186,6 +210,14 @@ public class GameRoom {
 
     private void updateRound() {
         long now = System.currentTimeMillis();
+
+        if (adminRoundFrozen) {
+            if (!roundTimerPaused) {
+                roundTimerPaused = true;
+                roundTimerPausedAt = now;
+            }
+            return;
+        }
 
         if (!roundEnding && players.size() < 2) {
             if (!roundTimerPaused) {
@@ -680,6 +712,46 @@ public class GameRoom {
 
     private void pruneKillFeed(long now) {
         killFeed.removeIf(event -> now - event.createdAt() > KILL_FEED_TTL_MS);
+    }
+
+    private void handleFreezeCommand(String[] parts) {
+        String mode = parts.length > 1 ? parts[1].toLowerCase(Locale.ROOT) : "toggle";
+        switch (mode) {
+            case "on", "1", "true" -> adminRoundFrozen = true;
+            case "off", "0", "false" -> adminRoundFrozen = false;
+            default -> adminRoundFrozen = !adminRoundFrozen;
+        }
+        addSystemChat("Round freeze: " + (adminRoundFrozen ? "ON" : "OFF"));
+    }
+
+    private void handleMoneyCommand(PlayerState requester, String[] parts) {
+        if (parts.length < 2) {
+            addSystemChat("Usage: money <amount>");
+            return;
+        }
+
+        int amount;
+        try {
+            amount = Integer.parseInt(parts[1]);
+        } catch (NumberFormatException _ignored) {
+            addSystemChat("Invalid amount: " + parts[1]);
+            return;
+        }
+
+        requester.addBalance(amount);
+        addSystemChat(requester.getName() + " balance: $" + requester.getBalance());
+    }
+
+    private void addSystemChat(String text) {
+        chatMessages.add(new ChatEvent(
+                "SERVER",
+                "SYSTEM",
+                text,
+                System.currentTimeMillis()
+        ));
+        while (chatMessages.size() > CHAT_LIMIT) {
+            chatMessages.remove(0);
+        }
     }
 
     private void pruneChat(long now) {

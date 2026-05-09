@@ -2,6 +2,9 @@ import {
     canvas,
     chatInputElement,
     characterSelect,
+    devConsoleElement,
+    devConsoleInputElement,
+    devConsoleOutputElement,
     joinButton,
     nameError,
     nameInput,
@@ -12,8 +15,8 @@ import {
 } from "./dom.js";
 import { getSelfPlayer, keys, mouse, state } from "./state.js";
 import { resumeAudio } from "./audio.js";
-import { joinGame, sendChatMessage } from "./websocket.js";
-import { updateMouseWorldPosition } from "./renderer3d.js";
+import { joinGame, sendAdminCommand, sendChatMessage } from "./websocket.js";
+import { setWallhackEnabled, updateMouseWorldPosition } from "./renderer3d.js";
 import { initWeaponShopPreview, previewWeaponModel } from "./weaponShopPreview.js";
 import { MOUSE_SENSITIVITY } from "./config.js";
 import { clamp, normalizeAngle } from "./utils.js";
@@ -94,6 +97,27 @@ export function registerInputHandlers() {
 
             sendChatMessage(text);
             chatInputElement.value = "";
+        });
+    }
+
+    if (devConsoleInputElement) {
+        devConsoleInputElement.addEventListener("keydown", event => {
+            if (event.code !== "Enter") {
+                if (event.code === "Escape") {
+                    event.preventDefault();
+                    setConsoleVisible(false);
+                }
+                return;
+            }
+
+            event.preventDefault();
+            const command = devConsoleInputElement.value.trim();
+            if (command.length === 0) {
+                return;
+            }
+
+            runConsoleCommand(command);
+            devConsoleInputElement.value = "";
         });
     }
 
@@ -207,6 +231,22 @@ function setShopCategory(category) {
 }
 
 function handleKeyDown(event) {
+    if (event.code === "Backquote") {
+        event.preventDefault();
+        setConsoleVisible(!state.consoleVisible);
+        return;
+    }
+
+    if (state.consoleVisible) {
+        if (event.code === "Escape") {
+            event.preventDefault();
+            setConsoleVisible(false);
+        } else {
+            event.preventDefault();
+        }
+        return;
+    }
+
     if (event.repeat && (event.code === "KeyB" || event.code === "Escape")) {
         event.preventDefault();
         return;
@@ -323,4 +363,58 @@ function handleKeyUp(event) {
             scoreboardElement.classList.add("hidden");
             break;
     }
+}
+
+function setConsoleVisible(visible) {
+    state.consoleVisible = visible;
+    devConsoleElement?.classList.toggle("hidden", !visible);
+    if (visible) {
+        devConsoleInputElement?.focus();
+        mouse.down = false;
+    } else if (document.activeElement === devConsoleInputElement) {
+        devConsoleInputElement.blur();
+    }
+}
+
+function appendConsoleLine(text) {
+    if (!devConsoleOutputElement) {
+        return;
+    }
+
+    const line = document.createElement("div");
+    line.textContent = text;
+    devConsoleOutputElement.appendChild(line);
+    devConsoleOutputElement.scrollTop = devConsoleOutputElement.scrollHeight;
+}
+
+function runConsoleCommand(rawCommand) {
+    const normalized = rawCommand.trim();
+    appendConsoleLine(`> ${normalized}`);
+    const parts = normalized.split(/\s+/);
+    const command = parts[0]?.toLowerCase();
+    const arg = parts[1]?.toLowerCase();
+
+    if (command === "wallhack") {
+        let enabled = state.wallhackEnabled;
+        if (arg === "on" || arg === "1" || arg === "true") {
+            enabled = true;
+        } else if (arg === "off" || arg === "0" || arg === "false") {
+            enabled = false;
+        } else {
+            enabled = !enabled;
+        }
+
+        state.wallhackEnabled = enabled;
+        setWallhackEnabled(enabled);
+        appendConsoleLine(`wallhack ${enabled ? "ON" : "OFF"}`);
+        return;
+    }
+
+    if (command === "freeze" || command === "money") {
+        const sent = sendAdminCommand(normalized);
+        appendConsoleLine(sent ? "ok" : "socket not ready");
+        return;
+    }
+
+    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, wallhack on|off|toggle");
 }

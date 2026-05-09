@@ -176,6 +176,10 @@ public class PlayerState {
         this.balance += amount;
     }
 
+    public void addBalance(int amount) {
+        this.balance = Math.max(0, this.balance + amount);
+    }
+
     public void resetBalance() {
         this.balance = 0;
     }

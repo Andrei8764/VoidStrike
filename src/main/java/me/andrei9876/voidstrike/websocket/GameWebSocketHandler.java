@@ -77,6 +77,12 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
+        if ("adminCommand".equals(type)) {
+            String command = json.has("command") ? json.get("command").asText() : "";
+            room.handleAdminCommand(session.getId(), command);
+            return;
+        }
+
         if ("input".equals(type)) {
             ClientInputMessage input = objectMapper.readValue(payload, ClientInputMessage.class);
             room.handleInput(session.getId(), input);

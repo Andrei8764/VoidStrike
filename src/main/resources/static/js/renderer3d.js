@@ -14,8 +14,9 @@ const PLAYER_HEIGHT = 72;
 const CAMERA_EYE_HEIGHT = 62;
 const CAMERA_BACK_OFFSET = 6;
 const CAMERA_LOOK_DISTANCE = 120;
-const BULLET_RADIUS = 1.6;
-const BULLET_LENGTH = 14;
+const BULLET_RADIUS = 0.85;
+const BULLET_LENGTH = 10;
+const BULLET_TRAIL_LENGTH = 16;
 const OBSTACLE_HEIGHT = 84;
 const CHARACTER_HEIGHT = 58;
 const CHARACTER_YAW_OFFSET = Math.PI / 2    ;
@@ -118,6 +119,7 @@ const worldModelGroup = new THREE.Group();
 scene.add(worldModelGroup);
 const worldPrimitiveGroup = new THREE.Group();
 scene.add(worldPrimitiveGroup);
+let wallhackEnabled = false;
 
 const gltfLoader = new GLTFLoader();
 const remotePlayerRoots = new Map();
@@ -208,6 +210,37 @@ function createMissingModelPlaceholder(modelDef) {
     );
 
     worldModelGroup.add(mesh);
+}
+
+function applyWallhackToObject(root, enabled) {
+    root.traverse(node => {
+        if (!node.isMesh || !node.material) {
+            return;
+        }
+
+        const material = node.material;
+        if (enabled) {
+            material.transparent = true;
+            material.opacity = 0.2;
+            material.depthWrite = false;
+        } else {
+            material.transparent = false;
+            material.opacity = 1;
+            material.depthWrite = true;
+        }
+        material.needsUpdate = true;
+    });
+}
+
+function applyWallhackState() {
+    applyWallhackToObject(obstacleGroup, wallhackEnabled);
+    applyWallhackToObject(worldPrimitiveGroup, wallhackEnabled);
+    applyWallhackToObject(worldModelGroup, wallhackEnabled);
+}
+
+export function setWallhackEnabled(enabled) {
+    wallhackEnabled = Boolean(enabled);
+    applyWallhackState();
 }
 
 function getCharacterModelPathForPlayer(player) {
@@ -351,6 +384,15 @@ function getWeaponModelPathByName(weaponName) {
     }
 }
 
+function getWeaponScaleByName(weaponName) {
+    switch (weaponName) {
+        case "SMG":
+            return WEAPON_MODEL_SCALE * 0.50;
+        default:
+            return WEAPON_MODEL_SCALE;
+    }
+}
+
 function normalizeWeaponModel(root, targetLength) {
     const box = new THREE.Box3().setFromObject(root);
     const size = new THREE.Vector3();
@@ -431,6 +473,7 @@ function ensureLimbRig(root, player) {
 
 function syncPlayerWeapon(player, root) {
     const weaponPath = getWeaponModelPathByName(player.weapon);
+    const weaponScale = getWeaponScaleByName(player.weapon);
     const previousPath = remotePlayerWeaponModelPaths.get(player.id);
     const weaponAnchor = ensureWeaponAnchor(root, player);
 
@@ -443,9 +486,9 @@ function syncPlayerWeapon(player, root) {
     loadWeaponTemplate(weaponPath)
         .then(template => {
             const weaponModel = template.clone(true);
-            normalizeWeaponModel(weaponModel, WEAPON_MODEL_SCALE);
-            weaponModel.position.set(WEAPON_MODEL_LOCAL_X, WEAPON_MODEL_LOCAL_Y, WEAPON_MODEL_LOCAL_Z);
             weaponModel.rotation.set(WEAPON_MODEL_ROT_X, WEAPON_MODEL_ROT_Y, WEAPON_MODEL_ROT_Z);
+            normalizeWeaponModel(weaponModel, weaponScale);
+            weaponModel.position.set(WEAPON_MODEL_LOCAL_X, WEAPON_MODEL_LOCAL_Y, WEAPON_MODEL_LOCAL_Z);
             weaponAnchor.clear();
             const baseWeapon = createWeaponPlaceholder();
             baseWeapon.name = "baseWeapon";
@@ -501,6 +544,7 @@ function syncLocalViewModel(self) {
     }
 
     const weaponPath = getWeaponPathForSelf(self);
+    const weaponScale = getWeaponScaleByName(self.weapon);
     if (!weaponPath) {
         return;
     }
@@ -522,9 +566,9 @@ function syncLocalViewModel(self) {
             }
 
             const model = template.clone(true);
-            normalizeWeaponModel(model, WEAPON_MODEL_SCALE);
-            model.position.set(WEAPON_MODEL_LOCAL_X, WEAPON_MODEL_LOCAL_Y, WEAPON_MODEL_LOCAL_Z);
             model.rotation.set(WEAPON_MODEL_ROT_X, WEAPON_MODEL_ROT_Y, WEAPON_MODEL_ROT_Z);
+            normalizeWeaponModel(model, weaponScale);
+            model.position.set(WEAPON_MODEL_LOCAL_X, WEAPON_MODEL_LOCAL_Y, WEAPON_MODEL_LOCAL_Z);
             model.traverse(node => {
                 if (!node.isMesh || !node.material) {
                     return;
@@ -833,6 +877,8 @@ function syncObstacles() {
         );
         obstacleGroup.add(mesh);
     }
+
+    applyWallhackState();
 }
 
 async function loadWorldScene() {
@@ -943,6 +989,8 @@ async function loadWorldScene() {
         }
     } catch (_error) {
     }
+
+    applyWallhackState();
 }
 
 function syncRemotePlayers() {
@@ -1070,31 +1118,60 @@ function syncBullets() {
     bulletGroup.clear();
 
     for (const bullet of getRenderableBullets()) {
-        const mesh = new THREE.Mesh(
-            new THREE.CylinderGeometry(BULLET_RADIUS, BULLET_RADIUS, BULLET_LENGTH, 10),
-            new THREE.MeshStandardMaterial({
-                color: 0xfef08a,
-                emissive: 0xf59e0b,
-                emissiveIntensity: 1.35,
-                roughness: 0.12,
-                metalness: 0.72
-            })
-        );
-        mesh.rotation.x = Math.PI / 2;
-        mesh.renderOrder = 42;
-
-        mesh.position.set(
+        const container = new THREE.Group();
+        container.position.set(
             bullet.x,
             Math.max(2, bullet.z || 2),
             bullet.y
         );
-        mesh.lookAt(
+        container.lookAt(
             bullet.x + (bullet.velocityX || 0),
             Math.max(2, (bullet.z || 2) + (bullet.velocityZ || 0)),
             bullet.y + (bullet.velocityY || 0)
         );
 
-        bulletGroup.add(mesh);
+        const core = new THREE.Mesh(
+            new THREE.CylinderGeometry(BULLET_RADIUS, BULLET_RADIUS * 0.92, BULLET_LENGTH, 10),
+            new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                emissive: 0xfacc15,
+                emissiveIntensity: 1.6,
+                roughness: 0.08,
+                metalness: 0.85
+            })
+        );
+        core.rotation.x = Math.PI / 2;
+        core.renderOrder = 42;
+        container.add(core);
+
+        const glow = new THREE.Mesh(
+            new THREE.CylinderGeometry(BULLET_RADIUS * 1.7, BULLET_RADIUS * 1.5, BULLET_LENGTH * 0.92, 10),
+            new THREE.MeshBasicMaterial({
+                color: 0xf59e0b,
+                transparent: true,
+                opacity: 0.35,
+                depthWrite: false
+            })
+        );
+        glow.rotation.x = Math.PI / 2;
+        glow.renderOrder = 43;
+        container.add(glow);
+
+        const trail = new THREE.Mesh(
+            new THREE.CylinderGeometry(BULLET_RADIUS * 0.6, BULLET_RADIUS * 1.35, BULLET_TRAIL_LENGTH, 10),
+            new THREE.MeshBasicMaterial({
+                color: 0xfb923c,
+                transparent: true,
+                opacity: 0.24,
+                depthWrite: false
+            })
+        );
+        trail.rotation.x = Math.PI / 2;
+        trail.position.z = -BULLET_TRAIL_LENGTH * 0.72;
+        trail.renderOrder = 41;
+        container.add(trail);
+
+        bulletGroup.add(container);
     }
 }
 

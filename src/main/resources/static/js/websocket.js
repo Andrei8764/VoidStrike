@@ -251,6 +251,18 @@ export function sendChatMessage(text) {
     }));
 }
 
+export function sendAdminCommand(command) {
+    if (!state.socket || state.socket.readyState !== WebSocket.OPEN || !state.joined) {
+        return false;
+    }
+
+    state.socket.send(JSON.stringify({
+        type: "adminCommand",
+        command
+    }));
+    return true;
+}
+
 function detectNearbyEnemyShots() {
     const self = getSelfPlayer();
 

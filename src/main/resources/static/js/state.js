@@ -18,6 +18,8 @@ export const state = {
     reloadRequested: false,
     scoreboardVisible: false,
     shopVisible: false,
+    consoleVisible: false,
+    wallhackEnabled: false,
 
     lastSelfAmmo: null,
     lastUnlockedWeapons: [],

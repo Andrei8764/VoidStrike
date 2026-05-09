@@ -570,6 +570,43 @@ input {
     overflow: hidden;
 }
 
+#devConsole {
+    position: fixed;
+    left: 18px;
+    bottom: 186px;
+    z-index: 22;
+    width: 420px;
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 10px;
+    background: rgba(2, 6, 23, 0.9);
+    backdrop-filter: blur(6px);
+    overflow: hidden;
+}
+
+#devConsoleOutput {
+    height: 120px;
+    padding: 8px 10px;
+    overflow-y: auto;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #e2e8f0;
+    background: rgba(2, 6, 23, 0.72);
+    white-space: pre-wrap;
+}
+
+#devConsoleInput {
+    width: 100%;
+    border: 0;
+    border-top: 1px solid rgba(56, 189, 248, 0.3);
+    outline: none;
+    padding: 8px 10px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+    color: #f8fafc;
+    background: rgba(15, 23, 42, 0.95);
+}
+
 #chatMessages {
     height: 140px;
     padding: 8px 10px;
