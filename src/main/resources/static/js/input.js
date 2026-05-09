@@ -238,11 +238,17 @@ function handleKeyDown(event) {
     }
 
     if (state.consoleVisible) {
+        const consoleFocused = document.activeElement === devConsoleInputElement;
+
         if (event.code === "Escape") {
             event.preventDefault();
             setConsoleVisible(false);
-        } else {
+            return;
+        }
+
+        if (!consoleFocused) {
             event.preventDefault();
+            devConsoleInputElement?.focus();
         }
         return;
     }
@@ -369,8 +375,14 @@ function setConsoleVisible(visible) {
     state.consoleVisible = visible;
     devConsoleElement?.classList.toggle("hidden", !visible);
     if (visible) {
+        state.shopVisible = false;
+        weaponShopElement.classList.add("hidden");
         devConsoleInputElement?.focus();
         mouse.down = false;
+        state.ads = false;
+        if (document.pointerLockElement) {
+            document.exitPointerLock();
+        }
     } else if (document.activeElement === devConsoleInputElement) {
         devConsoleInputElement.blur();
     }

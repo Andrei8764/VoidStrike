@@ -572,10 +572,12 @@ input {
 
 #devConsole {
     position: fixed;
-    left: 18px;
-    bottom: 186px;
-    z-index: 22;
-    width: 420px;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 9999;
+    width: auto;
+    max-width: 860px;
     border: 1px solid rgba(56, 189, 248, 0.35);
     border-radius: 10px;
     background: rgba(2, 6, 23, 0.9);
