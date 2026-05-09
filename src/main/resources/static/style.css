@@ -486,56 +486,62 @@ input {
 #crosshair {
     position: fixed;
     left: 50%;
-    top: 50%;
+    top: 52%;
     z-index: 20;
     transform: translate(-50%, -50%);
     pointer-events: none;
+    --crosshair-gap: 8px;
+    --crosshair-size: 10px;
+    --crosshair-thickness: 2px;
 }
 
 #crosshair span {
     position: absolute;
     display: block;
-    background: rgba(238, 242, 255, 0.92);
-    box-shadow: 0 0 6px rgba(2, 6, 23, 0.8);
+    background: rgba(236, 253, 245, 0.96);
+    box-shadow: 0 0 4px rgba(15, 23, 42, 0.85);
 }
 
 #crosshair .crosshairH {
-    width: 9px;
-    height: 2px;
-    top: -1px;
+    width: var(--crosshair-size);
+    height: var(--crosshair-thickness);
+    top: calc(var(--crosshair-thickness) * -0.5);
+    border-radius: 2px;
 }
 
 #crosshair .crosshairH:nth-child(1) {
-    left: -16px;
+    left: calc((var(--crosshair-gap) + var(--crosshair-size)) * -1);
 }
 
 #crosshair .crosshairH:nth-child(2) {
-    left: 7px;
+    left: var(--crosshair-gap);
 }
 
 #crosshair .crosshairV {
-    width: 2px;
-    height: 9px;
-    left: -1px;
+    width: var(--crosshair-thickness);
+    height: var(--crosshair-size);
+    left: calc(var(--crosshair-thickness) * -0.5);
+    border-radius: 2px;
 }
 
 #crosshair .crosshairV:nth-child(3) {
-    top: -16px;
+    top: calc((var(--crosshair-gap) + var(--crosshair-size)) * -1);
 }
 
 #crosshair .crosshairV:nth-child(4) {
-    top: 7px;
+    top: var(--crosshair-gap);
 }
 
 #crosshair .crosshairDot {
-    width: 3px;
-    height: 3px;
-    left: -1.5px;
-    top: -1.5px;
+    width: 2px;
+    height: 2px;
+    left: -1px;
+    top: -1px;
     border-radius: 50%;
 }
 
 #adsScope {
+    display: none !important;
     position: fixed;
     left: 50%;
     top: 50%;

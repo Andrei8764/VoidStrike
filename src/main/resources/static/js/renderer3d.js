@@ -14,10 +14,11 @@ const PLAYER_HEIGHT = 72;
 const CAMERA_EYE_HEIGHT = 62;
 const CAMERA_BACK_OFFSET = 6;
 const CAMERA_LOOK_DISTANCE = 120;
-const BULLET_RADIUS = 2;
+const BULLET_RADIUS = 1.6;
+const BULLET_LENGTH = 14;
 const OBSTACLE_HEIGHT = 84;
 const CHARACTER_HEIGHT = 58;
-const CHARACTER_YAW_OFFSET = Math.PI / 2;
+const CHARACTER_YAW_OFFSET = Math.PI / 2    ;
 const REMOTE_RUN_SPEED_THRESHOLD = PLAYER_MAX_SPEED * 1.08;
 const WEAPON_AIM_SMOOTHING = 0.18;
 const WEAPON_IDLE_PITCH = 0.08;
@@ -38,7 +39,7 @@ const WEAPON_MODEL_LOCAL_X = 0.2;
 const WEAPON_MODEL_LOCAL_Y = 0.02;
 const WEAPON_MODEL_LOCAL_Z = 0.55;
 const VIEWMODEL_HIP_POS = new THREE.Vector3(0.36, -0.36, -0.85);
-const VIEWMODEL_ADS_POS = new THREE.Vector3(0.0, -0.22, -0.58);
+const VIEWMODEL_ADS_POS = new THREE.Vector3(0.04, -0.22, -0.58);
 const VIEWMODEL_HIP_ROT = new THREE.Euler(-0.24, Math.PI + 0.05, 0.02);
 const VIEWMODEL_ADS_ROT = new THREE.Euler(-0.1, Math.PI, 0);
 const VIEWMODEL_BLEND_SPEED = 0.18;
@@ -81,6 +82,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
 const camera3d = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 4000);
+scene.add(camera3d);
 const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true
@@ -572,6 +574,10 @@ function syncLocalViewModel(self) {
 }
 
 function updateLocalViewModel(self) {
+    if (self?.reloading && state.ads) {
+        state.ads = false;
+    }
+
     const adsWeight = state.ads ? 1 : 0;
     const targetPos = adsWeight > 0.5 ? VIEWMODEL_ADS_POS : VIEWMODEL_HIP_POS;
     const targetRot = adsWeight > 0.5 ? VIEWMODEL_ADS_ROT : VIEWMODEL_HIP_ROT;
@@ -589,10 +595,14 @@ function updateLocalViewModel(self) {
 
     if (crosshairElement) {
         crosshairElement.classList.toggle("hidden", !self);
+        const recoilSpread = Math.min(18, state.recoilKick || 0);
+        const adsTighten = state.ads ? 3 : 0;
+        const dynamicGap = Math.max(5, 8 + recoilSpread - adsTighten);
+        crosshairElement.style.setProperty("--crosshair-gap", `${dynamicGap.toFixed(2)}px`);
     }
 
     if (adsScopeElement) {
-        adsScopeElement.classList.toggle("hidden", !state.ads || !self);
+        adsScopeElement.classList.add("hidden");
     }
 }
 
@@ -1061,18 +1071,27 @@ function syncBullets() {
 
     for (const bullet of getRenderableBullets()) {
         const mesh = new THREE.Mesh(
-            new THREE.SphereGeometry(BULLET_RADIUS, 8, 8),
+            new THREE.CylinderGeometry(BULLET_RADIUS, BULLET_RADIUS, BULLET_LENGTH, 10),
             new THREE.MeshStandardMaterial({
-                color: 0xfacc15,
-                emissive: 0xeab308,
-                emissiveIntensity: 0.65
+                color: 0xfef08a,
+                emissive: 0xf59e0b,
+                emissiveIntensity: 1.35,
+                roughness: 0.12,
+                metalness: 0.72
             })
         );
+        mesh.rotation.x = Math.PI / 2;
+        mesh.renderOrder = 42;
 
         mesh.position.set(
             bullet.x,
             Math.max(2, bullet.z || 2),
             bullet.y
+        );
+        mesh.lookAt(
+            bullet.x + (bullet.velocityX || 0),
+            Math.max(2, (bullet.z || 2) + (bullet.velocityZ || 0)),
+            bullet.y + (bullet.velocityY || 0)
         );
 
         bulletGroup.add(mesh);

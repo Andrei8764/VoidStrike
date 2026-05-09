@@ -10,7 +10,7 @@ import {
     weaponShopButtons,
     weaponShopElement
 } from "./dom.js";
-import { keys, mouse, state } from "./state.js";
+import { getSelfPlayer, keys, mouse, state } from "./state.js";
 import { resumeAudio } from "./audio.js";
 import { joinGame, sendChatMessage } from "./websocket.js";
 import { updateMouseWorldPosition } from "./renderer3d.js";
@@ -130,7 +130,10 @@ export function registerInputHandlers() {
         if (event.button === 2) {
             resumeAudio();
             canvas.requestPointerLock();
-            state.ads = true;
+            const self = getSelfPlayer();
+            if (!self?.reloading) {
+                state.ads = true;
+            }
         }
     });
 
@@ -257,6 +260,7 @@ function handleKeyDown(event) {
             break;
         case "KeyR":
             state.reloadRequested = true;
+            state.ads = false;
             break;
         case "Digit1":
         case "Numpad1":

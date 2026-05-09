@@ -36,15 +36,15 @@ public class GameRoom {
     private static final double PLAYER_STOP_SPEED = 90;
     private static final double PLAYER_RADIUS = 20;
     private static final double MAX_BULLET_Z = 700;
-    private static final double PLAYER_BODY_MAX_Z = 96;
-    private static final double PLAYER_HEAD_MIN_Z = 78;
-    private static final double PLAYER_HEAD_MAX_Z = 132;
-    private static final double BULLET_SPAWN_Z = 82;
+    private static final double PLAYER_BODY_MAX_Z = 88;
+    private static final double PLAYER_HEAD_MIN_Z = 52;
+    private static final double PLAYER_HEAD_MAX_Z = 86;
+    private static final double BULLET_SPAWN_Z = 60;
     private static final double BULLET_MUZZLE_FORWARD_OFFSET = 58;
-    private static final double BULLET_MUZZLE_SIDE_OFFSET = -8;
-    private static final double BULLET_MUZZLE_PITCH_OFFSET = 24;
-    private static final double BULLET_HIT_RADIUS = 18;
-    private static final double HEADSHOT_RADIUS = 16;
+    private static final double BULLET_MUZZLE_SIDE_OFFSET = 0;
+    private static final double BULLET_MUZZLE_PITCH_OFFSET = 18;
+    private static final double BULLET_HIT_RADIUS = 14;
+    private static final double HEADSHOT_RADIUS = 11;
     private static final int KILL_FEED_LIMIT = 6;
     private static final long KILL_FEED_TTL_MS = 8_000;
     private static final int CHAT_LIMIT = 40;
@@ -482,7 +482,9 @@ public class GameRoom {
                     + forwardY * muzzleForwardOffset
                     + rightY * BULLET_MUZZLE_SIDE_OFFSET;
 
-            double muzzleZ = BULLET_SPAWN_Z + Math.sin(finalPitch) * BULLET_MUZZLE_PITCH_OFFSET;
+            double muzzleZ = player.getZ()
+                    + BULLET_SPAWN_Z
+                    + Math.sin(finalPitch) * BULLET_MUZZLE_PITCH_OFFSET;
 
             BulletState bullet = new BulletState(
                     "b-" + System.nanoTime() + "-" + i,
@@ -541,11 +543,10 @@ public class GameRoom {
                     continue;
                 }
 
-                double bodyDistance = distance(bullet.getX(), bullet.getY(), player.getX(), player.getY());
-                boolean headshot = isHeadshot(bullet, player);
-                boolean bodyshot = bodyDistance <= BULLET_HIT_RADIUS
-                        && bullet.getZ() >= player.getZ()
-                        && bullet.getZ() <= player.getZ() + PLAYER_BODY_MAX_Z;
+                ClosestPointOnSegment closestPoint = closestPointOnBulletPathToPlayer(bullet, player);
+                double playerZ = player.getZ();
+                boolean headshot = isHeadshot(closestPoint, playerZ);
+                boolean bodyshot = isBodyshot(closestPoint, playerZ);
 
                 if (headshot || bodyshot) {
                     player.setHp(headshot ? 0 : player.getHp() - bullet.getDamage());
@@ -566,12 +567,54 @@ public class GameRoom {
         }
     }
 
-    private boolean isHeadshot(BulletState bullet, PlayerState player) {
-        double distance = distance(bullet.getX(), bullet.getY(), player.getX(), player.getY());
+    private boolean isHeadshot(ClosestPointOnSegment closestPoint, double playerZ) {
+        return closestPoint.horizontalDistance <= HEADSHOT_RADIUS
+                && closestPoint.z >= playerZ + PLAYER_HEAD_MIN_Z
+                && closestPoint.z <= playerZ + PLAYER_HEAD_MAX_Z;
+    }
 
-        return distance <= HEADSHOT_RADIUS
-                && bullet.getZ() >= player.getZ() + PLAYER_HEAD_MIN_Z
-                && bullet.getZ() <= player.getZ() + PLAYER_HEAD_MAX_Z;
+    private boolean isBodyshot(ClosestPointOnSegment closestPoint, double playerZ) {
+        if (closestPoint.z < playerZ || closestPoint.z > playerZ + PLAYER_BODY_MAX_Z) {
+            return false;
+        }
+
+        // Stricter near shoulders/neck to avoid grazing hits above the model.
+        double upperBodyStartZ = playerZ + PLAYER_BODY_MAX_Z - 16;
+        double allowedRadius = closestPoint.z >= upperBodyStartZ
+                ? BULLET_HIT_RADIUS * 0.72
+                : BULLET_HIT_RADIUS;
+
+        return closestPoint.horizontalDistance <= allowedRadius;
+    }
+
+    private ClosestPointOnSegment closestPointOnBulletPathToPlayer(BulletState bullet, PlayerState player) {
+        double startX = bullet.getPreviousX();
+        double startY = bullet.getPreviousY();
+        double startZ = bullet.getPreviousZ();
+        double endX = bullet.getX();
+        double endY = bullet.getY();
+        double endZ = bullet.getZ();
+
+        double segmentX = endX - startX;
+        double segmentY = endY - startY;
+        double segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
+
+        double t;
+        if (segmentLengthSquared <= 1e-9) {
+            t = 0.0;
+        } else {
+            double playerOffsetX = player.getX() - startX;
+            double playerOffsetY = player.getY() - startY;
+            t = (playerOffsetX * segmentX + playerOffsetY * segmentY) / segmentLengthSquared;
+            t = clamp(t, 0, 1);
+        }
+
+        double closestX = startX + segmentX * t;
+        double closestY = startY + segmentY * t;
+        double closestZ = startZ + (endZ - startZ) * t;
+        double horizontalDistance = distance(closestX, closestY, player.getX(), player.getY());
+
+        return new ClosestPointOnSegment(horizontalDistance, closestZ);
     }
 
     private void addTeamScore(String team) {
@@ -821,6 +864,9 @@ public class GameRoom {
     }
 
     private record ChatEvent(String player, String team, String text, long createdAt) {
+    }
+
+    private record ClosestPointOnSegment(double horizontalDistance, double z) {
     }
 
     public String getId() {

@@ -9,6 +9,9 @@ public class BulletState {
     private double x;
     private double y;
     private double z;
+    private double previousX;
+    private double previousY;
+    private double previousZ;
     private final double velocityX;
     private final double velocityY;
     private final double velocityZ;
@@ -32,6 +35,9 @@ public class BulletState {
         this.x = x;
         this.y = y;
         this.z = z;
+        this.previousX = x;
+        this.previousY = y;
+        this.previousZ = z;
         this.velocityX = velocityX;
         this.velocityY = velocityY;
         this.velocityZ = velocityZ;
@@ -39,6 +45,9 @@ public class BulletState {
     }
 
     public void update(double deltaSeconds) {
+        previousX = x;
+        previousY = y;
+        previousZ = z;
         x += velocityX * deltaSeconds;
         y += velocityY * deltaSeconds;
         z += velocityZ * deltaSeconds;
@@ -83,5 +92,17 @@ public class BulletState {
 
     public double getVelocityZ() {
         return velocityZ;
+    }
+
+    public double getPreviousX() {
+        return previousX;
+    }
+
+    public double getPreviousY() {
+        return previousY;
+    }
+
+    public double getPreviousZ() {
+        return previousZ;
     }
 }
