@@ -155,6 +155,9 @@ let lastAnimationTimeMs = performance.now();
 let localViewModelPath = null;
 let localViewModelObject = null;
 let localFirstPersonBody = null;
+let localWeaponOffsetX = WEAPON_MODEL_LOCAL_X;
+let localWeaponOffsetY = WEAPON_MODEL_LOCAL_Y;
+let localWeaponOffsetZ = WEAPON_MODEL_LOCAL_Z;
 const localViewModelPivot = new THREE.Group();
 camera3d.add(localViewModelPivot);
 localViewModelPivot.position.copy(VIEWMODEL_HIP_POS);
@@ -388,8 +391,59 @@ function getWeaponScaleByName(weaponName) {
     switch (weaponName) {
         case "SMG":
             return WEAPON_MODEL_SCALE * 0.50;
+        case "Pistol":
+            return WEAPON_MODEL_SCALE * 0.50;
+        case "Shotgun":
+            return WEAPON_MODEL_SCALE * 0.50;
+        case "Sniper":
+            return WEAPON_MODEL_SCALE * 0.50;
         default:
             return WEAPON_MODEL_SCALE;
+    }
+}
+
+function getLocalWeaponOffsetByName(weaponName) {
+    switch (weaponName) {
+        case "SMG":
+            return { x: WEAPON_MODEL_LOCAL_X + 0.08, y: WEAPON_MODEL_LOCAL_Y + 0.02, z: WEAPON_MODEL_LOCAL_Z - 0.06 };
+        case "Pistol":
+            return { x: WEAPON_MODEL_LOCAL_X + 0.08, y: WEAPON_MODEL_LOCAL_Y + 0.02, z: WEAPON_MODEL_LOCAL_Z - 0.06 };
+        case "Shotgun":
+            return { x: WEAPON_MODEL_LOCAL_X + 0.08, y: WEAPON_MODEL_LOCAL_Y + 0.02, z: WEAPON_MODEL_LOCAL_Z - 0.06 };
+        case "Sniper":
+            return { x: WEAPON_MODEL_LOCAL_X + 0.08, y: WEAPON_MODEL_LOCAL_Y + 0.02, z: WEAPON_MODEL_LOCAL_Z - 0.06 };
+        default:
+            return { x: WEAPON_MODEL_LOCAL_X, y: WEAPON_MODEL_LOCAL_Y, z: WEAPON_MODEL_LOCAL_Z };
+    }
+}
+
+function getHipViewModelPosByWeapon(weaponName) {
+    switch (weaponName) {
+        case "Rifle":
+            return new THREE.Vector3(0.44, -0.43, -0.94);
+        case "Pistol":
+            return new THREE.Vector3(0.44, -0.43, -0.94);
+        case "Shotgun":
+            return new THREE.Vector3(0.44, -0.43, -0.94);
+        case "Sniper":
+            return new THREE.Vector3(0.44, -0.43, -0.94);
+        default:
+            return VIEWMODEL_HIP_POS;
+    }
+}
+
+function getRemoteWeaponAnchorOffsetByName(weaponName) {
+    switch (weaponName) {
+        case "SMG":
+            return { x: 0.40, y: 0.9, z: 0.04 };
+        case "Pistol":
+            return { x: 0.40, y: 0.9, z: 0.04 };
+        case "Shotgun":
+            return { x: 0.40, y: 0.9, z: 0.04 };
+        case "Sniper":
+            return { x: 0.40, y: 0.9, z: 0.04 };
+        default:
+            return { x: 0.4, y: 1.1, z: 0.3 };
     }
 }
 
@@ -545,6 +599,10 @@ function syncLocalViewModel(self) {
 
     const weaponPath = getWeaponPathForSelf(self);
     const weaponScale = getWeaponScaleByName(self.weapon);
+    const localWeaponOffset = getLocalWeaponOffsetByName(self.weapon);
+    localWeaponOffsetX = localWeaponOffset.x;
+    localWeaponOffsetY = localWeaponOffset.y;
+    localWeaponOffsetZ = localWeaponOffset.z;
     if (!weaponPath) {
         return;
     }
@@ -568,7 +626,7 @@ function syncLocalViewModel(self) {
             const model = template.clone(true);
             model.rotation.set(WEAPON_MODEL_ROT_X, WEAPON_MODEL_ROT_Y, WEAPON_MODEL_ROT_Z);
             normalizeWeaponModel(model, weaponScale);
-            model.position.set(WEAPON_MODEL_LOCAL_X, WEAPON_MODEL_LOCAL_Y, WEAPON_MODEL_LOCAL_Z);
+            model.position.set(localWeaponOffsetX, localWeaponOffsetY, localWeaponOffsetZ);
             model.traverse(node => {
                 if (!node.isMesh || !node.material) {
                     return;
@@ -623,7 +681,8 @@ function updateLocalViewModel(self) {
     }
 
     const adsWeight = state.ads ? 1 : 0;
-    const targetPos = adsWeight > 0.5 ? VIEWMODEL_ADS_POS : VIEWMODEL_HIP_POS;
+    const targetHipPos = getHipViewModelPosByWeapon(self?.weapon);
+    const targetPos = adsWeight > 0.5 ? VIEWMODEL_ADS_POS : targetHipPos;
     const targetRot = adsWeight > 0.5 ? VIEWMODEL_ADS_ROT : VIEWMODEL_HIP_ROT;
 
     localViewModelPivot.position.lerp(targetPos, VIEWMODEL_BLEND_SPEED);
@@ -633,8 +692,8 @@ function updateLocalViewModel(self) {
 
     if (localViewModelObject) {
         const recoilOffset = Math.min(1, state.recoilKick / 18);
-        localViewModelObject.position.z = WEAPON_MODEL_LOCAL_Z - recoilOffset * 0.22;
-        localViewModelObject.position.y = WEAPON_MODEL_LOCAL_Y + recoilOffset * 0.06;
+        localViewModelObject.position.z = localWeaponOffsetZ - recoilOffset * 0.22;
+        localViewModelObject.position.y = localWeaponOffsetY + recoilOffset * 0.06;
     }
 
     if (crosshairElement) {
@@ -720,9 +779,10 @@ function updateWeaponAim(player, root, runLean, pitchLean, gaitWeight, phase) {
     remotePlayerWeaponRot.set(player.id, { yaw: smoothWeaponYaw, pitch: smoothWeaponPitch });
     weaponAnchor.rotation.y = smoothWeaponYaw;
     weaponAnchor.rotation.x = smoothWeaponPitch;
-    const basePosX = rig?.armRight ? 0.4 : 12.2;
-    const basePosY = rig?.armRight ? 1.1 : CHARACTER_HEIGHT * 0.69;
-    const basePosZ = rig?.armRight ? 0.3 : 5.8;
+    const remoteAnchorOffset = getRemoteWeaponAnchorOffsetByName(player.weapon);
+    const basePosX = rig?.armRight ? remoteAnchorOffset.x : 12.2;
+    const basePosY = rig?.armRight ? remoteAnchorOffset.y : CHARACTER_HEIGHT * 0.69;
+    const basePosZ = rig?.armRight ? remoteAnchorOffset.z : 5.8;
     weaponAnchor.position.x = basePosX + runSwayPos * 0.12;
     weaponAnchor.position.y = basePosY + recoil * (WEAPON_RECOIL_KICK_UP * 0.9);
     const recoilBackZ = basePosZ - recoil * (WEAPON_RECOIL_KICK_BACK * 0.28) + runSwayPos * 0.2;
