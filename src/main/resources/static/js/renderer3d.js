@@ -2,7 +2,7 @@ import * as THREE from "/vendor/three/build/three.module.js";
 import { GLTFLoader } from "/vendor/three/examples/jsm/loaders/GLTFLoader.js";
 import { OBJLoader } from "/vendor/three/examples/jsm/loaders/OBJLoader.js";
 import { MTLLoader } from "/vendor/three/examples/jsm/loaders/MTLLoader.js";
-import { adsScopeElement, canvas, crosshairElement, nameLabelsElement } from "./dom.js";
+import { adsScopeElement, canvas, crosshairElement, editorHudElement, editorSelectedModelElement, nameLabelsElement } from "./dom.js";
 import {
     getRenderableBullets,
     getRenderableRemotePlayers,
@@ -167,6 +167,14 @@ scene.add(worldModelGroup);
 const worldPrimitiveGroup = new THREE.Group();
 scene.add(worldPrimitiveGroup);
 let wallhackEnabled = false;
+const editorRaycaster = new THREE.Raycaster();
+const editorGroundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const editorGroundHit = new THREE.Vector3();
+let editorModelCatalog = [];
+let editorModelCursor = 0;
+let editorSceneModels = [];
+let selectedEditorRoot = null;
+let selectedEditorModelIndex = -1;
 
 const gltfLoader = new GLTFLoader();
 const remotePlayerRoots = new Map();
@@ -292,6 +300,157 @@ function applyWallhackState() {
 export function setWallhackEnabled(enabled) {
     wallhackEnabled = Boolean(enabled);
     applyWallhackState();
+}
+
+function updateEditorHud() {
+    if (!editorHudElement) {
+        return;
+    }
+    editorHudElement.classList.toggle("hidden", !state.editorMode);
+    if (editorSelectedModelElement) {
+        const current = editorModelCatalog[editorModelCursor] || "-";
+        editorSelectedModelElement.textContent = `Model: ${current.replace("/models/", "")}`;
+    }
+}
+
+function clearEditorSelectionHighlight() {
+    if (!selectedEditorRoot) {
+        return;
+    }
+    selectedEditorRoot.traverse(node => {
+        if (!node.isMesh || !node.material) {
+            return;
+        }
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        for (const material of materials) {
+            if (material.emissive && material.userData?.editorPrevEmissiveHex !== undefined) {
+                material.emissive.setHex(material.userData.editorPrevEmissiveHex);
+                material.emissiveIntensity = material.userData.editorPrevEmissiveIntensity ?? material.emissiveIntensity;
+                delete material.userData.editorPrevEmissiveHex;
+                delete material.userData.editorPrevEmissiveIntensity;
+                material.needsUpdate = true;
+            }
+        }
+    });
+    selectedEditorRoot = null;
+    selectedEditorModelIndex = -1;
+}
+
+function setEditorSelection(root, index) {
+    clearEditorSelectionHighlight();
+    if (!root || index < 0) {
+        return;
+    }
+    selectedEditorRoot = root;
+    selectedEditorModelIndex = index;
+    root.traverse(node => {
+        if (!node.isMesh || !node.material) {
+            return;
+        }
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        for (const material of materials) {
+            if (!material.emissive) {
+                continue;
+            }
+            material.userData = material.userData || {};
+            material.userData.editorPrevEmissiveHex = material.emissive.getHex();
+            material.userData.editorPrevEmissiveIntensity = material.emissiveIntensity ?? 1;
+            material.emissive.setHex(0xfacc15);
+            material.emissiveIntensity = 0.35;
+            material.needsUpdate = true;
+        }
+    });
+}
+
+function getEditorTopLevelRoot(object) {
+    let current = object;
+    while (current && current.parent && current.parent !== worldModelGroup) {
+        current = current.parent;
+    }
+    return current?.parent === worldModelGroup ? current : null;
+}
+
+function getEditorPointerNdc(pointerX = mouse.x, pointerY = mouse.y) {
+    const width = canvas.clientWidth || window.innerWidth;
+    const height = canvas.clientHeight || window.innerHeight;
+    const x = (pointerX / Math.max(width, 1)) * 2 - 1;
+    const y = -(pointerY / Math.max(height, 1)) * 2 + 1;
+    return { x, y };
+}
+
+async function ensureEditorModelCatalog() {
+    if (editorModelCatalog.length > 0) {
+        return;
+    }
+    try {
+        const response = await fetch("/api/world/models", { cache: "no-store" });
+        if (!response.ok) {
+            return;
+        }
+        const list = await response.json();
+        if (Array.isArray(list) && list.length > 0) {
+            editorModelCatalog = list;
+            editorModelCursor = 0;
+            updateEditorHud();
+            return;
+        }
+    } catch (_error) {
+    }
+    editorModelCatalog = ALL_OBJ_MODEL_FILES.map(name => `/models/${name}`);
+    editorModelCursor = 0;
+    updateEditorHud();
+}
+
+function applyEditorTransformByKey(code) {
+    if (!selectedEditorRoot || selectedEditorModelIndex < 0) {
+        return false;
+    }
+
+    const modelDef = editorSceneModels[selectedEditorModelIndex];
+    if (!modelDef) {
+        return false;
+    }
+
+    const moveStep = 30;
+    const rotStep = 15;
+    const scaleStep = 0.05;
+    switch (code) {
+        case "ArrowUp":
+            modelDef.position.z -= moveStep;
+            break;
+        case "ArrowDown":
+            modelDef.position.z += moveStep;
+            break;
+        case "ArrowLeft":
+            modelDef.position.x -= moveStep;
+            break;
+        case "ArrowRight":
+            modelDef.position.x += moveStep;
+            break;
+        case "KeyR":
+            modelDef.position.y += moveStep * 0.5;
+            break;
+        case "KeyF":
+            modelDef.position.y -= moveStep * 0.5;
+            break;
+        case "KeyQ":
+            modelDef.rotationDegrees.y -= rotStep;
+            break;
+        case "KeyE":
+            modelDef.rotationDegrees.y += rotStep;
+            break;
+        case "KeyZ":
+            modelDef.scale = Math.max(0.05, (modelDef.scale || 1) - scaleStep);
+            break;
+        case "KeyX":
+            modelDef.scale = Math.min(20, (modelDef.scale || 1) + scaleStep);
+            break;
+        default:
+            return false;
+    }
+
+    applyModelTransform(selectedEditorRoot, modelDef);
+    return true;
 }
 
 function getCharacterModelPathForPlayer(player) {
@@ -1026,8 +1185,12 @@ function applyModelTransform(root, modelDef) {
     // Only lift if geometry dips below terrain; do not force everything to ground.
     root.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(root);
-    if (Number.isFinite(box.min.y) && box.min.y < 0) {
-        root.position.y += -box.min.y + MODEL_GROUND_EPSILON;
+    if (Number.isFinite(box.min.y)) {
+        if (box.min.y < 0) {
+            root.position.y += -box.min.y;
+        }
+        // Keep every model slightly above ground to avoid depth fighting with terrain.
+        root.position.y += MODEL_GROUND_EPSILON;
         root.updateMatrixWorld(true);
     }
 
@@ -1057,11 +1220,17 @@ function applyModelTransform(root, modelDef) {
             }
             const name = (material.name || "").toLowerCase();
             const isFoliage = name.includes("tree") || name.includes("leaf") || name.includes("foliage");
-            material.transparent = isFoliage;
+            const isRoadLike = name.includes("asphalt") || name.includes("road") || name.includes("pavement") || name.includes("tile");
+            // Use alpha cutout (not blended transparency) for stable depth and less flicker.
+            material.transparent = false;
             material.alphaTest = isFoliage ? 0.5 : 0;
-            material.depthWrite = !isFoliage;
-            material.side = isFoliage ? THREE.DoubleSide : THREE.FrontSide;
+            material.depthWrite = true;
+            material.side = (isFoliage || isRoadLike) ? THREE.DoubleSide : THREE.FrontSide;
             material.alphaToCoverage = isFoliage;
+            material.depthTest = true;
+            material.polygonOffset = isFoliage;
+            material.polygonOffsetFactor = isFoliage ? 1 : 0;
+            material.polygonOffsetUnits = isFoliage ? 1 : 0;
             if (isFoliage && material.map) {
                 material.map.generateMipmaps = false;
                 material.map.magFilter = THREE.LinearFilter;
@@ -1078,7 +1247,7 @@ function applyModelTransform(root, modelDef) {
     });
 }
 
-function loadObjModel(modelDef) {
+function loadObjModel(modelDef, onLoaded) {
     const mtlPath = modelDef.mtlPath || modelDef.path.replace(/\.obj$/i, ".mtl");
     const lastSlashIndex = mtlPath.lastIndexOf("/");
     const mtlDir = lastSlashIndex >= 0 ? mtlPath.slice(0, lastSlashIndex + 1) : "/";
@@ -1101,6 +1270,9 @@ function loadObjModel(modelDef) {
                 obj => {
                     applyModelTransform(obj, modelDef);
                     worldModelGroup.add(obj);
+                    if (onLoaded) {
+                        onLoaded(obj);
+                    }
                 },
                 undefined,
                 () => createMissingModelPlaceholder(modelDef)
@@ -1114,6 +1286,9 @@ function loadObjModel(modelDef) {
                 obj => {
                     applyModelTransform(obj, modelDef);
                     worldModelGroup.add(obj);
+                    if (onLoaded) {
+                        onLoaded(obj);
+                    }
                 },
                 undefined,
                 () => createMissingModelPlaceholder(modelDef)
@@ -1122,10 +1297,10 @@ function loadObjModel(modelDef) {
     );
 }
 
-function loadWorldModel(modelDef) {
+function loadWorldModel(modelDef, onLoaded) {
     const path = (modelDef.path || "").toLowerCase();
     if (path.endsWith(".obj")) {
-        loadObjModel(modelDef);
+        loadObjModel(modelDef, onLoaded);
         return;
     }
 
@@ -1135,6 +1310,9 @@ function loadWorldModel(modelDef) {
             const root = gltf.scene;
             applyModelTransform(root, modelDef);
             worldModelGroup.add(root);
+            if (onLoaded) {
+                onLoaded(root);
+            }
         },
         undefined,
         () => {
@@ -1217,6 +1395,10 @@ async function loadWorldScene() {
             worldPrimitiveGroup.add(mesh);
         }
 
+        editorSceneModels = [];
+        clearEditorSelectionHighlight();
+        worldModelGroup.clear();
+
         for (const modelDef of modelDefs) {
             if (modelDef.enabled === false) {
                 continue;
@@ -1226,7 +1408,24 @@ async function loadWorldScene() {
                 continue;
             }
 
-            loadWorldModel(modelDef);
+            const normalizedModelDef = {
+                enabled: true,
+                path: modelDef.path,
+                position: {
+                    x: modelDef.position?.x ?? 0,
+                    y: modelDef.position?.y ?? 0,
+                    z: modelDef.position?.z ?? 0
+                },
+                rotationDegrees: {
+                    y: modelDef.rotationDegrees?.y ?? 0
+                },
+                scale: typeof modelDef.scale === "number" ? modelDef.scale : 1
+            };
+            const nextIndex = editorSceneModels.length;
+            editorSceneModels.push(normalizedModelDef);
+            loadWorldModel(normalizedModelDef, root => {
+                root.userData.editorModelIndex = nextIndex;
+            });
         }
     } catch (_error) {
     }
@@ -1517,6 +1716,136 @@ export function updateAimAngle() {
 
     mouse.angle = state.viewAngle;
     mouse.pitch = state.viewPitch;
+}
+
+export async function toggleEditorMode() {
+    state.editorMode = !state.editorMode;
+    if (state.editorMode) {
+        await ensureEditorModelCatalog();
+    }
+    updateEditorHud();
+    if (!state.editorMode) {
+        clearEditorSelectionHighlight();
+    }
+}
+
+export function cycleEditorModel(direction) {
+    if (!state.editorMode || editorModelCatalog.length === 0) {
+        return;
+    }
+    editorModelCursor = (editorModelCursor + direction + editorModelCatalog.length) % editorModelCatalog.length;
+    updateEditorHud();
+}
+
+export function editorHandleCanvasClick(clientX, clientY) {
+    if (!state.editorMode) {
+        return false;
+    }
+    const rect = canvas.getBoundingClientRect();
+    const pointerX = typeof clientX === "number" ? (clientX - rect.left) : mouse.x;
+    const pointerY = typeof clientY === "number" ? (clientY - rect.top) : mouse.y;
+    const ndc = getEditorPointerNdc(pointerX, pointerY);
+    editorRaycaster.setFromCamera(ndc, camera3d);
+
+    const modelHits = editorRaycaster.intersectObjects(worldModelGroup.children, true);
+    if (modelHits.length > 0) {
+        const topRoot = getEditorTopLevelRoot(modelHits[0].object);
+        if (topRoot && typeof topRoot.userData.editorModelIndex === "number") {
+            setEditorSelection(topRoot, topRoot.userData.editorModelIndex);
+            return true;
+        }
+    }
+
+    clearEditorSelectionHighlight();
+
+    if (!editorRaycaster.ray.intersectPlane(editorGroundPlane, editorGroundHit)) {
+        return true;
+    }
+
+    const path = editorModelCatalog[editorModelCursor];
+    if (!path) {
+        return true;
+    }
+    const newModel = {
+        enabled: true,
+        path,
+        position: {
+            x: Math.round(editorGroundHit.x),
+            y: 0,
+            z: Math.round(editorGroundHit.z)
+        },
+        rotationDegrees: { y: 0 },
+        scale: 1
+    };
+    const nextIndex = editorSceneModels.length;
+    editorSceneModels.push(newModel);
+    loadWorldModel(newModel, root => {
+        root.userData.editorModelIndex = nextIndex;
+        setEditorSelection(root, nextIndex);
+    });
+    return true;
+}
+
+export function editorHandleKeyDown(event) {
+    if (!state.editorMode) {
+        return false;
+    }
+
+    if (event.code === "Delete" || event.code === "Backspace") {
+        if (selectedEditorRoot && selectedEditorModelIndex >= 0) {
+            worldModelGroup.remove(selectedEditorRoot);
+            editorSceneModels.splice(selectedEditorModelIndex, 1);
+            for (const child of worldModelGroup.children) {
+                if (typeof child.userData.editorModelIndex === "number" && child.userData.editorModelIndex > selectedEditorModelIndex) {
+                    child.userData.editorModelIndex -= 1;
+                }
+            }
+            clearEditorSelectionHighlight();
+        }
+        return true;
+    }
+
+    if (event.code === "KeyL") {
+        if (selectedEditorModelIndex >= 0) {
+            const source = editorSceneModels[selectedEditorModelIndex];
+            if (source) {
+                const duplicate = {
+                    ...source,
+                    position: {
+                        x: (source.position?.x ?? 0) + 80,
+                        y: source.position?.y ?? 0,
+                        z: (source.position?.z ?? 0) + 80
+                    },
+                    rotationDegrees: { y: source.rotationDegrees?.y ?? 0 }
+                };
+                const nextIndex = editorSceneModels.length;
+                editorSceneModels.push(duplicate);
+                loadWorldModel(duplicate, root => {
+                    root.userData.editorModelIndex = nextIndex;
+                    setEditorSelection(root, nextIndex);
+                });
+            }
+        }
+        return true;
+    }
+
+    return applyEditorTransformByKey(event.code);
+}
+
+export async function saveEditorScene() {
+    const payload = {
+        version: 1,
+        models: editorSceneModels,
+        primitives: []
+    };
+    const response = await fetch("/api/world/scene", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+        throw new Error(`Save failed: ${response.status}`);
+    }
 }
 
 export function render() {

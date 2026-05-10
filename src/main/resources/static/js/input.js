@@ -16,7 +16,15 @@ import {
 import { getSelfPlayer, keys, mouse, state } from "./state.js";
 import { resumeAudio } from "./audio.js";
 import { joinGame, sendAdminCommand, sendChatMessage } from "./websocket.js";
-import { setWallhackEnabled, updateMouseWorldPosition } from "./renderer3d.js";
+import {
+    cycleEditorModel,
+    editorHandleCanvasClick,
+    editorHandleKeyDown,
+    saveEditorScene,
+    setWallhackEnabled,
+    toggleEditorMode,
+    updateMouseWorldPosition
+} from "./renderer3d.js";
 import { initWeaponShopPreview, previewWeaponModel } from "./weaponShopPreview.js";
 import { MOUSE_SENSITIVITY } from "./config.js";
 import { clamp, normalizeAngle } from "./utils.js";
@@ -140,6 +148,12 @@ export function registerInputHandlers() {
     });
 
     canvas.addEventListener("mousedown", event => {
+        if (state.editorMode && event.button === 0) {
+            event.preventDefault();
+            editorHandleCanvasClick(event.clientX, event.clientY);
+            return;
+        }
+
         if (state.shopVisible) {
             event.preventDefault();
             return;
@@ -231,6 +245,36 @@ function setShopCategory(category) {
 }
 
 function handleKeyDown(event) {
+    if (event.code === "F6") {
+        event.preventDefault();
+        void toggleEditorMode();
+        return;
+    }
+
+    if (state.editorMode) {
+        if (event.ctrlKey && event.code === "KeyS") {
+            event.preventDefault();
+            void saveEditorScene()
+                .then(() => appendConsoleLine("scene saved"))
+                .catch(() => appendConsoleLine("scene save failed"));
+            return;
+        }
+        if (event.code === "BracketLeft") {
+            event.preventDefault();
+            cycleEditorModel(-1);
+            return;
+        }
+        if (event.code === "BracketRight") {
+            event.preventDefault();
+            cycleEditorModel(1);
+            return;
+        }
+        if (editorHandleKeyDown(event)) {
+            event.preventDefault();
+            return;
+        }
+    }
+
     if (event.code === "Backquote") {
         event.preventDefault();
         setConsoleVisible(!state.consoleVisible);
@@ -435,11 +479,33 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
+    if (command === "editor") {
+        if (arg === "on" && !state.editorMode) {
+            void toggleEditorMode();
+            appendConsoleLine("editor ON");
+            return;
+        }
+        if (arg === "off" && state.editorMode) {
+            void toggleEditorMode();
+            appendConsoleLine("editor OFF");
+            return;
+        }
+        if (arg === "save") {
+            void saveEditorScene()
+                .then(() => appendConsoleLine("scene saved"))
+                .catch(() => appendConsoleLine("scene save failed"));
+            return;
+        }
+        void toggleEditorMode();
+        appendConsoleLine(`editor ${state.editorMode ? "OFF" : "ON"}`);
+        return;
+    }
+
     if (command === "freeze" || command === "money" || command === "fly") {
         const sent = sendAdminCommand(normalized);
         appendConsoleLine(sent ? "ok" : "socket not ready");
         return;
     }
 
-    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, wallhack on|off|toggle");
+    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, wallhack on|off|toggle, editor on|off|save");
 }

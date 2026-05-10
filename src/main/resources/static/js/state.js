@@ -21,6 +21,7 @@ export const state = {
     shopVisible: false,
     consoleVisible: false,
     wallhackEnabled: false,
+    editorMode: false,
 
     lastSelfAmmo: null,
     lastUnlockedWeapons: [],

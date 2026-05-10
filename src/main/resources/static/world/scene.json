@@ -1,10 +1,1553 @@
 {
-  "version": 7,
-  "autoPopulateAllObjs": true,
-  "models": [
-    { "enabled": true, "path": "/models/road-asphalt-center.obj", "position": { "x": 1900, "y": 0, "z": 3000 }, "rotationDegrees": { "y": 0 }, "scale": 1.0 },
-    { "enabled": true, "path": "/models/road-asphalt-straight.obj", "position": { "x": 2160, "y": 0, "z": 3000 }, "rotationDegrees": { "y": 90 }, "scale": 1.0 },
-    { "enabled": true, "path": "/models/road-asphalt-corner.obj", "position": { "x": 2420, "y": 0, "z": 3000 }, "rotationDegrees": { "y": 90 }, "scale": 1.0 }
-  ],
-  "primitives": []
+  "version" : 1,
+  "models" : [ {
+    "enabled" : true,
+    "path" : "/models/road-asphalt-center.obj",
+    "position" : {
+      "x" : 1900.0,
+      "y" : 0.0,
+      "z" : 3000.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-asphalt-straight.obj",
+    "position" : {
+      "x" : 2160.0,
+      "y" : 0.0,
+      "z" : 3000.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-asphalt-corner.obj",
+    "position" : {
+      "x" : 2420.0,
+      "y" : 0.0,
+      "z" : 3000.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/balcony-ladder-bottom.obj",
+    "position" : {
+      "x" : 420.0,
+      "y" : 0.0,
+      "z" : 420.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/balcony-ladder-top.obj",
+    "position" : {
+      "x" : 680.0,
+      "y" : 0.0,
+      "z" : 420.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/balcony-type-a.obj",
+    "position" : {
+      "x" : 940.0,
+      "y" : 0.0,
+      "z" : 420.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/cliff-corner.obj",
+    "position" : {
+      "x" : 1200.0,
+      "y" : 0.0,
+      "z" : 420.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/cliff-side.obj",
+    "position" : {
+      "x" : 1460.0,
+      "y" : 0.0,
+      "z" : 420.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-awning-small.obj",
+    "position" : {
+      "x" : 1720.0,
+      "y" : 0.0,
+      "z" : 420.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-awning-wide.obj",
+    "position" : {
+      "x" : 1980.0,
+      "y" : 0.0,
+      "z" : 420.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-barrier-strong-damaged.obj",
+    "position" : {
+      "x" : 2240.0,
+      "y" : 0.0,
+      "z" : 420.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-barrier-strong-type-a.obj",
+    "position" : {
+      "x" : 2500.0,
+      "y" : 0.0,
+      "z" : 420.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-barrier-strong-type-b.obj",
+    "position" : {
+      "x" : 2760.0,
+      "y" : 0.0,
+      "z" : 420.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-barrier-type-a.obj",
+    "position" : {
+      "x" : 3020.0,
+      "y" : 0.0,
+      "z" : 420.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-barrier-type-b.obj",
+    "position" : {
+      "x" : 3280.0,
+      "y" : 0.0,
+      "z" : 420.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-beam.obj",
+    "position" : {
+      "x" : 420.0,
+      "y" : 0.0,
+      "z" : 680.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-bench.obj",
+    "position" : {
+      "x" : 680.0,
+      "y" : 0.0,
+      "z" : 680.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-block.obj",
+    "position" : {
+      "x" : 940.0,
+      "y" : 0.0,
+      "z" : 680.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-bricks-type-a.obj",
+    "position" : {
+      "x" : 1200.0,
+      "y" : 0.0,
+      "z" : 680.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-bricks-type-b.obj",
+    "position" : {
+      "x" : 1460.0,
+      "y" : 0.0,
+      "z" : 680.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-cables-type-a.obj",
+    "position" : {
+      "x" : 1720.0,
+      "y" : 0.0,
+      "z" : 680.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-cables-type-b.obj",
+    "position" : {
+      "x" : 1980.0,
+      "y" : 0.0,
+      "z" : 680.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-dumpster-closed.obj",
+    "position" : {
+      "x" : 2240.0,
+      "y" : 0.0,
+      "z" : 680.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-dumpster-open.obj",
+    "position" : {
+      "x" : 2500.0,
+      "y" : 0.0,
+      "z" : 680.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-light-double.obj",
+    "position" : {
+      "x" : 2760.0,
+      "y" : 0.0,
+      "z" : 680.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-light-single.obj",
+    "position" : {
+      "x" : 3020.0,
+      "y" : 0.0,
+      "z" : 680.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/detail-light-traffic.obj",
+    "position" : {
+      "x" : 3280.0,
+      "y" : 0.0,
+      "z" : 680.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/door-type-a.obj",
+    "position" : {
+      "x" : 420.0,
+      "y" : 0.0,
+      "z" : 940.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/door-type-b.obj",
+    "position" : {
+      "x" : 680.0,
+      "y" : 0.0,
+      "z" : 940.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/grass.obj",
+    "position" : {
+      "x" : 940.0,
+      "y" : 0.0,
+      "z" : 940.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/grass-corner.obj",
+    "position" : {
+      "x" : 1200.0,
+      "y" : 0.0,
+      "z" : 940.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/grass-corner-inner.obj",
+    "position" : {
+      "x" : 1460.0,
+      "y" : 0.0,
+      "z" : 940.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/grass-hill.obj",
+    "position" : {
+      "x" : 1720.0,
+      "y" : 0.0,
+      "z" : 940.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/pallet.obj",
+    "position" : {
+      "x" : 1980.0,
+      "y" : 0.0,
+      "z" : 940.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/pallet-small.obj",
+    "position" : {
+      "x" : 2240.0,
+      "y" : 0.0,
+      "z" : 940.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/planks.obj",
+    "position" : {
+      "x" : 2500.0,
+      "y" : 0.0,
+      "z" : 940.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-asphalt-center.obj",
+    "position" : {
+      "x" : 2760.0,
+      "y" : 0.0,
+      "z" : 940.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-asphalt-corner.obj",
+    "position" : {
+      "x" : 3020.0,
+      "y" : 0.0,
+      "z" : 940.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-asphalt-corner-inner.obj",
+    "position" : {
+      "x" : 3280.0,
+      "y" : 0.0,
+      "z" : 940.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-asphalt-corner-outer.obj",
+    "position" : {
+      "x" : 300.0,
+      "y" : 0.0,
+      "z" : 1200.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-asphalt-damaged.obj",
+    "position" : {
+      "x" : 680.0,
+      "y" : 0.0,
+      "z" : 1200.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-asphalt-pavement.obj",
+    "position" : {
+      "x" : 940.0,
+      "y" : 0.0,
+      "z" : 1200.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-asphalt-side.obj",
+    "position" : {
+      "x" : 1200.0,
+      "y" : 0.0,
+      "z" : 1200.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-asphalt-straight.obj",
+    "position" : {
+      "x" : 1460.0,
+      "y" : 0.0,
+      "z" : 1200.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-dirt-center.obj",
+    "position" : {
+      "x" : 1720.0,
+      "y" : 0.0,
+      "z" : 1200.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-dirt-corner.obj",
+    "position" : {
+      "x" : 1980.0,
+      "y" : 0.0,
+      "z" : 1200.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-dirt-corner-inner.obj",
+    "position" : {
+      "x" : 2240.0,
+      "y" : 0.0,
+      "z" : 1200.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-dirt-corner-outer.obj",
+    "position" : {
+      "x" : 2500.0,
+      "y" : 0.0,
+      "z" : 1200.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-dirt-damaged.obj",
+    "position" : {
+      "x" : 2760.0,
+      "y" : 0.0,
+      "z" : 1200.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-dirt-pavement.obj",
+    "position" : {
+      "x" : 3020.0,
+      "y" : 0.0,
+      "z" : 1200.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-dirt-side.obj",
+    "position" : {
+      "x" : 3280.0,
+      "y" : 0.0,
+      "z" : 1200.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-dirt-straight.obj",
+    "position" : {
+      "x" : 420.0,
+      "y" : 0.0,
+      "z" : 1460.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/road-dirt-tile.obj",
+    "position" : {
+      "x" : 680.0,
+      "y" : 0.0,
+      "z" : 1460.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/roof-metal-poles.obj",
+    "position" : {
+      "x" : 940.0,
+      "y" : 0.0,
+      "z" : 1460.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/roof-metal-type-a.obj",
+    "position" : {
+      "x" : 1200.0,
+      "y" : 0.0,
+      "z" : 1460.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/roof-metal-type-b.obj",
+    "position" : {
+      "x" : 1460.0,
+      "y" : 0.0,
+      "z" : 1460.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/scaffolding-floor.obj",
+    "position" : {
+      "x" : 1720.0,
+      "y" : 0.0,
+      "z" : 1460.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/scaffolding-poles.obj",
+    "position" : {
+      "x" : 1980.0,
+      "y" : 0.0,
+      "z" : 1460.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/scaffolding-structure.obj",
+    "position" : {
+      "x" : 2240.0,
+      "y" : 0.0,
+      "z" : 1460.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/tree-large.obj",
+    "position" : {
+      "x" : 2500.0,
+      "y" : 0.0,
+      "z" : 1460.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/tree-park-large.obj",
+    "position" : {
+      "x" : 2760.0,
+      "y" : 0.0,
+      "z" : 1460.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/tree-park-pine-large.obj",
+    "position" : {
+      "x" : 3020.0,
+      "y" : 0.0,
+      "z" : 1460.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/tree-pine-large.obj",
+    "position" : {
+      "x" : 3280.0,
+      "y" : 0.0,
+      "z" : 1460.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/tree-pine-small.obj",
+    "position" : {
+      "x" : 420.0,
+      "y" : 0.0,
+      "z" : 1720.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/tree-shrub.obj",
+    "position" : {
+      "x" : 680.0,
+      "y" : 0.0,
+      "z" : 1720.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/tree-small.obj",
+    "position" : {
+      "x" : 940.0,
+      "y" : 0.0,
+      "z" : 1720.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/truck-flat.obj",
+    "position" : {
+      "x" : 1200.0,
+      "y" : 0.0,
+      "z" : 1720.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/truck-green.obj",
+    "position" : {
+      "x" : 1460.0,
+      "y" : 0.0,
+      "z" : 1720.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/truck-green-cargo.obj",
+    "position" : {
+      "x" : 1720.0,
+      "y" : 0.0,
+      "z" : 1720.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/truck-grey.obj",
+    "position" : {
+      "x" : 1980.0,
+      "y" : 0.0,
+      "z" : 1720.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/truck-grey-cargo.obj",
+    "position" : {
+      "x" : 2240.0,
+      "y" : 0.0,
+      "z" : 1720.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a.obj",
+    "position" : {
+      "x" : 2500.0,
+      "y" : 0.0,
+      "z" : 1720.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-column.obj",
+    "position" : {
+      "x" : 2760.0,
+      "y" : 0.0,
+      "z" : 1720.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-column-painted.obj",
+    "position" : {
+      "x" : 3020.0,
+      "y" : 0.0,
+      "z" : 1720.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-corner.obj",
+    "position" : {
+      "x" : 3280.0,
+      "y" : 0.0,
+      "z" : 1720.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-corner-painted.obj",
+    "position" : {
+      "x" : 420.0,
+      "y" : 0.0,
+      "z" : 1980.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-detail.obj",
+    "position" : {
+      "x" : 680.0,
+      "y" : 0.0,
+      "z" : 1980.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-detail-painted.obj",
+    "position" : {
+      "x" : 940.0,
+      "y" : 0.0,
+      "z" : 1980.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-diagonal.obj",
+    "position" : {
+      "x" : 1200.0,
+      "y" : 0.0,
+      "z" : 1980.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-door.obj",
+    "position" : {
+      "x" : 1460.0,
+      "y" : 0.0,
+      "z" : 1980.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-flat.obj",
+    "position" : {
+      "x" : 1720.0,
+      "y" : 0.0,
+      "z" : 1980.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-flat-garage.obj",
+    "position" : {
+      "x" : 1980.0,
+      "y" : 0.0,
+      "z" : 1980.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-flat-painted.obj",
+    "position" : {
+      "x" : 2240.0,
+      "y" : 0.0,
+      "z" : 1980.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-flat-window.obj",
+    "position" : {
+      "x" : 2500.0,
+      "y" : 0.0,
+      "z" : 1980.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-garage.obj",
+    "position" : {
+      "x" : 2760.0,
+      "y" : 0.0,
+      "z" : 1980.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-low.obj",
+    "position" : {
+      "x" : 3020.0,
+      "y" : 0.0,
+      "z" : 1980.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-low-painted.obj",
+    "position" : {
+      "x" : 3280.0,
+      "y" : 0.0,
+      "z" : 1980.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-open.obj",
+    "position" : {
+      "x" : 420.0,
+      "y" : 0.0,
+      "z" : 2240.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-painted.obj",
+    "position" : {
+      "x" : 680.0,
+      "y" : 0.0,
+      "z" : 2240.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-painted-diagonal.obj",
+    "position" : {
+      "x" : 940.0,
+      "y" : 0.0,
+      "z" : 2240.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-roof.obj",
+    "position" : {
+      "x" : 1200.0,
+      "y" : 0.0,
+      "z" : 2240.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-roof-detailed.obj",
+    "position" : {
+      "x" : 1460.0,
+      "y" : 0.0,
+      "z" : 2240.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-roof-slant.obj",
+    "position" : {
+      "x" : 1720.0,
+      "y" : 0.0,
+      "z" : 2240.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-roof-slant-detailed.obj",
+    "position" : {
+      "x" : 1980.0,
+      "y" : 0.0,
+      "z" : 2240.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-a-window.obj",
+    "position" : {
+      "x" : 2240.0,
+      "y" : 0.0,
+      "z" : 2240.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b.obj",
+    "position" : {
+      "x" : 2500.0,
+      "y" : 0.0,
+      "z" : 2240.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-column.obj",
+    "position" : {
+      "x" : 2760.0,
+      "y" : 0.0,
+      "z" : 2240.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-corner.obj",
+    "position" : {
+      "x" : 3020.0,
+      "y" : 0.0,
+      "z" : 2240.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-detail-painted.obj",
+    "position" : {
+      "x" : 3280.0,
+      "y" : 0.0,
+      "z" : 2240.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-diagonal.obj",
+    "position" : {
+      "x" : 420.0,
+      "y" : 0.0,
+      "z" : 2500.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-door.obj",
+    "position" : {
+      "x" : 680.0,
+      "y" : 0.0,
+      "z" : 2500.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-flat.obj",
+    "position" : {
+      "x" : 940.0,
+      "y" : 0.0,
+      "z" : 2500.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-flat-garage.obj",
+    "position" : {
+      "x" : 1200.0,
+      "y" : 0.0,
+      "z" : 2500.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-flat-window.obj",
+    "position" : {
+      "x" : 1460.0,
+      "y" : 0.0,
+      "z" : 2500.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-garage.obj",
+    "position" : {
+      "x" : 1720.0,
+      "y" : 0.0,
+      "z" : 2500.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-low.obj",
+    "position" : {
+      "x" : 1980.0,
+      "y" : 0.0,
+      "z" : 2500.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-open.obj",
+    "position" : {
+      "x" : 2240.0,
+      "y" : 0.0,
+      "z" : 2500.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-broken-type-a.obj",
+    "position" : {
+      "x" : 2500.0,
+      "y" : 0.0,
+      "z" : 2500.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-broken-type-b.obj",
+    "position" : {
+      "x" : 2760.0,
+      "y" : 0.0,
+      "z" : 2500.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-roof.obj",
+    "position" : {
+      "x" : 3020.0,
+      "y" : 0.0,
+      "z" : 2500.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-roof-detailed.obj",
+    "position" : {
+      "x" : 3280.0,
+      "y" : 0.0,
+      "z" : 2500.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-roof-slant.obj",
+    "position" : {
+      "x" : 420.0,
+      "y" : 0.0,
+      "z" : 2760.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-roof-slant-detailed.obj",
+    "position" : {
+      "x" : 680.0,
+      "y" : 0.0,
+      "z" : 2760.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-b-window.obj",
+    "position" : {
+      "x" : 940.0,
+      "y" : 0.0,
+      "z" : 2760.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-c-flat.obj",
+    "position" : {
+      "x" : 1200.0,
+      "y" : 0.0,
+      "z" : 2760.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-c-flat-low.obj",
+    "position" : {
+      "x" : 1460.0,
+      "y" : 0.0,
+      "z" : 2760.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-fence.obj",
+    "position" : {
+      "x" : 1720.0,
+      "y" : 0.0,
+      "z" : 2760.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-steps-type-a.obj",
+    "position" : {
+      "x" : 1980.0,
+      "y" : 0.0,
+      "z" : 2760.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-steps-type-b.obj",
+    "position" : {
+      "x" : 2240.0,
+      "y" : 0.0,
+      "z" : 2760.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-type-a.obj",
+    "position" : {
+      "x" : 2500.0,
+      "y" : 0.0,
+      "z" : 2760.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/wall-type-b.obj",
+    "position" : {
+      "x" : 2760.0,
+      "y" : 0.0,
+      "z" : 2760.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/window-small-type-a.obj",
+    "position" : {
+      "x" : 3020.0,
+      "y" : 0.0,
+      "z" : 2760.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/window-small-type-b.obj",
+    "position" : {
+      "x" : 3280.0,
+      "y" : 0.0,
+      "z" : 2760.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/window-wide-type-a.obj",
+    "position" : {
+      "x" : 420.0,
+      "y" : 0.0,
+      "z" : 3020.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/window-wide-type-b.obj",
+    "position" : {
+      "x" : 680.0,
+      "y" : 0.0,
+      "z" : 3020.0
+    },
+    "rotationDegrees" : {
+      "y" : 90.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/window-wide-type-c.obj",
+    "position" : {
+      "x" : 940.0,
+      "y" : 0.0,
+      "z" : 3020.0
+    },
+    "rotationDegrees" : {
+      "y" : 180.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/window-wide-type-d.obj",
+    "position" : {
+      "x" : 1200.0,
+      "y" : 0.0,
+      "z" : 3020.0
+    },
+    "rotationDegrees" : {
+      "y" : 270.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/balcony-ladder-bottom.obj",
+    "position" : {
+      "x" : 214.0,
+      "y" : 0.0,
+      "z" : 1194.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  }, {
+    "enabled" : true,
+    "path" : "/models/balcony-ladder-bottom.obj",
+    "position" : {
+      "x" : 341.0,
+      "y" : 0.0,
+      "z" : 1385.0
+    },
+    "rotationDegrees" : {
+      "y" : 0.0
+    },
+    "scale" : 1.0
+  } ],
+  "primitives" : [ ]
 }
