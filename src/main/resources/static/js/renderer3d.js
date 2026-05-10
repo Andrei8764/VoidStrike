@@ -24,9 +24,6 @@ const RENDER_COLLISION_OBSTACLES = false;
 const OBJ_WORLD_SCALE = 128;
 const MODEL_GROUND_EPSILON = 0.02;
 const PERFORMANCE_AUTOGRID_LIMIT = 56;
-const WORLD_MODEL_CULL_RADIUS_NORMAL = 2300;
-const WORLD_MODEL_CULL_RADIUS_PERF = 1400;
-const WORLD_MODEL_CULL_HYSTERESIS = 180;
 const CHARACTER_HEIGHT = 58;
 const CHARACTER_YAW_OFFSET = Math.PI / 2;
 const REMOTE_RUN_SPEED_THRESHOLD = PLAYER_MAX_SPEED * 1.08;
@@ -175,6 +172,8 @@ scene.add(bulletGroup);
 
 const worldModelGroup = new THREE.Group();
 scene.add(worldModelGroup);
+const worldInstancedGroup = new THREE.Group();
+scene.add(worldInstancedGroup);
 const worldPrimitiveGroup = new THREE.Group();
 scene.add(worldPrimitiveGroup);
 const editorPreviewGroup = new THREE.Group();
@@ -224,6 +223,7 @@ const LEG_ROTATION_SMOOTHING = 0.2;
 const LEG_ROTATION_MAX_DELTA = 0.024;
 const characterTemplateCache = new Map();
 const weaponTemplateCache = new Map();
+const objTemplatePromiseCache = new Map();
 let modularCharacterTemplatePromise = null;
 
 let obstaclesCacheKey = "";
@@ -246,6 +246,107 @@ localViewModelPivot.rotation.copy(VIEWMODEL_HIP_ROT);
 const localBodyPivot = new THREE.Group();
 camera3d.add(localBodyPivot);
 localBodyPivot.position.set(0, -1.05, -0.38);
+
+function collectMeshNodes(root) {
+    const meshes = [];
+    root.traverse(node => {
+        if (node.isMesh) {
+            meshes.push(node);
+        }
+    });
+    return meshes;
+}
+
+function clearInstancedWorldModels() {
+    worldInstancedGroup.clear();
+}
+
+function updateWorldModelRenderMode() {
+    const useInstanced = !state.editorMode;
+    worldInstancedGroup.visible = useInstanced;
+    for (const root of worldModelGroup.children) {
+        if (root.userData?.instancedHidden) {
+            root.visible = !useInstanced;
+        } else {
+            root.visible = true;
+        }
+    }
+}
+
+function rebuildInstancedWorldModels() {
+    clearInstancedWorldModels();
+
+    const byPath = new Map();
+    for (const root of worldModelGroup.children) {
+        const path = root.userData?.modelPath;
+        if (!path) {
+            root.userData.instancedHidden = false;
+            continue;
+        }
+        if (!byPath.has(path)) {
+            byPath.set(path, []);
+        }
+        byPath.get(path).push(root);
+    }
+
+    for (const roots of byPath.values()) {
+        if (!roots || roots.length < 3) {
+            for (const root of roots || []) {
+                root.userData.instancedHidden = false;
+            }
+            continue;
+        }
+
+        const firstMeshes = collectMeshNodes(roots[0]);
+        if (firstMeshes.length === 0) {
+            for (const root of roots) {
+                root.userData.instancedHidden = false;
+            }
+            continue;
+        }
+
+        const meshLists = [];
+        let compatible = true;
+        for (const root of roots) {
+            root.updateMatrixWorld(true);
+            const meshes = collectMeshNodes(root);
+            if (meshes.length !== firstMeshes.length) {
+                compatible = false;
+                break;
+            }
+            meshLists.push(meshes);
+        }
+
+        if (!compatible) {
+            for (const root of roots) {
+                root.userData.instancedHidden = false;
+            }
+            continue;
+        }
+
+        for (let meshIndex = 0; meshIndex < firstMeshes.length; meshIndex += 1) {
+            const templateMesh = firstMeshes[meshIndex];
+            const instancedMesh = new THREE.InstancedMesh(
+                templateMesh.geometry,
+                templateMesh.material,
+                roots.length
+            );
+            instancedMesh.castShadow = false;
+            instancedMesh.receiveShadow = false;
+            for (let instanceIndex = 0; instanceIndex < roots.length; instanceIndex += 1) {
+                instancedMesh.setMatrixAt(instanceIndex, meshLists[instanceIndex][meshIndex].matrixWorld);
+            }
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            worldInstancedGroup.add(instancedMesh);
+        }
+
+        for (const root of roots) {
+            root.userData.instancedHidden = true;
+        }
+    }
+
+    updateWorldModelRenderMode();
+}
 
 function createLocalViewModelFallback() {
     const mesh = new THREE.Mesh(
@@ -1477,11 +1578,14 @@ function applyModelTransform(root, modelDef) {
             material.alphaTest = isFoliage ? 0.5 : 0;
             material.depthWrite = true;
             material.side = (isFoliage || isRoadLike) ? THREE.DoubleSide : THREE.FrontSide;
-            material.alphaToCoverage = isFoliage;
+            // Alpha-to-coverage can shimmer on weaker GPUs or without MSAA.
+            material.alphaToCoverage = false;
             material.depthTest = true;
-            material.polygonOffset = isFoliage;
-            material.polygonOffsetFactor = isFoliage ? 1 : 0;
-            material.polygonOffsetUnits = isFoliage ? 1 : 0;
+            // Stabilize coplanar surfaces (roads/tiles/foliage planes) to reduce z-fighting flicker.
+            const needsDepthBias = isFoliage || isRoadLike;
+            material.polygonOffset = needsDepthBias;
+            material.polygonOffsetFactor = needsDepthBias ? -1 : 0;
+            material.polygonOffsetUnits = needsDepthBias ? -1 : 0;
             material.needsUpdate = true;
         };
 
@@ -1494,53 +1598,82 @@ function applyModelTransform(root, modelDef) {
 }
 
 function loadObjModel(modelDef, onLoaded, targetGroup = worldModelGroup) {
-    const mtlPath = modelDef.mtlPath || modelDef.path.replace(/\.obj$/i, ".mtl");
-    const lastSlashIndex = mtlPath.lastIndexOf("/");
-    const mtlDir = lastSlashIndex >= 0 ? mtlPath.slice(0, lastSlashIndex + 1) : "/";
-    const mtlFile = lastSlashIndex >= 0 ? mtlPath.slice(lastSlashIndex + 1) : mtlPath;
-    const localMtlLoader = new MTLLoader();
-    localMtlLoader.setMaterialOptions({
-        wrap: THREE.RepeatWrapping,
-        side: THREE.FrontSide
-    });
-    localMtlLoader.setPath(mtlDir);
-    localMtlLoader.setResourcePath(mtlDir);
-    localMtlLoader.load(
-        mtlFile,
-        materials => {
-            materials.preload();
-            const localObjLoader = new OBJLoader();
-            localObjLoader.setMaterials(materials);
-            localObjLoader.load(
-                modelDef.path,
-                obj => {
-                    applyModelTransform(obj, modelDef);
-                    targetGroup.add(obj);
-                    if (onLoaded) {
-                        onLoaded(obj);
-                    }
-                },
-                undefined,
-                () => createMissingModelPlaceholder(modelDef)
-            );
-        },
-        undefined,
-        () => {
-            const localObjLoader = new OBJLoader();
-            localObjLoader.load(
-                modelDef.path,
-                obj => {
-                    applyModelTransform(obj, modelDef);
-                    targetGroup.add(obj);
-                    if (onLoaded) {
-                        onLoaded(obj);
-                    }
-                },
-                undefined,
-                () => createMissingModelPlaceholder(modelDef)
-            );
+    function cloneTemplateWithUniqueMaterials(template) {
+        const clone = template.clone(true);
+        clone.traverse(node => {
+            if (!node.isMesh || !node.material) {
+                return;
+            }
+            if (Array.isArray(node.material)) {
+                node.material = node.material.map(material => material?.clone?.() ?? material);
+            } else if (node.material.clone) {
+                node.material = node.material.clone();
+            }
+        });
+        return clone;
+    }
+
+    function getObjTemplatePromise() {
+        const cacheKey = `${modelDef.path}|${modelDef.mtlPath || ""}`;
+        if (objTemplatePromiseCache.has(cacheKey)) {
+            return objTemplatePromiseCache.get(cacheKey);
         }
-    );
+
+        const promise = new Promise(resolve => {
+            const mtlPath = modelDef.mtlPath || modelDef.path.replace(/\.obj$/i, ".mtl");
+            const lastSlashIndex = mtlPath.lastIndexOf("/");
+            const mtlDir = lastSlashIndex >= 0 ? mtlPath.slice(0, lastSlashIndex + 1) : "/";
+            const mtlFile = lastSlashIndex >= 0 ? mtlPath.slice(lastSlashIndex + 1) : mtlPath;
+            const localMtlLoader = new MTLLoader();
+            localMtlLoader.setMaterialOptions({
+                wrap: THREE.RepeatWrapping,
+                side: THREE.FrontSide
+            });
+            localMtlLoader.setPath(mtlDir);
+            localMtlLoader.setResourcePath(mtlDir);
+            localMtlLoader.load(
+                mtlFile,
+                materials => {
+                    materials.preload();
+                    const localObjLoader = new OBJLoader();
+                    localObjLoader.setMaterials(materials);
+                    localObjLoader.load(
+                        modelDef.path,
+                        obj => resolve(obj),
+                        undefined,
+                        () => resolve(null)
+                    );
+                },
+                undefined,
+                () => {
+                    const localObjLoader = new OBJLoader();
+                    localObjLoader.load(
+                        modelDef.path,
+                        obj => resolve(obj),
+                        undefined,
+                        () => resolve(null)
+                    );
+                }
+            );
+        });
+
+        objTemplatePromiseCache.set(cacheKey, promise);
+        return promise;
+    }
+
+    void getObjTemplatePromise().then(template => {
+        if (!template) {
+            createMissingModelPlaceholder(modelDef);
+            return;
+        }
+        const obj = cloneTemplateWithUniqueMaterials(template);
+        applyModelTransform(obj, modelDef);
+        obj.userData.modelPath = modelDef.path || "";
+        targetGroup.add(obj);
+        if (onLoaded) {
+            onLoaded(obj);
+        }
+    });
 }
 
 function loadWorldModel(modelDef, onLoaded, targetGroup = worldModelGroup) {
@@ -1555,6 +1688,7 @@ function loadWorldModel(modelDef, onLoaded, targetGroup = worldModelGroup) {
         gltf => {
             const root = gltf.scene;
             applyModelTransform(root, modelDef);
+            root.userData.modelPath = modelDef.path || "";
             targetGroup.add(root);
             if (onLoaded) {
                 onLoaded(root);
@@ -1631,6 +1765,7 @@ function applyWorldSceneConfig(sceneConfig) {
     editorSceneModels = [];
     clearEditorSelectionHighlight();
     cancelEditorDraft();
+    clearInstancedWorldModels();
     worldModelGroup.clear();
 
     for (const modelDef of modelDefs) {
@@ -1659,11 +1794,14 @@ function applyWorldSceneConfig(sceneConfig) {
         editorSceneModels.push(normalizedModelDef);
         loadWorldModel(normalizedModelDef, root => {
             root.userData.editorModelIndex = nextIndex;
+            root.userData.modelPath = normalizedModelDef.path || "";
+            rebuildInstancedWorldModels();
         });
     }
 
     retuneWorldMaterials();
     applyWallhackState();
+    rebuildInstancedWorldModels();
 }
 
 async function syncWorldSceneIfNeeded(force = false) {
@@ -1859,41 +1997,6 @@ function syncBullets() {
     }
 }
 
-function updateWorldModelVisibility() {
-    if (state.editorMode) {
-        for (const root of worldModelGroup.children) {
-            root.visible = true;
-        }
-        return;
-    }
-
-    const self = getSelfPlayer();
-    if (!self) {
-        for (const root of worldModelGroup.children) {
-            root.visible = true;
-        }
-        return;
-    }
-
-    const baseRadius = state.performanceMode ? WORLD_MODEL_CULL_RADIUS_PERF : WORLD_MODEL_CULL_RADIUS_NORMAL;
-    const showRadiusSq = baseRadius * baseRadius;
-    const hideRadius = Math.max(100, baseRadius + WORLD_MODEL_CULL_HYSTERESIS);
-    const hideRadiusSq = hideRadius * hideRadius;
-
-    for (const root of worldModelGroup.children) {
-        const dx = root.position.x - self.x;
-        const dz = root.position.z - self.y;
-        const distanceSq = (dx * dx) + (dz * dz);
-
-        if (root.visible) {
-            if (distanceSq > hideRadiusSq) {
-                root.visible = false;
-            }
-        } else if (distanceSq <= showRadiusSq) {
-            root.visible = true;
-        }
-    }
-}
 
 function createBulletVisual() {
     const container = new THREE.Group();
@@ -2046,12 +2149,14 @@ export async function toggleEditorMode() {
         mouse.down = false;
         state.ads = false;
         ensureEditorPreview();
+        updateWorldModelRenderMode();
     }
     updateEditorHud();
     if (!state.editorMode) {
         clearEditorSelectionHighlight();
         cancelEditorDraft();
         clearEditorPreview();
+        rebuildInstancedWorldModels();
     }
 }
 
@@ -2258,6 +2363,7 @@ export async function saveEditorScene() {
 export function clearEditorSceneModels() {
     cancelEditorDraft();
     clearEditorSelectionHighlight();
+    clearInstancedWorldModels();
     worldModelGroup.clear();
     editorSceneModels = [];
     editorLastPickSignature = "";
@@ -2265,8 +2371,10 @@ export function clearEditorSceneModels() {
     editorLastPickCursor = 0;
     if (state.editorMode) {
         ensureEditorPreview();
+        updateWorldModelRenderMode();
     } else {
         clearEditorPreview();
+        rebuildInstancedWorldModels();
     }
 }
 
@@ -2292,7 +2400,6 @@ export function render() {
     }
 
     syncObstacles();
-    updateWorldModelVisibility();
     syncRemotePlayers();
     syncBullets();
     updateEditorPreviewPosition();
