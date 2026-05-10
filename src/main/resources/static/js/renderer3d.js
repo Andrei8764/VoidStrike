@@ -24,6 +24,9 @@ const RENDER_COLLISION_OBSTACLES = false;
 const OBJ_WORLD_SCALE = 128;
 const MODEL_GROUND_EPSILON = 0.02;
 const PERFORMANCE_AUTOGRID_LIMIT = 56;
+const WORLD_MODEL_CULL_RADIUS_NORMAL = 2300;
+const WORLD_MODEL_CULL_RADIUS_PERF = 1400;
+const WORLD_MODEL_CULL_HYSTERESIS = 180;
 const CHARACTER_HEIGHT = 58;
 const CHARACTER_YAW_OFFSET = Math.PI / 2;
 const REMOTE_RUN_SPEED_THRESHOLD = PLAYER_MAX_SPEED * 1.08;
@@ -1856,6 +1859,42 @@ function syncBullets() {
     }
 }
 
+function updateWorldModelVisibility() {
+    if (state.editorMode) {
+        for (const root of worldModelGroup.children) {
+            root.visible = true;
+        }
+        return;
+    }
+
+    const self = getSelfPlayer();
+    if (!self) {
+        for (const root of worldModelGroup.children) {
+            root.visible = true;
+        }
+        return;
+    }
+
+    const baseRadius = state.performanceMode ? WORLD_MODEL_CULL_RADIUS_PERF : WORLD_MODEL_CULL_RADIUS_NORMAL;
+    const showRadiusSq = baseRadius * baseRadius;
+    const hideRadius = Math.max(100, baseRadius + WORLD_MODEL_CULL_HYSTERESIS);
+    const hideRadiusSq = hideRadius * hideRadius;
+
+    for (const root of worldModelGroup.children) {
+        const dx = root.position.x - self.x;
+        const dz = root.position.z - self.y;
+        const distanceSq = (dx * dx) + (dz * dz);
+
+        if (root.visible) {
+            if (distanceSq > hideRadiusSq) {
+                root.visible = false;
+            }
+        } else if (distanceSq <= showRadiusSq) {
+            root.visible = true;
+        }
+    }
+}
+
 function createBulletVisual() {
     const container = new THREE.Group();
 
@@ -2253,6 +2292,7 @@ export function render() {
     }
 
     syncObstacles();
+    updateWorldModelVisibility();
     syncRemotePlayers();
     syncBullets();
     updateEditorPreviewPosition();
