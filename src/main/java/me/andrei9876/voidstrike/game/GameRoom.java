@@ -23,8 +23,8 @@ public class GameRoom {
 
     private static final int KILL_REWARD = 150;
 
-    private static final double MAP_WIDTH = 1600;
-    private static final double MAP_HEIGHT = 900;
+    private static final double MAP_WIDTH = 3800;
+    private static final double MAP_HEIGHT = 3400;
     private static final double PLAYER_MAX_SPEED = 410;
     private static final double PLAYER_ACCELERATION = 2200;
     private static final double PLAYER_SPRINT_SPEED_MULTIPLIER = 1.45;
@@ -44,6 +44,7 @@ public class GameRoom {
     private static final double BULLET_MUZZLE_FORWARD_OFFSET = 26;
     private static final double BULLET_MUZZLE_SIDE_OFFSET = 0;
     private static final double BULLET_MUZZLE_PITCH_OFFSET = 18;
+    private static final double FLY_VERTICAL_SPEED = 520;
     private static final double BULLET_HIT_RADIUS = 14;
     private static final double HEADSHOT_RADIUS = 10;
     private static final int KILL_FEED_LIMIT = 6;
@@ -53,8 +54,11 @@ public class GameRoom {
 
     private static final long ROUND_DURATION_MS = 180_000;
     private static final long ROUND_END_DISPLAY_MS = 10_000;
-    private static final long CLIMB_COOLDOWN_MS = 700;
-    private static final double CLIMB_TRIGGER_RADIUS = 24;
+    private static final long CLIMB_COOLDOWN_MS = 250;
+    private static final double CLIMB_TRIGGER_RADIUS = 40;
+    private static final double LADDER_FRONT_OFFSET = PLAYER_RADIUS + 6;
+    private static final double LADDER_LANDING_SEARCH_STEP = 6;
+    private static final int LADDER_LANDING_SEARCH_RINGS = 4;
 
     private static final List<Obstacle> OBSTACLES = List.of(
             // Garduri / cover la spawn RED
@@ -95,14 +99,30 @@ public class GameRoom {
 
             // Props mici pentru cover extra
             new Obstacle(650, 720, 75, 45),
-            new Obstacle(870, 230, 80, 45)
+            new Obstacle(870, 230, 80, 45),
+
+            // Extended arena sections for large matches
+            new Obstacle(1680, 220, 210, 120),
+            new Obstacle(2060, 250, 260, 120),
+            new Obstacle(2400, 210, 320, 130),
+            new Obstacle(1880, 760, 210, 140),
+            new Obstacle(2250, 830, 260, 140),
+            new Obstacle(2530, 980, 180, 210),
+            new Obstacle(1670, 1320, 230, 120),
+            new Obstacle(2050, 1370, 260, 130),
+            new Obstacle(2380, 1450, 260, 130),
+
+            new Obstacle(900, 1030, 180, 120),
+            new Obstacle(1200, 1120, 220, 110),
+            new Obstacle(1540, 1040, 210, 120),
+
+            new Obstacle(260, 1000, 120, 290),
+            new Obstacle(2360, 440, 120, 290),
+            new Obstacle(2460, 1220, 120, 290)
     );
 
-    private static final List<LadderZone> LADDER_ZONES = List.of(
-            new LadderZone(655, 215, 372, 215, 720, 215),
-            new LadderZone(905, 590, 735, 590, 960, 590),
-            new LadderZone(1208, 340, 1208, 292, 1208, 448)
-    );
+    private static final List<LadderZone> LADDER_ZONES = List.of();
+    private static final List<Obstacle> COLLISION_OBSTACLES = List.of();
 
     private final String id;
     private final ObjectMapper objectMapper;
@@ -149,8 +169,8 @@ public class GameRoom {
         String playerId = session.getId();
         String team = chooseTeam();
 
-        double spawnX = team.equals("RED") ? 85 : MAP_WIDTH - 85;
-        double spawnY = 260 + Math.random() * 380;
+        double spawnX = team.equals("RED") ? 120 : MAP_WIDTH - 120;
+        double spawnY = 360 + Math.random() * 2680;
 
         sessions.put(playerId, session);
         players.put(playerId, new PlayerState(playerId, playerName, team, characterModel, spawnX, spawnY));
@@ -194,7 +214,7 @@ public class GameRoom {
 
         String trimmed = rawCommand.trim();
         if (trimmed.isEmpty()) {
-            addSystemChat("Usage: freeze on|off|toggle, money <amount>");
+            addSystemChat("Usage: freeze on|off|toggle, money <amount>, fly on|off|toggle");
             return;
         }
 
@@ -204,6 +224,7 @@ public class GameRoom {
         switch (command) {
             case "freeze" -> handleFreezeCommand(parts);
             case "money" -> handleMoneyCommand(requester, parts);
+            case "fly" -> handleFlyCommand(requester, parts);
             default -> addSystemChat("Unknown command: " + command);
         }
     }
@@ -380,7 +401,7 @@ public class GameRoom {
             double wishDirectionX = cos * forward - sin * strafe;
             double wishDirectionY = sin * forward + cos * strafe;
             boolean sprinting = player.isSprint() && forward > 0;
-            boolean airborne = player.getZ() > 0.001;
+            boolean airborne = player.getZ() > 0.001 && !player.isFlyEnabled();
             double maxSpeed = sprinting
                     ? PLAYER_MAX_SPEED * PLAYER_SPRINT_SPEED_MULTIPLIER
                     : PLAYER_MAX_SPEED;
@@ -402,6 +423,21 @@ public class GameRoom {
     }
 
     private void updatePlayerVerticalMovement(PlayerState player, double deltaSeconds) {
+        if (player.isFlyEnabled()) {
+            double verticalIntent = 0;
+            if (player.isJump()) {
+                verticalIntent += 1;
+            }
+            if (player.isDescend()) {
+                verticalIntent -= 1;
+            }
+
+            player.setVelocityZ(verticalIntent * FLY_VERTICAL_SPEED);
+            double nextZ = clamp(player.getZ() + player.getVelocityZ() * deltaSeconds, 0, MAX_BULLET_Z);
+            player.setZ(nextZ);
+            return;
+        }
+
         boolean onGround = player.getZ() <= 0.001;
 
         if (player.isJump() && onGround) {
@@ -423,6 +459,10 @@ public class GameRoom {
     }
 
     private void tryUseLadder(PlayerState player, long now) {
+        if (LADDER_ZONES.isEmpty()) {
+            return;
+        }
+
         if (!player.isClimb()) {
             return;
         }
@@ -436,33 +476,37 @@ public class GameRoom {
                 continue;
             }
 
-            double toLeftDistanceSq = distanceSquared(player.getX(), player.getY(), zone.leftTargetX(), zone.leftTargetY());
-            double toRightDistanceSq = distanceSquared(player.getX(), player.getY(), zone.rightTargetX(), zone.rightTargetY());
-            double targetX = toLeftDistanceSq <= toRightDistanceSq ? zone.rightTargetX() : zone.leftTargetX();
-            double targetY = toLeftDistanceSq <= toRightDistanceSq ? zone.rightTargetY() : zone.leftTargetY();
-            double fromX = zone.triggerX();
-            double fromY = zone.triggerY();
-            double dirX = targetX - fromX;
-            double dirY = targetY - fromY;
-            double dirLength = Math.sqrt(dirX * dirX + dirY * dirY);
-            if (dirLength > 0.0001) {
-                dirX /= dirLength;
-                dirY /= dirLength;
-            } else {
-                dirX = 1;
-                dirY = 0;
+            double triggerToLeftDistanceSq = distanceSquared(
+                    zone.triggerX(), zone.triggerY(), zone.leftTargetX(), zone.leftTargetY()
+            );
+            double triggerToRightDistanceSq = distanceSquared(
+                    zone.triggerX(), zone.triggerY(), zone.rightTargetX(), zone.rightTargetY()
+            );
+
+            // Wall side = endpoint physically closest to this ladder trigger.
+            double preferredX = triggerToLeftDistanceSq <= triggerToRightDistanceSq
+                    ? zone.leftTargetX()
+                    : zone.rightTargetX();
+            double preferredY = triggerToLeftDistanceSq <= triggerToRightDistanceSq
+                    ? zone.leftTargetY()
+                    : zone.rightTargetY();
+            double alternateX = triggerToLeftDistanceSq <= triggerToRightDistanceSq
+                    ? zone.rightTargetX()
+                    : zone.leftTargetX();
+            double alternateY = triggerToLeftDistanceSq <= triggerToRightDistanceSq
+                    ? zone.rightTargetY()
+                    : zone.leftTargetY();
+
+            double[] landing = findLadderLandingInFrontOfLadder(zone, preferredX, preferredY);
+            if (landing == null) {
+                landing = findLadderLandingInFrontOfLadder(zone, alternateX, alternateY);
+            }
+            if (landing == null) {
+                return;
             }
 
-            // Ensure the landing point is outside collision by pushing forward along ladder direction.
-            int safetySteps = 0;
-            while (collidesWithObstacle(targetX, targetY, PLAYER_RADIUS) && safetySteps < 24) {
-                targetX += dirX * 8;
-                targetY += dirY * 8;
-                safetySteps++;
-            }
-
-            player.setX(targetX);
-            player.setY(targetY);
+            player.setX(landing[0]);
+            player.setY(landing[1]);
             player.setVelocityX(0);
             player.setVelocityY(0);
             player.setZ(0);
@@ -470,6 +514,49 @@ public class GameRoom {
             player.setLastClimbAt(now);
             return;
         }
+    }
+
+    private double[] findLadderLanding(double targetX, double targetY) {
+        if (!collidesWithObstacle(targetX, targetY, PLAYER_RADIUS)) {
+            return new double[]{targetX, targetY};
+        }
+
+        for (int ring = 1; ring <= LADDER_LANDING_SEARCH_RINGS; ring++) {
+            double distance = ring * LADDER_LANDING_SEARCH_STEP;
+
+            for (int i = 0; i < 8; i++) {
+                double angle = i * (Math.PI / 4.0);
+                double candidateX = targetX + Math.cos(angle) * distance;
+                double candidateY = targetY + Math.sin(angle) * distance;
+                double clampedX = clamp(candidateX, PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS);
+                double clampedY = clamp(candidateY, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS);
+
+                if (!collidesWithObstacle(clampedX, clampedY, PLAYER_RADIUS)) {
+                    return new double[]{clampedX, clampedY};
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private double[] findLadderLandingInFrontOfLadder(LadderZone zone, double sideHintX, double sideHintY) {
+        double dirX = sideHintX - zone.triggerX();
+        double dirY = sideHintY - zone.triggerY();
+        double dirLength = Math.sqrt(dirX * dirX + dirY * dirY);
+        if (dirLength < 0.0001) {
+            return null;
+        }
+
+        dirX /= dirLength;
+        dirY /= dirLength;
+
+        double targetX = zone.triggerX() + dirX * LADDER_FRONT_OFFSET;
+        double targetY = zone.triggerY() + dirY * LADDER_FRONT_OFFSET;
+        double clampedX = clamp(targetX, PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS);
+        double clampedY = clamp(targetY, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS);
+
+        return findLadderLanding(clampedX, clampedY);
     }
 
     private void applyFriction(PlayerState player, double deltaSeconds) {
@@ -718,35 +805,48 @@ public class GameRoom {
     }
 
     private void respawnPlayer(PlayerState player) {
-        double spawnX = player.getTeam().equals("RED") ? 85 : MAP_WIDTH - 85;
-        double spawnY = 260 + Math.random() * 380;
+        double spawnX = player.getTeam().equals("RED") ? 120 : MAP_WIDTH - 120;
+        double spawnY = 360 + Math.random() * 2680;
 
         player.respawn(spawnX, spawnY);
     }
 
     private void movePlayerWithCollision(PlayerState player, double nextX, double nextY) {
-        double clampedX = clamp(nextX, PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS);
-        double clampedY = clamp(nextY, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS);
+        double startX = player.getX();
+        double startY = player.getY();
+        double deltaX = nextX - startX;
+        double deltaY = nextY - startY;
+        double travelDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        int steps = Math.max(1, (int) Math.ceil(travelDistance / 6.0));
 
-        if (!collidesWithObstacle(clampedX, player.getY(), PLAYER_RADIUS)) {
-            player.setX(clampedX);
-        } else {
-            player.setVelocityX(0);
-        }
+        for (int i = 1; i <= steps; i++) {
+            double t = (double) i / steps;
+            double stepX = startX + deltaX * t;
+            double stepY = startY + deltaY * t;
 
-        if (!collidesWithObstacle(player.getX(), clampedY, PLAYER_RADIUS)) {
-            player.setY(clampedY);
-        } else {
-            player.setVelocityY(0);
+            double clampedX = clamp(stepX, PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS);
+            double clampedY = clamp(stepY, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS);
+
+            if (!collidesWithObstacle(clampedX, player.getY(), PLAYER_RADIUS)) {
+                player.setX(clampedX);
+            } else {
+                player.setVelocityX(0);
+            }
+
+            if (!collidesWithObstacle(player.getX(), clampedY, PLAYER_RADIUS)) {
+                player.setY(clampedY);
+            } else {
+                player.setVelocityY(0);
+            }
         }
     }
 
     private boolean collidesWithObstacle(double x, double y) {
-        return OBSTACLES.stream().anyMatch(obstacle -> obstacle.contains(x, y));
+        return COLLISION_OBSTACLES.stream().anyMatch(obstacle -> obstacle.contains(x, y));
     }
 
     private boolean collidesWithObstacle(double x, double y, double radius) {
-        return OBSTACLES.stream().anyMatch(obstacle -> obstacle.intersectsCircle(x, y, radius));
+        return COLLISION_OBSTACLES.stream().anyMatch(obstacle -> obstacle.intersectsCircle(x, y, radius));
     }
 
     private void addKillFeedEvent(PlayerState attacker, PlayerState victim, boolean headshot) {
@@ -800,6 +900,25 @@ public class GameRoom {
 
         requester.addBalance(amount);
         addSystemChat(requester.getName() + " balance: $" + requester.getBalance());
+    }
+
+    private void handleFlyCommand(PlayerState requester, String[] parts) {
+        String mode = parts.length > 1 ? parts[1].toLowerCase(Locale.ROOT) : "toggle";
+        boolean enabled = requester.isFlyEnabled();
+        switch (mode) {
+            case "on", "1", "true" -> enabled = true;
+            case "off", "0", "false" -> enabled = false;
+            default -> enabled = !enabled;
+        }
+
+        requester.setFlyEnabled(enabled);
+        if (!enabled) {
+            requester.setVelocityZ(0);
+            if (requester.getZ() < 0) {
+                requester.setZ(0);
+            }
+        }
+        addSystemChat(requester.getName() + " fly: " + (enabled ? "ON" : "OFF"));
     }
 
     private void addSystemChat(String text) {
@@ -886,7 +1005,7 @@ public class GameRoom {
                         ))
                         .toList(),
 
-                OBSTACLES.stream()
+                COLLISION_OBSTACLES.stream()
                         .map(obstacle -> new GameSnapshot.ObstacleView(
                                 obstacle.x(),
                                 obstacle.y(),

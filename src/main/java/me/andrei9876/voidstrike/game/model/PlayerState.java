@@ -39,6 +39,7 @@ public class PlayerState {
     private boolean right;
     private boolean sprint;
     private boolean jump;
+    private boolean descend;
     private boolean shoot;
     private boolean reload;
     private boolean climb;
@@ -47,6 +48,7 @@ public class PlayerState {
     private long lastProcessedInputSequence;
     private long lastShotAt;
     private long lastClimbAt;
+    private boolean flyEnabled;
 
     public PlayerState(String id, String name, String team, String characterModel, double x, double y) {
         this.id = id;
@@ -88,6 +90,7 @@ public class PlayerState {
         this.right = input.isRight();
         this.sprint = input.isSprint();
         this.jump = input.isJump();
+        this.descend = input.isDescend();
         this.shoot = input.isShoot();
         this.reload = input.isReload();
         this.climb = input.isClimb();
@@ -125,6 +128,7 @@ public class PlayerState {
         this.right = false;
         this.sprint = false;
         this.jump = false;
+        this.descend = false;
         this.shoot = false;
         this.reload = false;
         this.climb = false;
@@ -319,6 +323,10 @@ public class PlayerState {
         return jump;
     }
 
+    public boolean isDescend() {
+        return descend;
+    }
+
     public boolean isReload() {
         return reload;
     }
@@ -345,6 +353,10 @@ public class PlayerState {
 
     public long getReloadEndsAt() {
         return reloadEndsAt;
+    }
+
+    public boolean isFlyEnabled() {
+        return flyEnabled;
     }
 
     public void setX(double x) {
@@ -385,5 +397,9 @@ public class PlayerState {
 
     public void setBalance(int balance) {
         this.balance = Math.max(0, balance);
+    }
+
+    public void setFlyEnabled(boolean flyEnabled) {
+        this.flyEnabled = flyEnabled;
     }
 }

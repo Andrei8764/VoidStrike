@@ -10,6 +10,7 @@ public class ClientInputMessage {
     private boolean right;
     private boolean sprint;
     private boolean jump;
+    private boolean descend;
     private boolean shoot;
     private boolean reload;
     private boolean climb;
@@ -48,6 +49,10 @@ public class ClientInputMessage {
 
     public boolean isJump() {
         return jump;
+    }
+
+    public boolean isDescend() {
+        return descend;
     }
 
     public boolean isShoot() {
@@ -108,6 +113,10 @@ public class ClientInputMessage {
 
     public void setJump(boolean jump) {
         this.jump = jump;
+    }
+
+    public void setDescend(boolean descend) {
+        this.descend = descend;
     }
 
     public void setShoot(boolean shoot) {

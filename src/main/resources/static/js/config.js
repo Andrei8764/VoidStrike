@@ -1,5 +1,5 @@
-export const WORLD_WIDTH = 1600;
-export const WORLD_HEIGHT = 900;
+export const WORLD_WIDTH = 3800;
+export const WORLD_HEIGHT = 3400;
 
 export const PLAYER_RADIUS = 20;
 export const FOV = 100 * Math.PI / 180;

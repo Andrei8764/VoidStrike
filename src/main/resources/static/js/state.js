@@ -51,6 +51,9 @@ export const state = {
     fadingBulletTrails: [],
 
     inputIntervalId: null
+    ,
+    climbDebugUntil: 0,
+    climbDebugLastSequence: 0
 };
 
 export const keys = {
@@ -58,7 +61,8 @@ export const keys = {
     down: false,
     left: false,
     right: false,
-    sprint: false
+    sprint: false,
+    descend: false
 };
 
 export const mouse = {

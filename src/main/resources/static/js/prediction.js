@@ -41,6 +41,25 @@ export function reconcileLocalPlayer() {
     const errorX = serverSelf.x - state.predictedSelf.x;
     const errorY = serverSelf.y - state.predictedSelf.y;
     const errorDistance = Math.sqrt(errorX * errorX + errorY * errorY);
+    const now = Date.now();
+    const climbDebugActive = now <= (state.climbDebugUntil || 0);
+
+    if (climbDebugActive) {
+        console.log("[CLIMB_DEBUG] before_reconcile", {
+            sequence: state.climbDebugLastSequence,
+            predicted: {
+                x: state.predictedSelf.x,
+                y: state.predictedSelf.y,
+                z: state.predictedSelf.z
+            },
+            server: {
+                x: serverSelf.x,
+                y: serverSelf.y,
+                z: serverSelf.z
+            },
+            errorDistance
+        });
+    }
 
     state.predictedSelf = {
         ...serverSelf
@@ -53,6 +72,23 @@ export function reconcileLocalPlayer() {
     if (errorDistance > PREDICTION_ERROR_THRESHOLD) {
         state.predictedSelf.x = state.predictedSelf.x * 0.85 + serverSelf.x * 0.15;
         state.predictedSelf.y = state.predictedSelf.y * 0.85 + serverSelf.y * 0.15;
+
+        if (climbDebugActive) {
+            console.log("[CLIMB_DEBUG] correction_applied", {
+                sequence: state.climbDebugLastSequence,
+                corrected: {
+                    x: state.predictedSelf.x,
+                    y: state.predictedSelf.y,
+                    z: state.predictedSelf.z
+                },
+                threshold: PREDICTION_ERROR_THRESHOLD
+            });
+        }
+    } else if (climbDebugActive) {
+        console.log("[CLIMB_DEBUG] no_correction", {
+            sequence: state.climbDebugLastSequence,
+            threshold: PREDICTION_ERROR_THRESHOLD
+        });
     }
 }
 
@@ -213,19 +249,32 @@ function acceleratePredictedPlayer(player, wishDirectionX, wishDirectionY, maxSp
 }
 
 function movePredictedPlayerWithCollision(player, nextX, nextY) {
-    const clampedX = clamp(nextX, PLAYER_RADIUS, WORLD_WIDTH - PLAYER_RADIUS);
-    const clampedY = clamp(nextY, PLAYER_RADIUS, WORLD_HEIGHT - PLAYER_RADIUS);
+    const startX = player.x;
+    const startY = player.y;
+    const deltaX = nextX - startX;
+    const deltaY = nextY - startY;
+    const travelDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    const steps = Math.max(1, Math.ceil(travelDistance / 6));
 
-    if (!predictedCircleCollidesWithObstacle(clampedX, player.y, PLAYER_RADIUS)) {
-        player.x = clampedX;
-    } else {
-        player.velocityX = 0;
-    }
+    for (let i = 1; i <= steps; i += 1) {
+        const t = i / steps;
+        const stepX = startX + deltaX * t;
+        const stepY = startY + deltaY * t;
 
-    if (!predictedCircleCollidesWithObstacle(player.x, clampedY, PLAYER_RADIUS)) {
-        player.y = clampedY;
-    } else {
-        player.velocityY = 0;
+        const clampedX = clamp(stepX, PLAYER_RADIUS, WORLD_WIDTH - PLAYER_RADIUS);
+        const clampedY = clamp(stepY, PLAYER_RADIUS, WORLD_HEIGHT - PLAYER_RADIUS);
+
+        if (!predictedCircleCollidesWithObstacle(clampedX, player.y, PLAYER_RADIUS)) {
+            player.x = clampedX;
+        } else {
+            player.velocityX = 0;
+        }
+
+        if (!predictedCircleCollidesWithObstacle(player.x, clampedY, PLAYER_RADIUS)) {
+            player.y = clampedY;
+        } else {
+            player.velocityY = 0;
+        }
     }
 }
 

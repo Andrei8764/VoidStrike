@@ -200,6 +200,7 @@ function startSendingInput() {
             right: keys.right,
             sprint: keys.sprint,
             jump: keys.jump,
+            descend: keys.descend,
             shoot: mouse.down,
             reload: state.reloadRequested,
             climb: state.climbRequested,
@@ -208,6 +209,19 @@ function startSendingInput() {
             angle: mouse.angle,
             pitch: mouse.pitch
         };
+
+        if (input.climb) {
+            state.climbDebugUntil = Date.now() + 2500;
+            state.climbDebugLastSequence = input.sequence;
+            const self = getSelfPlayer();
+            console.log("[CLIMB_DEBUG] send_input", {
+                sequence: input.sequence,
+                pos: self ? { x: self.x, y: self.y, z: self.z } : null,
+                vel: self ? { x: self.velocityX, y: self.velocityY, z: self.velocityZ } : null,
+                angle: input.angle,
+                pitch: input.pitch
+            });
+        }
 
         predictLocalPlayer(input, CLIENT_DELTA_SECONDS);
         state.pendingInputs.push(input);

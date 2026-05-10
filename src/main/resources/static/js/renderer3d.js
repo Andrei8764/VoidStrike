@@ -1,5 +1,7 @@
 import * as THREE from "/vendor/three/build/three.module.js";
 import { GLTFLoader } from "/vendor/three/examples/jsm/loaders/GLTFLoader.js";
+import { OBJLoader } from "/vendor/three/examples/jsm/loaders/OBJLoader.js";
+import { MTLLoader } from "/vendor/three/examples/jsm/loaders/MTLLoader.js";
 import { adsScopeElement, canvas, crosshairElement, nameLabelsElement } from "./dom.js";
 import {
     getRenderableBullets,
@@ -18,6 +20,9 @@ const BULLET_RADIUS = 0.85;
 const BULLET_LENGTH = 10;
 const BULLET_TRAIL_LENGTH = 16;
 const OBSTACLE_HEIGHT = 84;
+const RENDER_COLLISION_OBSTACLES = false;
+const OBJ_WORLD_SCALE = 128;
+const MODEL_GROUND_EPSILON = 0.02;
 const CHARACTER_HEIGHT = 58;
 const CHARACTER_YAW_OFFSET = Math.PI / 2;
 const REMOTE_RUN_SPEED_THRESHOLD = PLAYER_MAX_SPEED * 1.08;
@@ -78,32 +83,74 @@ const MODULAR_CHARACTER_PARTS = {
     legRight: "/models/a_leg_right.glb",
     armRight: "/models/a_arm_right.glb"
 };
+const ALL_OBJ_MODEL_FILES = [
+    "balcony-ladder-bottom.obj","balcony-ladder-top.obj","balcony-type-a.obj","cliff-corner.obj","cliff-side.obj",
+    "detail-awning-small.obj","detail-awning-wide.obj","detail-barrier-strong-damaged.obj","detail-barrier-strong-type-a.obj","detail-barrier-strong-type-b.obj",
+    "detail-barrier-type-a.obj","detail-barrier-type-b.obj","detail-beam.obj","detail-bench.obj","detail-block.obj",
+    "detail-bricks-type-a.obj","detail-bricks-type-b.obj","detail-cables-type-a.obj","detail-cables-type-b.obj","detail-dumpster-closed.obj",
+    "detail-dumpster-open.obj","detail-light-double.obj","detail-light-single.obj","detail-light-traffic.obj","door-type-a.obj",
+    "door-type-b.obj","grass.obj","grass-corner.obj","grass-corner-inner.obj","grass-hill.obj",
+    "pallet.obj","pallet-small.obj","planks.obj","road-asphalt-center.obj","road-asphalt-corner.obj",
+    "road-asphalt-corner-inner.obj","road-asphalt-corner-outer.obj","road-asphalt-damaged.obj","road-asphalt-pavement.obj","road-asphalt-side.obj",
+    "road-asphalt-straight.obj","road-dirt-center.obj","road-dirt-corner.obj","road-dirt-corner-inner.obj","road-dirt-corner-outer.obj",
+    "road-dirt-damaged.obj","road-dirt-pavement.obj","road-dirt-side.obj","road-dirt-straight.obj","road-dirt-tile.obj",
+    "roof-metal-poles.obj","roof-metal-type-a.obj","roof-metal-type-b.obj","scaffolding-floor.obj","scaffolding-poles.obj",
+    "scaffolding-structure.obj","tree-large.obj","tree-park-large.obj","tree-park-pine-large.obj","tree-pine-large.obj",
+    "tree-pine-small.obj","tree-shrub.obj","tree-small.obj","truck-flat.obj","truck-green.obj",
+    "truck-green-cargo.obj","truck-grey.obj","truck-grey-cargo.obj","wall-a.obj","wall-a-column.obj",
+    "wall-a-column-painted.obj","wall-a-corner.obj","wall-a-corner-painted.obj","wall-a-detail.obj","wall-a-detail-painted.obj",
+    "wall-a-diagonal.obj","wall-a-door.obj","wall-a-flat.obj","wall-a-flat-garage.obj","wall-a-flat-painted.obj",
+    "wall-a-flat-window.obj","wall-a-garage.obj","wall-a-low.obj","wall-a-low-painted.obj","wall-a-open.obj",
+    "wall-a-painted.obj","wall-a-painted-diagonal.obj","wall-a-roof.obj","wall-a-roof-detailed.obj","wall-a-roof-slant.obj",
+    "wall-a-roof-slant-detailed.obj","wall-a-window.obj","wall-b.obj","wall-b-column.obj","wall-b-corner.obj",
+    "wall-b-detail-painted.obj","wall-b-diagonal.obj","wall-b-door.obj","wall-b-flat.obj","wall-b-flat-garage.obj",
+    "wall-b-flat-window.obj","wall-b-garage.obj","wall-b-low.obj","wall-b-open.obj","wall-broken-type-a.obj",
+    "wall-broken-type-b.obj","wall-b-roof.obj","wall-b-roof-detailed.obj","wall-b-roof-slant.obj","wall-b-roof-slant-detailed.obj",
+    "wall-b-window.obj","wall-c-flat.obj","wall-c-flat-low.obj","wall-fence.obj","wall-steps-type-a.obj",
+    "wall-steps-type-b.obj","wall-type-a.obj","wall-type-b.obj","window-small-type-a.obj","window-small-type-b.obj",
+    "window-wide-type-a.obj","window-wide-type-b.obj","window-wide-type-c.obj","window-wide-type-d.obj"
+];
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-const camera3d = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 4000);
+const camera3d = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.8, 3000);
 scene.add(camera3d);
 const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true
 });
-renderer.setPixelRatio(window.devicePixelRatio || 1);
-renderer.shadowMap.enabled = false;
+renderer.setPixelRatio(Math.min((window.devicePixelRatio || 1) * 1.25, 2.5));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.sortObjects = true;
 
 const ambientLight = new THREE.HemisphereLight(0xffffff, 0x355e2c, 1.1);
 scene.add(ambientLight);
 
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
 directionalLight.position.set(300, 600, 300);
+directionalLight.castShadow = true;
+directionalLight.shadow.mapSize.set(2048, 2048);
+directionalLight.shadow.camera.near = 50;
+directionalLight.shadow.camera.far = 2200;
+directionalLight.shadow.camera.left = -1200;
+directionalLight.shadow.camera.right = 1200;
+directionalLight.shadow.camera.top = 1200;
+directionalLight.shadow.camera.bottom = -1200;
+directionalLight.shadow.bias = -0.00015;
 scene.add(directionalLight);
 
 const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(WORLD_WIDTH, WORLD_HEIGHT),
-    new THREE.MeshStandardMaterial({ color: 0x5d7a2f, roughness: 0.92, metalness: 0.05 })
+    new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.96, metalness: 0.02 })
 );
 ground.rotation.x = -Math.PI / 2;
 ground.position.set(WORLD_WIDTH / 2, 0, WORLD_HEIGHT / 2);
+ground.receiveShadow = true;
 scene.add(ground);
 
 const obstacleGroup = new THREE.Group();
@@ -913,6 +960,14 @@ function updateNameLabel(player, root) {
 }
 
 function syncObstacles() {
+    if (!RENDER_COLLISION_OBSTACLES) {
+        if (obstacleGroup.children.length > 0) {
+            obstacleGroup.clear();
+            applyWallhackState();
+        }
+        return;
+    }
+
     const obstacles = state.obstacles || [];
     const nextKey = JSON.stringify(obstacles);
 
@@ -942,6 +997,152 @@ function syncObstacles() {
     applyWallhackState();
 }
 
+function applyModelTransform(root, modelDef) {
+    const position = modelDef.position || {};
+    const rotation = modelDef.rotation || {};
+    const rotationDegrees = modelDef.rotationDegrees || {};
+    const scale = readScale(modelDef.scale);
+
+    root.position.set(
+        position.x ?? 0,
+        position.y ?? 0,
+        position.z ?? 0
+    );
+    root.rotation.set(
+        rotation.x ?? toRadians(rotationDegrees.x),
+        rotation.y ?? toRadians(rotationDegrees.y),
+        rotation.z ?? toRadians(rotationDegrees.z)
+    );
+    const objScaleMultiplier = (modelDef.path || "").toLowerCase().endsWith(".obj")
+        ? (modelDef.objScaleMultiplier ?? OBJ_WORLD_SCALE)
+        : 1;
+
+    root.scale.set(
+        scale.x * objScaleMultiplier,
+        scale.y * objScaleMultiplier,
+        scale.z * objScaleMultiplier
+    );
+
+    // Only lift if geometry dips below terrain; do not force everything to ground.
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root);
+    if (Number.isFinite(box.min.y) && box.min.y < 0) {
+        root.position.y += -box.min.y + MODEL_GROUND_EPSILON;
+        root.updateMatrixWorld(true);
+    }
+
+    root.traverse(node => {
+        if (!node.isMesh) {
+            return;
+        }
+        node.castShadow = true;
+        node.receiveShadow = true;
+
+        const applyMaterialTuning = material => {
+            if (!material) {
+                return;
+            }
+            if (material.map) {
+                material.map.wrapS = THREE.RepeatWrapping;
+                material.map.wrapT = THREE.RepeatWrapping;
+                material.map.colorSpace = THREE.SRGBColorSpace;
+                material.map.generateMipmaps = true;
+                material.map.magFilter = THREE.LinearFilter;
+                material.map.minFilter = THREE.LinearMipmapLinearFilter;
+                material.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                material.map.needsUpdate = true;
+            }
+            if (material.color) {
+                material.color.setRGB(1, 1, 1);
+            }
+            const name = (material.name || "").toLowerCase();
+            const isFoliage = name.includes("tree") || name.includes("leaf") || name.includes("foliage");
+            material.transparent = isFoliage;
+            material.alphaTest = isFoliage ? 0.5 : 0;
+            material.depthWrite = !isFoliage;
+            material.side = isFoliage ? THREE.DoubleSide : THREE.FrontSide;
+            material.alphaToCoverage = isFoliage;
+            if (isFoliage && material.map) {
+                material.map.generateMipmaps = false;
+                material.map.magFilter = THREE.LinearFilter;
+                material.map.minFilter = THREE.LinearFilter;
+            }
+            material.needsUpdate = true;
+        };
+
+        if (Array.isArray(node.material)) {
+            node.material.forEach(applyMaterialTuning);
+        } else {
+            applyMaterialTuning(node.material);
+        }
+    });
+}
+
+function loadObjModel(modelDef) {
+    const mtlPath = modelDef.mtlPath || modelDef.path.replace(/\.obj$/i, ".mtl");
+    const lastSlashIndex = mtlPath.lastIndexOf("/");
+    const mtlDir = lastSlashIndex >= 0 ? mtlPath.slice(0, lastSlashIndex + 1) : "/";
+    const mtlFile = lastSlashIndex >= 0 ? mtlPath.slice(lastSlashIndex + 1) : mtlPath;
+    const localMtlLoader = new MTLLoader();
+    localMtlLoader.setMaterialOptions({
+        wrap: THREE.RepeatWrapping,
+        side: THREE.FrontSide
+    });
+    localMtlLoader.setPath(mtlDir);
+    localMtlLoader.setResourcePath(mtlDir);
+    localMtlLoader.load(
+        mtlFile,
+        materials => {
+            materials.preload();
+            const localObjLoader = new OBJLoader();
+            localObjLoader.setMaterials(materials);
+            localObjLoader.load(
+                modelDef.path,
+                obj => {
+                    applyModelTransform(obj, modelDef);
+                    worldModelGroup.add(obj);
+                },
+                undefined,
+                () => createMissingModelPlaceholder(modelDef)
+            );
+        },
+        undefined,
+        () => {
+            const localObjLoader = new OBJLoader();
+            localObjLoader.load(
+                modelDef.path,
+                obj => {
+                    applyModelTransform(obj, modelDef);
+                    worldModelGroup.add(obj);
+                },
+                undefined,
+                () => createMissingModelPlaceholder(modelDef)
+            );
+        }
+    );
+}
+
+function loadWorldModel(modelDef) {
+    const path = (modelDef.path || "").toLowerCase();
+    if (path.endsWith(".obj")) {
+        loadObjModel(modelDef);
+        return;
+    }
+
+    gltfLoader.load(
+        modelDef.path,
+        gltf => {
+            const root = gltf.scene;
+            applyModelTransform(root, modelDef);
+            worldModelGroup.add(root);
+        },
+        undefined,
+        () => {
+            createMissingModelPlaceholder(modelDef);
+        }
+    );
+}
+
 async function loadWorldScene() {
     if (worldSceneLoaded) {
         return;
@@ -957,8 +1158,27 @@ async function loadWorldScene() {
         }
 
         const sceneConfig = await response.json();
-        const modelDefs = Array.isArray(sceneConfig.models) ? sceneConfig.models : [];
+        let modelDefs = Array.isArray(sceneConfig.models) ? sceneConfig.models : [];
         const primitiveDefs = Array.isArray(sceneConfig.primitives) ? sceneConfig.primitives : [];
+        if (sceneConfig.autoPopulateAllObjs) {
+            const spacingX = 260;
+            const spacingZ = 260;
+            const columns = 12;
+            const startX = 420;
+            const startZ = 420;
+            const generatedDefs = ALL_OBJ_MODEL_FILES.map((fileName, index) => {
+                const col = index % columns;
+                const row = Math.floor(index / columns);
+                return {
+                    enabled: true,
+                    path: `/models/${fileName}`,
+                    position: { x: startX + col * spacingX, y: 0, z: startZ + row * spacingZ },
+                    rotationDegrees: { y: (index % 4) * 90 },
+                    scale: 1.0
+                };
+            });
+            modelDefs = [...modelDefs, ...generatedDefs];
+        }
 
         for (const primitiveDef of primitiveDefs) {
             if ((primitiveDef.type || "box") !== "box") {
@@ -1006,47 +1226,7 @@ async function loadWorldScene() {
                 continue;
             }
 
-            gltfLoader.load(
-                modelDef.path,
-                gltf => {
-                    const root = gltf.scene;
-                    const position = modelDef.position || {};
-                    const rotation = modelDef.rotation || {};
-                    const rotationDegrees = modelDef.rotationDegrees || {};
-                    const scale = readScale(modelDef.scale);
-
-                    root.position.set(
-                        position.x ?? 0,
-                        position.y ?? 0,
-                        position.z ?? 0
-                    );
-                    root.rotation.set(
-                        rotation.x ?? toRadians(rotationDegrees.x),
-                        rotation.y ?? toRadians(rotationDegrees.y),
-                        rotation.z ?? toRadians(rotationDegrees.z)
-                    );
-                    root.scale.set(
-                        scale.x,
-                        scale.y,
-                        scale.z
-                    );
-
-                    root.traverse(node => {
-                        if (!node.isMesh) {
-                            return;
-                        }
-
-                        node.castShadow = false;
-                        node.receiveShadow = false;
-                    });
-
-                    worldModelGroup.add(root);
-                },
-                undefined,
-                () => {
-                    createMissingModelPlaceholder(modelDef);
-                }
-            );
+            loadWorldModel(modelDef);
         }
     } catch (_error) {
     }

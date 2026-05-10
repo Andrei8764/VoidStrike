@@ -304,6 +304,9 @@ function handleKeyDown(event) {
         case "ShiftRight":
             keys.sprint = true;
             break;
+        case "KeyC":
+            keys.descend = true;
+            break;
         case "Space":
             keys.jump = true;
             event.preventDefault();
@@ -365,6 +368,9 @@ function handleKeyUp(event) {
         case "ShiftLeft":
         case "ShiftRight":
             keys.sprint = false;
+            break;
+        case "KeyC":
+            keys.descend = false;
             break;
         case "Space":
             keys.jump = false;
@@ -429,11 +435,11 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
-    if (command === "freeze" || command === "money") {
+    if (command === "freeze" || command === "money" || command === "fly") {
         const sent = sendAdminCommand(normalized);
         appendConsoleLine(sent ? "ok" : "socket not ready");
         return;
     }
 
-    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, wallhack on|off|toggle");
+    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, wallhack on|off|toggle");
 }
