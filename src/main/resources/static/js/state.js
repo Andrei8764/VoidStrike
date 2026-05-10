@@ -25,6 +25,7 @@ export const state = {
     settingsVisible: false,
     showFps: false,
     perfHudVisible: false,
+    collisionDebugVisible: false,
     renderScale: 1,
     toneMappingEnabled: true,
     textureFilter: "smooth",

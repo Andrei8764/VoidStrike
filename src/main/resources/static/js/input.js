@@ -31,8 +31,10 @@ import {
     cycleEditorModel,
     editorHandleCanvasClick,
     editorHandleKeyDown,
+    getCollisionProfileSuggestionAtCrosshair,
     saveEditorScene,
     setAnisotropyLevel,
+    setCollisionDebugVisible,
     setRemoteHandMountOffset,
     setPerformanceMode,
     setRemoteBackMountTransform,
@@ -701,6 +703,16 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
+    if (command === "colprofile" || command === "colliderprofile" || command === "hbprofile") {
+        const suggestion = getCollisionProfileSuggestionAtCrosshair();
+        if (!suggestion) {
+            appendConsoleLine("colprofile: no model under crosshair");
+            return;
+        }
+        appendConsoleLine(`{ "value": "${suggestion.value}", "halfWidth": ${suggestion.halfWidth}, "halfDepth": ${suggestion.halfDepth}, "height": ${suggestion.height}, "solid": ${suggestion.solid}, "walkable": ${suggestion.walkable} }`);
+        return;
+    }
+
     if (command === "perfhud" || command === "debugfps") {
         let enabled = state.perfHudVisible;
         if (arg === "on" || arg === "1" || arg === "true") {
@@ -712,6 +724,21 @@ function runConsoleCommand(rawCommand) {
         }
         setPerfHudVisible(enabled);
         appendConsoleLine(`perfhud ${enabled ? "ON" : "OFF"}`);
+        return;
+    }
+
+    if (command === "hitbox" || command === "collisionbox" || command === "colbox") {
+        let enabled = Boolean(state.collisionDebugVisible);
+        if (arg === "on" || arg === "1" || arg === "true") {
+            enabled = true;
+        } else if (arg === "off" || arg === "0" || arg === "false") {
+            enabled = false;
+        } else {
+            enabled = !enabled;
+        }
+        state.collisionDebugVisible = enabled;
+        void setCollisionDebugVisible(enabled);
+        appendConsoleLine(`hitbox ${enabled ? "ON" : "OFF"}`);
         return;
     }
 
@@ -742,11 +769,12 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
-    if (command === "freeze" || command === "money" || command === "fly" || command === "tp") {
+    if (command === "freeze" || command === "money" || command === "fly" || command === "tp"
+        || command === "reloadcollision" || command === "reloadcol" || command === "reloadprofiles") {
         const sent = sendAdminCommand(normalized);
         appendConsoleLine(sent ? "ok" : "socket not ready");
         return;
     }
 
-    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>, backmount <x> <y> <z> <rxDeg> <ryDeg> <rzDeg>, handoffset <x> <y> <z> [weapon], wallhack on|off|toggle, performancemode on|off|toggle, perfhud on|off|toggle, editor on|off|save|clear");
+    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>, reloadcollision, hitbox on|off|toggle, colprofile, backmount <x> <y> <z> <rxDeg> <ryDeg> <rzDeg>, handoffset <x> <y> <z> [weapon], wallhack on|off|toggle, performancemode on|off|toggle, perfhud on|off|toggle, editor on|off|save|clear");
 }

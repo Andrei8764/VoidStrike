@@ -198,6 +198,13 @@ function simulatePredictedVerticalMovement(player, input, deltaSeconds) {
     let velocityZ = player.velocityZ || 0;
     const onGround = z <= 0.001;
 
+    // Client-side stabilization: if server already has us standing on a raised surface
+    // and we're not jumping, don't apply fake gravity locally (prevents camera jitter).
+    if (!onGround && Math.abs(velocityZ) < 0.001 && !input.jump) {
+        player.velocityZ = 0;
+        return;
+    }
+
     if (input.jump && onGround) {
         velocityZ = PLAYER_JUMP_VELOCITY;
         player.velocityX = (player.velocityX || 0) * PLAYER_BUNNYHOP_SPEED_BOOST;

@@ -1,6 +1,7 @@
 package me.andrei9876.voidstrike.game;
 
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
 import me.andrei9876.voidstrike.game.model.BulletState;
 import me.andrei9876.voidstrike.game.model.ClientInputMessage;
 import me.andrei9876.voidstrike.game.model.GameSnapshot;
@@ -10,6 +11,8 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -132,6 +135,18 @@ public class GameRoom {
 
     private static final List<LadderZone> LADDER_ZONES = List.of();
     private static final List<Obstacle> COLLISION_OBSTACLES = List.of();
+    private static final Path SCENE_PATH = Path.of("src/main/resources/static/world/scene.json");
+    private static final Path COLLISION_PROFILES_PATH = Path.of("src/main/resources/static/world/collision-profiles.json");
+    private static final double DEFAULT_PLAYER_COLLIDER_HEIGHT = 72;
+    private static final double PLAYER_GROUND_SNAP_EPSILON = 1.5;
+    private static final double PLAYER_STEP_UP_HEIGHT = 20;
+    private static final int SPAWN_TRIES = 48;
+    private static final double SPAWN_Y_MIN = 200;
+    private static final double SPAWN_Y_MAX = MAP_HEIGHT - 200;
+    private static final double SPAWN_X_RED = 120;
+    private static final double SPAWN_X_BLUE = MAP_WIDTH - 120;
+    private static final double SPAWN_RING_STEP = 26;
+    private static final double SPAWN_PLAYER_CLEARANCE = PLAYER_RADIUS * 2.4;
 
     private final String id;
     private final ObjectMapper objectMapper;
@@ -141,6 +156,8 @@ public class GameRoom {
     private final List<BulletState> bullets = new ArrayList<>();
     private final List<KillFeedEvent> killFeed = new ArrayList<>();
     private final List<ChatEvent> chatMessages = new ArrayList<>();
+    private final List<CollisionBox> sceneCollisionBoxes = new ArrayList<>();
+    private final CollisionProfileConfig collisionProfileConfig;
 
     private int roundNumber = 1;
     private int redScore = 0;
@@ -162,6 +179,8 @@ public class GameRoom {
         this.objectMapper = objectMapper;
         this.sessions = sessions;
         this.players = players;
+        this.collisionProfileConfig = loadCollisionProfileConfig();
+        this.sceneCollisionBoxes.addAll(loadSceneCollisionBoxes());
     }
 
     public synchronized boolean hasFreeSlot() {
@@ -178,11 +197,48 @@ public class GameRoom {
         String playerId = session.getId();
         String team = chooseTeam();
 
-        double spawnX = team.equals("RED") ? 120 : MAP_WIDTH - 120;
-        double spawnY = 360 + Math.random() * 2680;
+        SpawnPoint spawn = findSafeSpawn(team);
 
         sessions.put(playerId, session);
-        players.put(playerId, new PlayerState(playerId, playerName, team, characterModel, spawnX, spawnY));
+        players.put(playerId, new PlayerState(playerId, playerName, team, characterModel, spawn.x, spawn.y));
+    }
+
+    private SpawnPoint findSafeSpawn(String team) {
+        double baseX = "RED".equals(team) ? SPAWN_X_RED : SPAWN_X_BLUE;
+        double baseY = SPAWN_Y_MIN + Math.random() * (SPAWN_Y_MAX - SPAWN_Y_MIN);
+
+        if (isSpawnPointSafe(baseX, baseY)) {
+            return new SpawnPoint(baseX, baseY);
+        }
+
+        for (int i = 0; i < SPAWN_TRIES; i += 1) {
+            double angle = Math.random() * Math.PI * 2;
+            double ring = 1 + (i / 8.0);
+            double radius = ring * SPAWN_RING_STEP;
+            double x = baseX + Math.cos(angle) * radius;
+            double y = baseY + Math.sin(angle) * radius;
+            x = clamp(x, PLAYER_RADIUS + 8, MAP_WIDTH - PLAYER_RADIUS - 8);
+            y = clamp(y, SPAWN_Y_MIN, SPAWN_Y_MAX);
+            if (isSpawnPointSafe(x, y)) {
+                return new SpawnPoint(x, y);
+            }
+        }
+
+        return new SpawnPoint(baseX, baseY);
+    }
+
+    private boolean isSpawnPointSafe(double x, double y) {
+        if (collidesWithObstacle(x, y, 0, PLAYER_RADIUS, DEFAULT_PLAYER_COLLIDER_HEIGHT)) {
+            return false;
+        }
+        for (PlayerState other : players.values()) {
+            double dx = other.getX() - x;
+            double dy = other.getY() - y;
+            if (dx * dx + dy * dy < SPAWN_PLAYER_CLEARANCE * SPAWN_PLAYER_CLEARANCE) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public synchronized void removePlayer(String playerId) {
@@ -235,7 +291,25 @@ public class GameRoom {
             case "money" -> handleMoneyCommand(requester, parts);
             case "fly" -> handleFlyCommand(requester, parts);
             case "tp" -> handleTeleportCommand(requester, parts);
+            case "reloadcollision", "reloadcol", "reloadprofiles" -> handleReloadCollisionCommand();
             default -> addSystemChat("Unknown command: " + command);
+        }
+    }
+
+    private void handleReloadCollisionCommand() {
+        try {
+            CollisionProfileConfig reloadedConfig = loadCollisionProfileConfig();
+            collisionProfileConfig.exact.clear();
+            collisionProfileConfig.exact.putAll(reloadedConfig.exact);
+            collisionProfileConfig.prefix.clear();
+            collisionProfileConfig.prefix.addAll(reloadedConfig.prefix);
+            collisionProfileConfig.defaultProfile = reloadedConfig.defaultProfile;
+
+            sceneCollisionBoxes.clear();
+            sceneCollisionBoxes.addAll(loadSceneCollisionBoxes());
+            addSystemChat("Collision profiles reloaded (" + sceneCollisionBoxes.size() + " boxes)");
+        } catch (Exception e) {
+            addSystemChat("Collision reload failed");
         }
     }
 
@@ -453,7 +527,16 @@ public class GameRoom {
             return;
         }
 
-        boolean onGround = player.getZ() <= 0.001;
+        double supportTop = findSupportTopAt(player.getX(), player.getY(), player.getZ() + PLAYER_GROUND_SNAP_EPSILON);
+        boolean supportedByObject = supportTop > 0
+                && player.getZ() <= supportTop + PLAYER_GROUND_SNAP_EPSILON
+                && player.getVelocityZ() <= 0;
+        if (supportedByObject) {
+            player.setZ(supportTop);
+            player.setVelocityZ(0);
+        }
+
+        boolean onGround = player.getZ() <= 0.001 || supportedByObject;
 
         if (player.isJump() && onGround) {
             player.setVelocityZ(JUMP_VELOCITY);
@@ -470,6 +553,15 @@ public class GameRoom {
                 player.setZ(0);
                 player.setVelocityZ(0);
             }
+        }
+
+        // Final snap after movement integration to keep stable contact on top faces.
+        double postMoveSupportTop = findSupportTopAt(player.getX(), player.getY(), player.getZ() + PLAYER_GROUND_SNAP_EPSILON);
+        if (player.getVelocityZ() <= 0
+                && postMoveSupportTop > 0
+                && player.getZ() <= postMoveSupportTop + PLAYER_GROUND_SNAP_EPSILON) {
+            player.setZ(postMoveSupportTop);
+            player.setVelocityZ(0);
         }
     }
 
@@ -702,7 +794,7 @@ public class GameRoom {
                     || bullet.getZ() < 0
                     || bullet.getZ() > MAX_BULLET_Z;
 
-            if (bullet.isExpired() || outsideMap || collidesWithObstacle(bullet.getX(), bullet.getY())) {
+            if (bullet.isExpired() || outsideMap || collidesWithObstaclePoint3D(bullet.getX(), bullet.getY(), bullet.getZ())) {
                 iterator.remove();
             }
         }
@@ -839,26 +931,87 @@ public class GameRoom {
             double clampedX = clamp(stepX, PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS);
             double clampedY = clamp(stepY, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS);
 
-            if (!collidesWithObstacle(clampedX, player.getY(), PLAYER_RADIUS)) {
+            if (!collidesWithObstacle(clampedX, player.getY(), player.getZ(), PLAYER_RADIUS, DEFAULT_PLAYER_COLLIDER_HEIGHT)) {
                 player.setX(clampedX);
             } else {
-                player.setVelocityX(0);
+                double stepTopX = findSupportTopAt(clampedX, player.getY(), player.getZ() + PLAYER_STEP_UP_HEIGHT);
+                if (stepTopX > player.getZ()
+                        && stepTopX - player.getZ() <= PLAYER_STEP_UP_HEIGHT
+                        && !collidesWithObstacle(clampedX, player.getY(), stepTopX, PLAYER_RADIUS, DEFAULT_PLAYER_COLLIDER_HEIGHT)) {
+                    player.setX(clampedX);
+                    player.setZ(stepTopX);
+                    player.setVelocityZ(0);
+                } else {
+                    player.setVelocityX(0);
+                }
             }
 
-            if (!collidesWithObstacle(player.getX(), clampedY, PLAYER_RADIUS)) {
+            if (!collidesWithObstacle(player.getX(), clampedY, player.getZ(), PLAYER_RADIUS, DEFAULT_PLAYER_COLLIDER_HEIGHT)) {
                 player.setY(clampedY);
             } else {
-                player.setVelocityY(0);
+                double stepTopY = findSupportTopAt(player.getX(), clampedY, player.getZ() + PLAYER_STEP_UP_HEIGHT);
+                if (stepTopY > player.getZ()
+                        && stepTopY - player.getZ() <= PLAYER_STEP_UP_HEIGHT
+                        && !collidesWithObstacle(player.getX(), clampedY, stepTopY, PLAYER_RADIUS, DEFAULT_PLAYER_COLLIDER_HEIGHT)) {
+                    player.setY(clampedY);
+                    player.setZ(stepTopY);
+                    player.setVelocityZ(0);
+                } else {
+                    player.setVelocityY(0);
+                }
             }
         }
     }
 
     private boolean collidesWithObstacle(double x, double y) {
-        return COLLISION_OBSTACLES.stream().anyMatch(obstacle -> obstacle.contains(x, y));
+        if (COLLISION_OBSTACLES.stream().anyMatch(obstacle -> obstacle.contains(x, y))) {
+            return true;
+        }
+        return sceneCollisionBoxes.stream().anyMatch(box -> box.contains(x, y, 1));
     }
 
     private boolean collidesWithObstacle(double x, double y, double radius) {
-        return COLLISION_OBSTACLES.stream().anyMatch(obstacle -> obstacle.intersectsCircle(x, y, radius));
+        if (COLLISION_OBSTACLES.stream().anyMatch(obstacle -> obstacle.intersectsCircle(x, y, radius))) {
+            return true;
+        }
+        return collidesWithObstacle(x, y, 0, radius, DEFAULT_PLAYER_COLLIDER_HEIGHT);
+    }
+
+    private boolean collidesWithObstaclePoint3D(double x, double y, double z) {
+        for (CollisionBox box : sceneCollisionBoxes) {
+            if (box.solid && box.intersectsPoint3D(x, y, z)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean collidesWithObstacle(double x, double y, double z, double radius, double height) {
+        if (COLLISION_OBSTACLES.stream().anyMatch(obstacle -> obstacle.intersectsCircle(x, y, radius))) {
+            return true;
+        }
+        for (CollisionBox box : sceneCollisionBoxes) {
+            if (box.solid && box.intersectsCylinder(x, y, z, radius, height)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private double findSupportTopAt(double x, double y, double currentZ) {
+        double top = 0;
+        for (CollisionBox box : sceneCollisionBoxes) {
+            if (!box.walkable || !box.supportsPoint(x, y)) {
+                continue;
+            }
+            if (currentZ + PLAYER_GROUND_SNAP_EPSILON < box.topZ) {
+                continue;
+            }
+            if (box.topZ > top) {
+                top = box.topZ;
+            }
+        }
+        return top;
     }
 
     private void addKillFeedEvent(PlayerState attacker, PlayerState victim, boolean headshot) {
@@ -1207,6 +1360,249 @@ public class GameRoom {
     }
 
     private record ClosestPointOnSegment(double horizontalDistance, double z) {
+    }
+
+    private record SpawnPoint(double x, double y) {
+    }
+
+    private record CollisionBox(
+            double centerX,
+            double centerY,
+            double halfWidth,
+            double halfDepth,
+            double cosYaw,
+            double sinYaw,
+            double topZ,
+            boolean solid,
+            boolean walkable
+    ) {
+        private LocalPoint toLocal(double x, double y) {
+            double dx = x - centerX;
+            double dy = y - centerY;
+            double localX = dx * cosYaw + dy * sinYaw;
+            double localY = -dx * sinYaw + dy * cosYaw;
+            return new LocalPoint(localX, localY);
+        }
+
+        boolean contains(double x, double y, double z) {
+            LocalPoint p = toLocal(x, y);
+            return Math.abs(p.x) <= halfWidth
+                    && Math.abs(p.y) <= halfDepth
+                    && z >= 0
+                    && z <= topZ;
+        }
+
+        boolean intersectsPoint3D(double x, double y, double z) {
+            return contains(x, y, z);
+        }
+
+        boolean supportsPoint(double x, double y) {
+            LocalPoint p = toLocal(x, y);
+            return Math.abs(p.x) <= halfWidth && Math.abs(p.y) <= halfDepth;
+        }
+
+        boolean intersectsCylinder(double x, double y, double z, double radius, double height) {
+            if (z >= topZ) {
+                return false;
+            }
+            if (z + height <= 0) {
+                return false;
+            }
+
+            LocalPoint p = toLocal(x, y);
+            double closestX = Math.max(-halfWidth, Math.min(p.x, halfWidth));
+            double closestY = Math.max(-halfDepth, Math.min(p.y, halfDepth));
+            double dx = p.x - closestX;
+            double dy = p.y - closestY;
+            return dx * dx + dy * dy <= radius * radius;
+        }
+    }
+
+    private record LocalPoint(double x, double y) {
+    }
+
+    private List<CollisionBox> loadSceneCollisionBoxes() {
+        List<CollisionBox> boxes = new ArrayList<>();
+        try {
+            if (!Files.exists(SCENE_PATH)) {
+                return boxes;
+            }
+
+            var root = objectMapper.readTree(Files.readString(SCENE_PATH));
+            var models = root.path("models");
+            if (!models.isArray()) {
+                return boxes;
+            }
+
+            for (var model : models) {
+                if (!model.path("enabled").asBoolean(true)) {
+                    continue;
+                }
+                String path = model.path("path").asText("").toLowerCase(Locale.ROOT);
+                var collider = resolveCollisionProfile(path);
+                if (collider == null) {
+                    continue;
+                }
+                double modelScale = readModelScale(model.path("scale"));
+                double yawDeg = readModelYawDeg(model) + collider.yawOffsetDeg;
+                double yawRad = Math.toRadians(yawDeg);
+
+                double x = model.path("position").path("x").asDouble(0);
+                double y = model.path("position").path("z").asDouble(0);
+                double halfWidth = collider.halfWidth * modelScale;
+                double halfDepth = collider.halfDepth * modelScale;
+                double height = collider.height * modelScale;
+                double cosYaw = Math.cos(yawRad);
+                double sinYaw = Math.sin(yawRad);
+                double localOffsetX = collider.offsetLocalX * modelScale;
+                double localOffsetY = collider.offsetLocalY * modelScale;
+                double worldOffsetX = localOffsetX * cosYaw - localOffsetY * sinYaw;
+                double worldOffsetY = localOffsetX * sinYaw + localOffsetY * cosYaw;
+                boxes.add(new CollisionBox(x + worldOffsetX, y + worldOffsetY, halfWidth, halfDepth, cosYaw, sinYaw, height, collider.solid, collider.walkable));
+            }
+        } catch (Exception _ignored) {
+        }
+        return boxes;
+    }
+
+    private double readModelScale(JsonNode scaleNode) {
+        if (scaleNode == null || scaleNode.isMissingNode() || scaleNode.isNull()) {
+            return 1.0;
+        }
+        if (scaleNode.isNumber()) {
+            double scale = scaleNode.asDouble(1.0);
+            return Double.isFinite(scale) && scale > 0 ? scale : 1.0;
+        }
+        if (scaleNode.isObject()) {
+            double sx = scaleNode.path("x").asDouble(1.0);
+            double sy = scaleNode.path("y").asDouble(1.0);
+            double sz = scaleNode.path("z").asDouble(1.0);
+            if (Double.isFinite(sx) && sx > 0 && Double.isFinite(sy) && sy > 0 && Double.isFinite(sz) && sz > 0) {
+                return (sx + sy + sz) / 3.0;
+            }
+        }
+        return 1.0;
+    }
+
+    private double readModelYawDeg(JsonNode modelNode) {
+        if (modelNode == null || modelNode.isMissingNode() || modelNode.isNull()) {
+            return 0.0;
+        }
+        JsonNode rotationDegreesY = modelNode.path("rotationDegrees").path("y");
+        if (rotationDegreesY.isNumber()) {
+            return rotationDegreesY.asDouble(0.0);
+        }
+        JsonNode rotationY = modelNode.path("rotation").path("y");
+        if (rotationY.isNumber()) {
+            return Math.toDegrees(rotationY.asDouble(0.0));
+        }
+        return 0.0;
+    }
+
+    private ColliderTemplate resolveCollisionProfile(String modelPath) {
+        if (modelPath == null || modelPath.isEmpty()) {
+            return null;
+        }
+
+        ColliderTemplate exact = collisionProfileConfig.exact.get(modelPath);
+        if (exact != null) {
+            return exact;
+        }
+        for (PrefixColliderProfile prefixProfile : collisionProfileConfig.prefix) {
+            if (modelPath.startsWith(prefixProfile.prefix)) {
+                return prefixProfile.collider;
+            }
+        }
+        return collisionProfileConfig.defaultProfile;
+    }
+
+    private CollisionProfileConfig loadCollisionProfileConfig() {
+        CollisionProfileConfig config = new CollisionProfileConfig();
+        // Reasonable fallback defaults if file is missing.
+        config.defaultProfile = new ColliderTemplate(48, 48, 64, true, true, 0, 0, 0);
+        config.prefix.add(new PrefixColliderProfile("/models/road-", new ColliderTemplate(64, 64, 8, false, true, 0, 0, 0)));
+        config.prefix.add(new PrefixColliderProfile("/models/grass", new ColliderTemplate(64, 64, 8, false, true, 0, 0, 0)));
+        config.prefix.add(new PrefixColliderProfile("/models/wall-", new ColliderTemplate(64, 64, 96, true, true, 0, 0, 0)));
+        config.prefix.add(new PrefixColliderProfile("/models/window-", new ColliderTemplate(48, 24, 96, true, true, 0, 0, 0)));
+        config.prefix.add(new PrefixColliderProfile("/models/door-", new ColliderTemplate(40, 20, 96, true, true, 0, 0, 0)));
+        config.prefix.add(new PrefixColliderProfile("/models/truck-", new ColliderTemplate(92, 56, 88, true, true, 0, 0, 0)));
+        config.prefix.add(new PrefixColliderProfile("/models/detail-block", new ColliderTemplate(56, 56, 72, true, true, 0, 0, 0)));
+        config.prefix.add(new PrefixColliderProfile("/models/detail-barrier", new ColliderTemplate(52, 36, 52, true, true, 0, 0, 0)));
+
+        try {
+            if (!Files.exists(COLLISION_PROFILES_PATH)) {
+                return config;
+            }
+            var root = objectMapper.readTree(Files.readString(COLLISION_PROFILES_PATH));
+
+            var defaults = root.path("default");
+            if (defaults.isObject()) {
+                config.defaultProfile = readColliderTemplate(defaults, config.defaultProfile);
+            }
+
+            var exact = root.path("exact");
+            if (exact.isArray()) {
+                for (var item : exact) {
+                    String value = item.path("value").asText("").toLowerCase(Locale.ROOT);
+                    if (value.isEmpty()) {
+                        continue;
+                    }
+                    var collider = readColliderTemplate(item, config.defaultProfile);
+                    config.exact.put(value, collider);
+                }
+            }
+
+            var prefix = root.path("prefix");
+            if (prefix.isArray()) {
+                config.prefix.clear();
+                for (var item : prefix) {
+                    String value = item.path("value").asText("").toLowerCase(Locale.ROOT);
+                    if (value.isEmpty()) {
+                        continue;
+                    }
+                    var collider = readColliderTemplate(item, config.defaultProfile);
+                    config.prefix.add(new PrefixColliderProfile(value, collider));
+                }
+            }
+        } catch (Exception _ignored) {
+        }
+        return config;
+    }
+
+    private ColliderTemplate readColliderTemplate(tools.jackson.databind.JsonNode node, ColliderTemplate fallback) {
+        if (node == null || !node.isObject()) {
+            return fallback;
+        }
+        double halfWidth = node.path("halfWidth").asDouble(fallback.halfWidth);
+        double halfDepth = node.path("halfDepth").asDouble(fallback.halfDepth);
+        double height = node.path("height").asDouble(fallback.height);
+        boolean solid = node.path("solid").asBoolean(fallback.solid);
+        boolean walkable = node.path("walkable").asBoolean(fallback.walkable);
+        double yawOffsetDeg = node.path("yawOffsetDeg").asDouble(fallback.yawOffsetDeg);
+        double offsetLocalX = node.path("offsetLocalX").asDouble(fallback.offsetLocalX);
+        double offsetLocalY = node.path("offsetLocalY").asDouble(fallback.offsetLocalY);
+        return new ColliderTemplate(halfWidth, halfDepth, height, solid, walkable, yawOffsetDeg, offsetLocalX, offsetLocalY);
+    }
+
+    private record ColliderTemplate(
+            double halfWidth,
+            double halfDepth,
+            double height,
+            boolean solid,
+            boolean walkable,
+            double yawOffsetDeg,
+            double offsetLocalX,
+            double offsetLocalY
+    ) {
+    }
+
+    private static class CollisionProfileConfig {
+        final java.util.Map<String, ColliderTemplate> exact = new java.util.HashMap<>();
+        final List<PrefixColliderProfile> prefix = new ArrayList<>();
+        ColliderTemplate defaultProfile;
+    }
+
+    private record PrefixColliderProfile(String prefix, ColliderTemplate collider) {
     }
 
     public String getId() {
