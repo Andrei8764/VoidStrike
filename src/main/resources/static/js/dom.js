@@ -42,6 +42,7 @@ export const settingToneMappingElement = document.getElementById("settingToneMap
 export const settingTextureFilterElement = document.getElementById("settingTextureFilter");
 export const settingAnisotropyElement = document.getElementById("settingAnisotropy");
 export const fpsBadgeElement = document.getElementById("fpsBadge");
+export const perfHudElement = document.getElementById("perfHud");
 export const editorHudElement = document.getElementById("editorHud");
 export const editorSelectedModelElement = document.getElementById("editorSelectedModel");
 export const minimapCanvas = document.getElementById("minimapCanvas");

@@ -6,6 +6,7 @@ import {
     devConsoleInputElement,
     devConsoleOutputElement,
     fpsBadgeElement,
+    perfHudElement,
     joinButton,
     nameError,
     nameInput,
@@ -344,6 +345,12 @@ function handleKeyDown(event) {
         return;
     }
 
+    if (event.code === "F8") {
+        event.preventDefault();
+        setPerfHudVisible(!state.perfHudVisible);
+        return;
+    }
+
     if (state.editorMode) {
         mouse.down = false;
         state.ads = false;
@@ -574,6 +581,11 @@ function setShowFpsEnabled(enabled) {
     }
 }
 
+function setPerfHudVisible(enabled) {
+    state.perfHudVisible = Boolean(enabled);
+    perfHudElement?.classList.toggle("hidden", !state.perfHudVisible);
+}
+
 function appendConsoleLine(text) {
     if (!devConsoleOutputElement) {
         return;
@@ -622,6 +634,20 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
+    if (command === "perfhud" || command === "debugfps") {
+        let enabled = state.perfHudVisible;
+        if (arg === "on" || arg === "1" || arg === "true") {
+            enabled = true;
+        } else if (arg === "off" || arg === "0" || arg === "false") {
+            enabled = false;
+        } else {
+            enabled = !enabled;
+        }
+        setPerfHudVisible(enabled);
+        appendConsoleLine(`perfhud ${enabled ? "ON" : "OFF"}`);
+        return;
+    }
+
     if (command === "editor") {
         if (arg === "on" && !state.editorMode) {
             void toggleEditorMode();
@@ -655,5 +681,5 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
-    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, wallhack on|off|toggle, performancemode on|off|toggle, editor on|off|save|clear");
+    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, wallhack on|off|toggle, performancemode on|off|toggle, perfhud on|off|toggle, editor on|off|save|clear");
 }

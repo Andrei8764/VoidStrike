@@ -1986,6 +1986,20 @@ export function updateAimAngle() {
     mouse.pitch = state.viewPitch;
 }
 
+export function getRendererPerfStats() {
+    const memory = renderer.info?.memory || {};
+    const renderInfo = renderer.info?.render || {};
+    return {
+        dpr: renderer.getPixelRatio(),
+        calls: renderInfo.calls || 0,
+        triangles: renderInfo.triangles || 0,
+        lines: renderInfo.lines || 0,
+        points: renderInfo.points || 0,
+        geometries: memory.geometries || 0,
+        textures: memory.textures || 0
+    };
+}
+
 export async function toggleEditorMode() {
     state.editorMode = !state.editorMode;
     if (state.editorMode) {

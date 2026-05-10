@@ -702,6 +702,23 @@ input {
     cursor: pointer;
 }
 
+#perfHud {
+    position: fixed;
+    right: 18px;
+    top: 120px;
+    z-index: 42;
+    min-width: 220px;
+    padding: 8px 10px;
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    border-radius: 8px;
+    background: rgba(2, 6, 23, 0.9);
+    color: #e2e8f0;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 11px;
+    line-height: 1.35;
+    white-space: pre;
+}
+
 #chatMessages {
     height: 140px;
     padding: 8px 10px;
