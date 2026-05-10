@@ -71,6 +71,7 @@ export const keys = {
     left: false,
     right: false,
     sprint: false,
+    crouch: false,
     descend: false
 };
 

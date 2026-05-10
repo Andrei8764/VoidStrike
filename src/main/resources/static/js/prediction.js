@@ -159,13 +159,18 @@ function simulatePredictedMovement(player, input, deltaSeconds) {
         const wishDirectionX = cos * forward - sin * strafe;
         const wishDirectionY = sin * forward + cos * strafe;
         const sprinting = input.sprint && forward > 0;
+        const crouching = Boolean(input.crouch);
         const airborne = (player.z || 0) > 0.001;
-        const maxSpeed = sprinting
+        let maxSpeed = sprinting
             ? PLAYER_MAX_SPEED * PLAYER_SPRINT_SPEED_MULTIPLIER
             : PLAYER_MAX_SPEED;
-        const acceleration = sprinting
+        let acceleration = sprinting
             ? PLAYER_ACCELERATION * PLAYER_SPRINT_ACCELERATION_MULTIPLIER
             : PLAYER_ACCELERATION;
+        if (crouching) {
+            maxSpeed *= 0.52;
+            acceleration *= 0.62;
+        }
         const finalAcceleration = airborne
             ? acceleration * PLAYER_AIR_ACCELERATION_MULTIPLIER
             : acceleration;
@@ -185,6 +190,7 @@ function simulatePredictedMovement(player, input, deltaSeconds) {
 
     movePredictedPlayerWithCollision(player, nextX, nextY);
     simulatePredictedVerticalMovement(player, input, deltaSeconds);
+    player.crouching = Boolean(input.crouch);
 }
 
 function simulatePredictedVerticalMovement(player, input, deltaSeconds) {

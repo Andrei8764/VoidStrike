@@ -28,7 +28,9 @@ public class GameRoom {
     private static final double PLAYER_MAX_SPEED = 410;
     private static final double PLAYER_ACCELERATION = 2200;
     private static final double PLAYER_SPRINT_SPEED_MULTIPLIER = 1.45;
+    private static final double PLAYER_CROUCH_SPEED_MULTIPLIER = 0.52;
     private static final double PLAYER_SPRINT_ACCELERATION_MULTIPLIER = 1.2;
+    private static final double PLAYER_CROUCH_ACCELERATION_MULTIPLIER = 0.62;
     private static final double PLAYER_AIR_ACCELERATION_MULTIPLIER = 0.45;
     private static final double GRAVITY = 1350;
     private static final double JUMP_VELOCITY = 520;
@@ -37,13 +39,20 @@ public class GameRoom {
     private static final double PLAYER_STOP_SPEED = 90;
     private static final double PLAYER_RADIUS = 20;
     private static final double MAX_BULLET_Z = 700;
-    private static final double PLAYER_BODY_MAX_Z = 88;
-    private static final double PLAYER_HEAD_MIN_Z = 54;
-    private static final double PLAYER_HEAD_MAX_Z = 88;
-    private static final double BULLET_SPAWN_Z = 60;
-    private static final double BULLET_MUZZLE_FORWARD_OFFSET = 26;
-    private static final double BULLET_MUZZLE_SIDE_OFFSET = 0;
-    private static final double BULLET_MUZZLE_PITCH_OFFSET = 18;
+    private static final double PLAYER_BODY_MAX_Z = 64;
+    private static final double PLAYER_HEAD_MIN_Z = 42;
+    private static final double PLAYER_HEAD_MAX_Z = 64;
+    private static final double PLAYER_CROUCH_BODY_MAX_Z = 48;
+    private static final double PLAYER_CROUCH_HEAD_MIN_Z = 30;
+    private static final double PLAYER_CROUCH_HEAD_MAX_Z = 48;
+    private static final double PLAYER_EYE_HEIGHT_STAND = 54;
+    private static final double PLAYER_EYE_HEIGHT_CROUCH = 40;
+    private static final double BULLET_SPAWN_Z_STAND = 30;
+    private static final double BULLET_SPAWN_Z_CROUCH = 22;
+    private static final double BULLET_MUZZLE_FORWARD_OFFSET = 48;
+    private static final double BULLET_MUZZLE_SIDE_OFFSET = -12;
+    private static final double BULLET_MUZZLE_PITCH_OFFSET = 6;
+    private static final double BULLET_EYE_FORWARD_OFFSET = 12;
     private static final double FLY_VERTICAL_SPEED = 520;
     private static final double BULLET_HIT_RADIUS = 14;
     private static final double HEADSHOT_RADIUS = 10;
@@ -214,7 +223,7 @@ public class GameRoom {
 
         String trimmed = rawCommand.trim();
         if (trimmed.isEmpty()) {
-            addSystemChat("Usage: freeze on|off|toggle, money <amount>, fly on|off|toggle");
+            addSystemChat("Usage: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>");
             return;
         }
 
@@ -225,6 +234,7 @@ public class GameRoom {
             case "freeze" -> handleFreezeCommand(parts);
             case "money" -> handleMoneyCommand(requester, parts);
             case "fly" -> handleFlyCommand(requester, parts);
+            case "tp" -> handleTeleportCommand(requester, parts);
             default -> addSystemChat("Unknown command: " + command);
         }
     }
@@ -401,6 +411,7 @@ public class GameRoom {
             double wishDirectionX = cos * forward - sin * strafe;
             double wishDirectionY = sin * forward + cos * strafe;
             boolean sprinting = player.isSprint() && forward > 0;
+            boolean crouching = player.isCrouch();
             boolean airborne = player.getZ() > 0.001 && !player.isFlyEnabled();
             double maxSpeed = sprinting
                     ? PLAYER_MAX_SPEED * PLAYER_SPRINT_SPEED_MULTIPLIER
@@ -408,6 +419,10 @@ public class GameRoom {
             double acceleration = sprinting
                     ? PLAYER_ACCELERATION * PLAYER_SPRINT_ACCELERATION_MULTIPLIER
                     : PLAYER_ACCELERATION;
+            if (crouching) {
+                maxSpeed *= PLAYER_CROUCH_SPEED_MULTIPLIER;
+                acceleration *= PLAYER_CROUCH_ACCELERATION_MULTIPLIER;
+            }
 
             if (airborne) {
                 acceleration *= PLAYER_AIR_ACCELERATION_MULTIPLIER;
@@ -641,37 +656,29 @@ public class GameRoom {
             double finalAngle = player.getAngle() + spread;
             double finalPitch = player.getPitch();
 
-            double horizontalSpeed = Math.cos(finalPitch) * weapon.getBulletSpeed();
-            double velocityX = Math.cos(finalAngle) * horizontalSpeed;
-            double velocityY = Math.sin(finalAngle) * horizontalSpeed;
-            double velocityZ = Math.sin(finalPitch) * weapon.getBulletSpeed();
-
             double forwardX = Math.cos(player.getAngle());
             double forwardY = Math.sin(player.getAngle());
             double rightX = -Math.sin(player.getAngle());
             double rightY = Math.cos(player.getAngle());
 
-            double muzzleForwardOffset = Math.cos(finalPitch) * BULLET_MUZZLE_FORWARD_OFFSET;
-
-            double muzzleX = player.getX()
-                    + forwardX * muzzleForwardOffset
-                    + rightX * BULLET_MUZZLE_SIDE_OFFSET;
-
-            double muzzleY = player.getY()
-                    + forwardY * muzzleForwardOffset
-                    + rightY * BULLET_MUZZLE_SIDE_OFFSET;
-
-            double muzzleZ = player.getZ()
-                    + BULLET_SPAWN_Z
-                    + Math.sin(finalPitch) * BULLET_MUZZLE_PITCH_OFFSET;
+            double lookDirX = Math.cos(finalAngle) * Math.cos(finalPitch);
+            double lookDirY = Math.sin(finalAngle) * Math.cos(finalPitch);
+            double lookDirZ = Math.sin(finalPitch);
+            double eyeHeight = player.isCrouch() ? PLAYER_EYE_HEIGHT_CROUCH : PLAYER_EYE_HEIGHT_STAND;
+            double eyeX = player.getX() + lookDirX * BULLET_EYE_FORWARD_OFFSET;
+            double eyeY = player.getY() + lookDirY * BULLET_EYE_FORWARD_OFFSET;
+            double eyeZ = player.getZ() + eyeHeight;
+            double velocityX = lookDirX * weapon.getBulletSpeed();
+            double velocityY = lookDirY * weapon.getBulletSpeed();
+            double velocityZ = lookDirZ * weapon.getBulletSpeed();
 
             BulletState bullet = new BulletState(
                     "b-" + System.nanoTime() + "-" + i,
                     player.getId(),
                     weapon.getDamage(),
-                    muzzleX,
-                    muzzleY,
-                    muzzleZ,
+                    eyeX,
+                    eyeY,
+                    eyeZ,
                     velocityX,
                     velocityY,
                     velocityZ
@@ -724,8 +731,8 @@ public class GameRoom {
 
                 ClosestPointOnSegment closestPoint = closestPointOnBulletPathToPlayer(bullet, player);
                 double playerZ = player.getZ();
-                boolean headshot = isHeadshot(closestPoint, playerZ);
-                boolean bodyshot = isBodyshot(closestPoint, playerZ);
+                boolean headshot = isHeadshot(closestPoint, player, playerZ);
+                boolean bodyshot = isBodyshot(closestPoint, player, playerZ);
 
                 if (headshot || bodyshot) {
                     player.setHp(headshot ? 0 : player.getHp() - bullet.getDamage());
@@ -746,19 +753,24 @@ public class GameRoom {
         }
     }
 
-    private boolean isHeadshot(ClosestPointOnSegment closestPoint, double playerZ) {
+    private boolean isHeadshot(ClosestPointOnSegment closestPoint, PlayerState player, double playerZ) {
+        boolean crouching = player.isCrouch();
+        double headMin = crouching ? PLAYER_CROUCH_HEAD_MIN_Z : PLAYER_HEAD_MIN_Z;
+        double headMax = crouching ? PLAYER_CROUCH_HEAD_MAX_Z : PLAYER_HEAD_MAX_Z;
         return closestPoint.horizontalDistance <= HEADSHOT_RADIUS
-                && closestPoint.z >= playerZ + PLAYER_HEAD_MIN_Z
-                && closestPoint.z <= playerZ + PLAYER_HEAD_MAX_Z;
+                && closestPoint.z >= playerZ + headMin
+                && closestPoint.z <= playerZ + headMax;
     }
 
-    private boolean isBodyshot(ClosestPointOnSegment closestPoint, double playerZ) {
-        if (closestPoint.z < playerZ || closestPoint.z > playerZ + PLAYER_BODY_MAX_Z) {
+    private boolean isBodyshot(ClosestPointOnSegment closestPoint, PlayerState player, double playerZ) {
+        boolean crouching = player.isCrouch();
+        double bodyMaxZ = crouching ? PLAYER_CROUCH_BODY_MAX_Z : PLAYER_BODY_MAX_Z;
+        if (closestPoint.z < playerZ || closestPoint.z > playerZ + bodyMaxZ) {
             return false;
         }
 
         // Stricter near shoulders/neck to avoid grazing hits above the model.
-        double upperBodyStartZ = playerZ + PLAYER_BODY_MAX_Z - 16;
+        double upperBodyStartZ = playerZ + bodyMaxZ - 16;
         double allowedRadius = closestPoint.z >= upperBodyStartZ
                 ? BULLET_HIT_RADIUS * 0.72
                 : BULLET_HIT_RADIUS;
@@ -921,6 +933,59 @@ public class GameRoom {
         addSystemChat(requester.getName() + " fly: " + (enabled ? "ON" : "OFF"));
     }
 
+    private void handleTeleportCommand(PlayerState requester, String[] parts) {
+        if (parts.length < 2) {
+            addSystemChat("Usage: tp <x> <y> [z] | tp <playerName>");
+            return;
+        }
+
+        if (parts.length >= 3) {
+            try {
+                double x = Double.parseDouble(parts[1]);
+                double y = Double.parseDouble(parts[2]);
+                double z = parts.length >= 4 ? Double.parseDouble(parts[3]) : requester.getZ();
+
+                requester.setX(clamp(x, PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS));
+                requester.setY(clamp(y, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS));
+                requester.setZ(clamp(z, 0, MAX_BULLET_Z));
+                requester.setVelocityX(0);
+                requester.setVelocityY(0);
+                requester.setVelocityZ(0);
+                addSystemChat(requester.getName() + " teleported to (" +
+                        Math.round(requester.getX()) + ", " +
+                        Math.round(requester.getY()) + ", " +
+                        Math.round(requester.getZ()) + ")");
+                return;
+            } catch (NumberFormatException _ignored) {
+                // Fall through to player-name teleport usage.
+            }
+        }
+
+        String targetName = String.join(" ", java.util.Arrays.copyOfRange(parts, 1, parts.length)).trim();
+        if (targetName.isEmpty()) {
+            addSystemChat("Usage: tp <x> <y> [z] | tp <playerName>");
+            return;
+        }
+
+        PlayerState target = players.values().stream()
+                .filter(player -> player.getName().equalsIgnoreCase(targetName))
+                .findFirst()
+                .orElse(null);
+
+        if (target == null) {
+            addSystemChat("Player not found: " + targetName);
+            return;
+        }
+
+        requester.setX(target.getX());
+        requester.setY(target.getY());
+        requester.setZ(target.getZ());
+        requester.setVelocityX(0);
+        requester.setVelocityY(0);
+        requester.setVelocityZ(0);
+        addSystemChat(requester.getName() + " teleported to " + target.getName());
+    }
+
     private void addSystemChat(String text) {
         chatMessages.add(new ChatEvent(
                 "SERVER",
@@ -975,6 +1040,7 @@ public class GameRoom {
                                 player.getVelocityX(),
                                 player.getVelocityY(),
                                 player.getVelocityZ(),
+                                player.isCrouch(),
                                 player.getAngle(),
                                 player.getPitch(),
                                 player.getLastProcessedInputSequence(),
@@ -985,6 +1051,8 @@ public class GameRoom {
                                 player.getWeapon().getDisplayName(),
                                 player.getAmmo(),
                                 player.getWeapon().getMagazineSize(),
+                                player.isAds(),
+                                player.isShoot(),
                                 player.isReloading(),
                                 player.getUnlockedWeapons()
                                         .stream()

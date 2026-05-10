@@ -40,7 +40,9 @@ public class PlayerState {
     private boolean sprint;
     private boolean jump;
     private boolean descend;
+    private boolean crouch;
     private boolean shoot;
+    private boolean ads;
     private boolean reload;
     private boolean climb;
     private int weaponSlot;
@@ -91,7 +93,9 @@ public class PlayerState {
         this.sprint = input.isSprint();
         this.jump = input.isJump();
         this.descend = input.isDescend();
+        this.crouch = input.isCrouch();
         this.shoot = input.isShoot();
+        this.ads = input.isAds();
         this.reload = input.isReload();
         this.climb = input.isClimb();
         this.weaponSlot = input.getWeaponSlot();
@@ -129,7 +133,9 @@ public class PlayerState {
         this.sprint = false;
         this.jump = false;
         this.descend = false;
+        this.crouch = false;
         this.shoot = false;
+        this.ads = false;
         this.reload = false;
         this.climb = false;
     }
@@ -315,6 +321,10 @@ public class PlayerState {
         return shoot;
     }
 
+    public boolean isAds() {
+        return ads;
+    }
+
     public boolean isSprint() {
         return sprint;
     }
@@ -325,6 +335,10 @@ public class PlayerState {
 
     public boolean isDescend() {
         return descend;
+    }
+
+    public boolean isCrouch() {
+        return crouch;
     }
 
     public boolean isReload() {

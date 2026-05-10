@@ -11,7 +11,9 @@ public class ClientInputMessage {
     private boolean sprint;
     private boolean jump;
     private boolean descend;
+    private boolean crouch;
     private boolean shoot;
+    private boolean ads;
     private boolean reload;
     private boolean climb;
     private int weaponSlot;
@@ -55,8 +57,16 @@ public class ClientInputMessage {
         return descend;
     }
 
+    public boolean isCrouch() {
+        return crouch;
+    }
+
     public boolean isShoot() {
         return shoot;
+    }
+
+    public boolean isAds() {
+        return ads;
     }
 
     public boolean isReload() {
@@ -119,8 +129,16 @@ public class ClientInputMessage {
         this.descend = descend;
     }
 
+    public void setCrouch(boolean crouch) {
+        this.crouch = crouch;
+    }
+
     public void setShoot(boolean shoot) {
         this.shoot = shoot;
+    }
+
+    public void setAds(boolean ads) {
+        this.ads = ads;
     }
 
     public void setReload(boolean reload) {

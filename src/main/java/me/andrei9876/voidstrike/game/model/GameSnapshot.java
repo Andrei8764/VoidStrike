@@ -67,6 +67,7 @@ public class GameSnapshot {
             double velocityX,
             double velocityY,
             double velocityZ,
+            boolean crouching,
             double angle,
             double pitch,
             long lastProcessedInputSequence,
@@ -77,6 +78,8 @@ public class GameSnapshot {
             String weapon,
             int ammo,
             int magazineSize,
+            boolean ads,
+            boolean shooting,
             boolean reloading,
             List<String> unlockedWeapons
     ) {

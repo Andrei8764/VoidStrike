@@ -33,7 +33,9 @@ import {
     editorHandleKeyDown,
     saveEditorScene,
     setAnisotropyLevel,
+    setRemoteHandMountOffset,
     setPerformanceMode,
+    setRemoteBackMountTransform,
     setRenderScale,
     setTextureFilterMode,
     setToneMappingEnabled,
@@ -450,6 +452,10 @@ function handleKeyDown(event) {
         case "ShiftRight":
             keys.sprint = true;
             break;
+        case "ControlLeft":
+        case "ControlRight":
+            keys.crouch = true;
+            break;
         case "KeyC":
             keys.descend = true;
             break;
@@ -514,6 +520,10 @@ function handleKeyUp(event) {
         case "ShiftLeft":
         case "ShiftRight":
             keys.sprint = false;
+            break;
+        case "ControlLeft":
+        case "ControlRight":
+            keys.crouch = false;
             break;
         case "KeyC":
             keys.descend = false;
@@ -634,6 +644,63 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
+    if (command === "backmount") {
+        if (parts.length < 7) {
+            appendConsoleLine("usage: backmount <x> <y> <z> <rxDeg> <ryDeg> <rzDeg>");
+            return;
+        }
+
+        const x = Number(parts[1]);
+        const y = Number(parts[2]);
+        const z = Number(parts[3]);
+        const rxDeg = Number(parts[4]);
+        const ryDeg = Number(parts[5]);
+        const rzDeg = Number(parts[6]);
+
+        if (![x, y, z, rxDeg, ryDeg, rzDeg].every(Number.isFinite)) {
+            appendConsoleLine("backmount invalid numbers");
+            return;
+        }
+
+        setRemoteBackMountTransform({ x, y, z, rxDeg, ryDeg, rzDeg });
+        appendConsoleLine(`backmount x=${x.toFixed(2)} y=${y.toFixed(2)} z=${z.toFixed(2)} rx=${rxDeg.toFixed(1)} ry=${ryDeg.toFixed(1)} rz=${rzDeg.toFixed(1)}`);
+        return;
+    }
+
+    if (command === "handoffset") {
+        if (parts.length < 4) {
+            appendConsoleLine("usage: handoffset <x> <y> <z> [weapon]");
+            return;
+        }
+        const x = Number(parts[1]);
+        const y = Number(parts[2]);
+        const z = Number(parts[3]);
+        const weaponToken = (parts[4] || "").toLowerCase();
+        const weaponMap = {
+            smg: "SMG",
+            pistol: "Pistol",
+            shotgun: "Shotgun",
+            sniper: "Sniper",
+            rifle: "Rifle",
+            default: "default",
+            all: "default"
+        };
+        const weapon = weaponToken ? (weaponMap[weaponToken] || null) : null;
+
+        if (![x, y, z].every(Number.isFinite)) {
+            appendConsoleLine("handoffset invalid numbers");
+            return;
+        }
+        if (weaponToken && !weapon) {
+            appendConsoleLine("handoffset weapon must be: smg|pistol|shotgun|sniper|rifle|default");
+            return;
+        }
+
+        setRemoteHandMountOffset({ x, y, z, weapon });
+        appendConsoleLine(`handoffset ${weapon || "default"} x=${x.toFixed(2)} y=${y.toFixed(2)} z=${z.toFixed(2)}`);
+        return;
+    }
+
     if (command === "perfhud" || command === "debugfps") {
         let enabled = state.perfHudVisible;
         if (arg === "on" || arg === "1" || arg === "true") {
@@ -675,11 +742,11 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
-    if (command === "freeze" || command === "money" || command === "fly") {
+    if (command === "freeze" || command === "money" || command === "fly" || command === "tp") {
         const sent = sendAdminCommand(normalized);
         appendConsoleLine(sent ? "ok" : "socket not ready");
         return;
     }
 
-    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, wallhack on|off|toggle, performancemode on|off|toggle, perfhud on|off|toggle, editor on|off|save|clear");
+    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>, backmount <x> <y> <z> <rxDeg> <ryDeg> <rzDeg>, handoffset <x> <y> <z> [weapon], wallhack on|off|toggle, performancemode on|off|toggle, perfhud on|off|toggle, editor on|off|save|clear");
 }
