@@ -23,6 +23,7 @@ const OBSTACLE_HEIGHT = 84;
 const RENDER_COLLISION_OBSTACLES = false;
 const OBJ_WORLD_SCALE = 128;
 const MODEL_GROUND_EPSILON = 0.02;
+const PERFORMANCE_AUTOGRID_LIMIT = 56;
 const CHARACTER_HEIGHT = 58;
 const CHARACTER_YAW_OFFSET = Math.PI / 2;
 const REMOTE_RUN_SPEED_THRESHOLD = PLAYER_MAX_SPEED * 1.08;
@@ -118,30 +119,37 @@ const camera3d = new THREE.PerspectiveCamera(75, window.innerWidth / window.inne
 scene.add(camera3d);
 const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: true
+    antialias: false,
+    powerPreference: "high-performance"
 });
-renderer.setPixelRatio(Math.min((window.devicePixelRatio || 1) * 1.25, 2.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.12;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.sortObjects = true;
+
+function applyPerformanceModeSettings() {
+    const baseDpr = window.devicePixelRatio || 1;
+    const scale = Math.max(0.6, Math.min(1.5, state.renderScale || 1));
+    if (state.performanceMode) {
+        renderer.setPixelRatio(Math.min(baseDpr * scale, 1.25));
+        renderer.shadowMap.enabled = false;
+    } else {
+        renderer.setPixelRatio(Math.min(baseDpr * scale, 2));
+        renderer.shadowMap.enabled = false;
+    }
+    if (state.toneMappingEnabled) {
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+    } else {
+        renderer.toneMapping = THREE.NoToneMapping;
+        renderer.toneMappingExposure = 1.0;
+    }
+}
+applyPerformanceModeSettings();
 
 const ambientLight = new THREE.HemisphereLight(0xffffff, 0x355e2c, 1.1);
 scene.add(ambientLight);
 
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
 directionalLight.position.set(300, 600, 300);
-directionalLight.castShadow = true;
-directionalLight.shadow.mapSize.set(2048, 2048);
-directionalLight.shadow.camera.near = 50;
-directionalLight.shadow.camera.far = 2200;
-directionalLight.shadow.camera.left = -1200;
-directionalLight.shadow.camera.right = 1200;
-directionalLight.shadow.camera.top = 1200;
-directionalLight.shadow.camera.bottom = -1200;
-directionalLight.shadow.bias = -0.00015;
 scene.add(directionalLight);
 
 const ground = new THREE.Mesh(
@@ -150,7 +158,7 @@ const ground = new THREE.Mesh(
 );
 ground.rotation.x = -Math.PI / 2;
 ground.position.set(WORLD_WIDTH / 2, 0, WORLD_HEIGHT / 2);
-ground.receiveShadow = true;
+ground.receiveShadow = false;
 scene.add(ground);
 
 const obstacleGroup = new THREE.Group();
@@ -166,6 +174,8 @@ const worldModelGroup = new THREE.Group();
 scene.add(worldModelGroup);
 const worldPrimitiveGroup = new THREE.Group();
 scene.add(worldPrimitiveGroup);
+const editorPreviewGroup = new THREE.Group();
+scene.add(editorPreviewGroup);
 let wallhackEnabled = false;
 const editorRaycaster = new THREE.Raycaster();
 const editorGroundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -175,6 +185,14 @@ let editorModelCursor = 0;
 let editorSceneModels = [];
 let selectedEditorRoot = null;
 let selectedEditorModelIndex = -1;
+let editorLastPickSignature = "";
+let editorLastPickRoots = [];
+let editorLastPickCursor = 0;
+let editorDraftModel = null;
+let editorDraftRoot = null;
+let editorPreviewRoot = null;
+let editorPreviewModelPath = null;
+let editorPreviewRequestId = 0;
 
 const gltfLoader = new GLTFLoader();
 const remotePlayerRoots = new Map();
@@ -207,6 +225,10 @@ let modularCharacterTemplatePromise = null;
 
 let obstaclesCacheKey = "";
 let worldSceneLoaded = false;
+let worldSceneSignature = "";
+let worldSceneSyncInFlight = false;
+let lastWorldSceneSyncAtMs = 0;
+const WORLD_SCENE_SYNC_INTERVAL_MS = 1500;
 let lastAnimationTimeMs = performance.now();
 let localViewModelPath = null;
 let localViewModelObject = null;
@@ -302,6 +324,74 @@ export function setWallhackEnabled(enabled) {
     applyWallhackState();
 }
 
+export function setPerformanceMode(enabled) {
+    state.performanceMode = Boolean(enabled);
+    applyPerformanceModeSettings();
+    resizeCanvas();
+}
+
+export function setRenderScale(value) {
+    state.renderScale = Math.max(0.6, Math.min(1.5, Number(value) || 1));
+    applyPerformanceModeSettings();
+    resizeCanvas();
+}
+
+export function setToneMappingEnabled(enabled) {
+    state.toneMappingEnabled = Boolean(enabled);
+    applyPerformanceModeSettings();
+}
+
+function resolveAnisotropyLevel() {
+    const max = renderer.capabilities.getMaxAnisotropy();
+    if (state.anisotropyLevel === "max") {
+        return max;
+    }
+    const parsed = Number(state.anisotropyLevel);
+    if (!Number.isFinite(parsed)) {
+        return Math.min(8, max);
+    }
+    return Math.max(1, Math.min(parsed, max));
+}
+
+function retuneWorldMaterials() {
+    const targets = [worldModelGroup, editorPreviewGroup];
+    for (const group of targets) {
+        group.traverse(node => {
+            if (!node.isMesh || !node.material) {
+                return;
+            }
+            const materials = Array.isArray(node.material) ? node.material : [node.material];
+            for (const material of materials) {
+                if (!material?.map) {
+                    continue;
+                }
+                if (state.textureFilter === "crisp") {
+                    material.map.generateMipmaps = false;
+                    material.map.magFilter = THREE.NearestFilter;
+                    material.map.minFilter = THREE.NearestFilter;
+                } else {
+                    material.map.generateMipmaps = true;
+                    material.map.magFilter = THREE.LinearFilter;
+                    material.map.minFilter = THREE.LinearMipmapLinearFilter;
+                }
+                material.map.anisotropy = resolveAnisotropyLevel();
+                material.map.needsUpdate = true;
+                material.needsUpdate = true;
+            }
+        });
+    }
+}
+
+export function setTextureFilterMode(mode) {
+    state.textureFilter = mode === "crisp" ? "crisp" : "smooth";
+    retuneWorldMaterials();
+}
+
+export function setAnisotropyLevel(level) {
+    state.anisotropyLevel = level;
+    retuneWorldMaterials();
+}
+
 function updateEditorHud() {
     if (!editorHudElement) {
         return;
@@ -362,6 +452,133 @@ function setEditorSelection(root, index) {
     });
 }
 
+function applyDraftVisual(root) {
+    root.traverse(node => {
+        if (!node.isMesh || !node.material) {
+            return;
+        }
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        for (const material of materials) {
+            if (!material.emissive) {
+                continue;
+            }
+            material.userData = material.userData || {};
+            if (material.userData.editorDraftPrevEmissiveHex === undefined) {
+                material.userData.editorDraftPrevEmissiveHex = material.emissive.getHex();
+                material.userData.editorDraftPrevEmissiveIntensity = material.emissiveIntensity ?? 1;
+            }
+            material.emissive.setHex(0x22d3ee);
+            material.emissiveIntensity = 0.45;
+            material.needsUpdate = true;
+        }
+    });
+}
+
+function clearDraftVisual(root) {
+    if (!root) {
+        return;
+    }
+    root.traverse(node => {
+        if (!node.isMesh || !node.material) {
+            return;
+        }
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        for (const material of materials) {
+            if (!material.emissive || !material.userData) {
+                continue;
+            }
+            if (material.userData.editorDraftPrevEmissiveHex !== undefined) {
+                material.emissive.setHex(material.userData.editorDraftPrevEmissiveHex);
+                material.emissiveIntensity = material.userData.editorDraftPrevEmissiveIntensity ?? material.emissiveIntensity;
+                delete material.userData.editorDraftPrevEmissiveHex;
+                delete material.userData.editorDraftPrevEmissiveIntensity;
+                material.needsUpdate = true;
+            }
+        }
+    });
+}
+
+function cancelEditorDraft() {
+    if (editorDraftRoot) {
+        worldModelGroup.remove(editorDraftRoot);
+    }
+    editorDraftModel = null;
+    editorDraftRoot = null;
+    ensureEditorPreview();
+}
+
+function clearEditorPreview() {
+    if (editorPreviewRoot) {
+        editorPreviewGroup.remove(editorPreviewRoot);
+    }
+    editorPreviewRoot = null;
+    editorPreviewModelPath = null;
+}
+
+function applyPreviewVisual(root) {
+    root.traverse(node => {
+        if (!node.isMesh || !node.material) {
+            return;
+        }
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        for (const material of materials) {
+            material.userData = material.userData || {};
+            if (material.userData.editorPreviewPrevOpacity === undefined) {
+                material.userData.editorPreviewPrevOpacity = material.opacity ?? 1;
+                material.userData.editorPreviewPrevTransparent = material.transparent ?? false;
+            }
+            material.transparent = true;
+            material.opacity = 0.5;
+            if (material.emissive) {
+                material.emissive.setHex(0x22d3ee);
+                material.emissiveIntensity = 0.2;
+            }
+            material.needsUpdate = true;
+        }
+    });
+}
+
+function ensureEditorPreview() {
+    if (!state.editorMode || editorModelCatalog.length === 0) {
+        clearEditorPreview();
+        return;
+    }
+    if (editorDraftRoot) {
+        clearEditorPreview();
+        return;
+    }
+
+    const path = editorModelCatalog[editorModelCursor];
+    if (!path) {
+        clearEditorPreview();
+        return;
+    }
+    if (editorPreviewRoot && editorPreviewModelPath === path) {
+        return;
+    }
+
+    clearEditorPreview();
+    editorPreviewModelPath = path;
+    const requestId = ++editorPreviewRequestId;
+    const previewModel = {
+        enabled: true,
+        path,
+        position: { x: 0, y: 0, z: 0 },
+        rotationDegrees: { y: 0 },
+        scale: 1
+    };
+    loadWorldModel(previewModel, root => {
+        if (requestId !== editorPreviewRequestId || !state.editorMode || editorDraftRoot) {
+            worldModelGroup.remove(root);
+            return;
+        }
+        worldModelGroup.remove(root);
+        applyPreviewVisual(root);
+        editorPreviewRoot = root;
+        editorPreviewGroup.add(root);
+    }, worldModelGroup);
+}
+
 function getEditorTopLevelRoot(object) {
     let current = object;
     while (current && current.parent && current.parent !== worldModelGroup) {
@@ -376,6 +593,34 @@ function getEditorPointerNdc(pointerX = mouse.x, pointerY = mouse.y) {
     const x = (pointerX / Math.max(width, 1)) * 2 - 1;
     const y = -(pointerY / Math.max(height, 1)) * 2 + 1;
     return { x, y };
+}
+
+function resolveEditorPlacementPoint(ndc) {
+    editorRaycaster.setFromCamera(ndc, camera3d);
+
+    const placementTargets = [
+        ...worldModelGroup.children,
+        ...worldPrimitiveGroup.children
+    ].filter(object => object !== editorDraftRoot && object !== editorPreviewRoot);
+
+    const hits = editorRaycaster.intersectObjects(placementTargets, true);
+    if (hits.length > 0) {
+        return {
+            x: Math.round(hits[0].point.x),
+            y: Math.round(hits[0].point.y + MODEL_GROUND_EPSILON),
+            z: Math.round(hits[0].point.z)
+        };
+    }
+
+    if (!editorRaycaster.ray.intersectPlane(editorGroundPlane, editorGroundHit)) {
+        return null;
+    }
+
+    return {
+        x: Math.round(editorGroundHit.x),
+        y: 0,
+        z: Math.round(editorGroundHit.z)
+    };
 }
 
 async function ensureEditorModelCatalog() {
@@ -401,13 +646,10 @@ async function ensureEditorModelCatalog() {
     updateEditorHud();
 }
 
-function applyEditorTransformByKey(code) {
-    if (!selectedEditorRoot || selectedEditorModelIndex < 0) {
-        return false;
-    }
-
-    const modelDef = editorSceneModels[selectedEditorModelIndex];
-    if (!modelDef) {
+function applyEditorTransformByKey(code, modelDefOverride = null, rootOverride = null) {
+    const modelDef = modelDefOverride || editorSceneModels[selectedEditorModelIndex];
+    const targetRoot = rootOverride || selectedEditorRoot;
+    if (!modelDef || !targetRoot) {
         return false;
     }
 
@@ -449,7 +691,7 @@ function applyEditorTransformByKey(code) {
             return false;
     }
 
-    applyModelTransform(selectedEditorRoot, modelDef);
+    applyModelTransform(targetRoot, modelDef);
     return true;
 }
 
@@ -1198,8 +1440,8 @@ function applyModelTransform(root, modelDef) {
         if (!node.isMesh) {
             return;
         }
-        node.castShadow = true;
-        node.receiveShadow = true;
+        node.castShadow = false;
+        node.receiveShadow = false;
 
         const applyMaterialTuning = material => {
             if (!material) {
@@ -1209,10 +1451,16 @@ function applyModelTransform(root, modelDef) {
                 material.map.wrapS = THREE.RepeatWrapping;
                 material.map.wrapT = THREE.RepeatWrapping;
                 material.map.colorSpace = THREE.SRGBColorSpace;
-                material.map.generateMipmaps = true;
-                material.map.magFilter = THREE.LinearFilter;
-                material.map.minFilter = THREE.LinearMipmapLinearFilter;
-                material.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                if (state.textureFilter === "crisp") {
+                    material.map.generateMipmaps = false;
+                    material.map.magFilter = THREE.NearestFilter;
+                    material.map.minFilter = THREE.NearestFilter;
+                } else {
+                    material.map.generateMipmaps = true;
+                    material.map.magFilter = THREE.LinearFilter;
+                    material.map.minFilter = THREE.LinearMipmapLinearFilter;
+                }
+                material.map.anisotropy = resolveAnisotropyLevel();
                 material.map.needsUpdate = true;
             }
             if (material.color) {
@@ -1231,11 +1479,6 @@ function applyModelTransform(root, modelDef) {
             material.polygonOffset = isFoliage;
             material.polygonOffsetFactor = isFoliage ? 1 : 0;
             material.polygonOffsetUnits = isFoliage ? 1 : 0;
-            if (isFoliage && material.map) {
-                material.map.generateMipmaps = false;
-                material.map.magFilter = THREE.LinearFilter;
-                material.map.minFilter = THREE.LinearFilter;
-            }
             material.needsUpdate = true;
         };
 
@@ -1247,7 +1490,7 @@ function applyModelTransform(root, modelDef) {
     });
 }
 
-function loadObjModel(modelDef, onLoaded) {
+function loadObjModel(modelDef, onLoaded, targetGroup = worldModelGroup) {
     const mtlPath = modelDef.mtlPath || modelDef.path.replace(/\.obj$/i, ".mtl");
     const lastSlashIndex = mtlPath.lastIndexOf("/");
     const mtlDir = lastSlashIndex >= 0 ? mtlPath.slice(0, lastSlashIndex + 1) : "/";
@@ -1269,7 +1512,7 @@ function loadObjModel(modelDef, onLoaded) {
                 modelDef.path,
                 obj => {
                     applyModelTransform(obj, modelDef);
-                    worldModelGroup.add(obj);
+                    targetGroup.add(obj);
                     if (onLoaded) {
                         onLoaded(obj);
                     }
@@ -1285,7 +1528,7 @@ function loadObjModel(modelDef, onLoaded) {
                 modelDef.path,
                 obj => {
                     applyModelTransform(obj, modelDef);
-                    worldModelGroup.add(obj);
+                    targetGroup.add(obj);
                     if (onLoaded) {
                         onLoaded(obj);
                     }
@@ -1297,10 +1540,10 @@ function loadObjModel(modelDef, onLoaded) {
     );
 }
 
-function loadWorldModel(modelDef, onLoaded) {
+function loadWorldModel(modelDef, onLoaded, targetGroup = worldModelGroup) {
     const path = (modelDef.path || "").toLowerCase();
     if (path.endsWith(".obj")) {
-        loadObjModel(modelDef, onLoaded);
+        loadObjModel(modelDef, onLoaded, targetGroup);
         return;
     }
 
@@ -1309,7 +1552,7 @@ function loadWorldModel(modelDef, onLoaded) {
         gltf => {
             const root = gltf.scene;
             applyModelTransform(root, modelDef);
-            worldModelGroup.add(root);
+            targetGroup.add(root);
             if (onLoaded) {
                 onLoaded(root);
             }
@@ -1321,116 +1564,141 @@ function loadWorldModel(modelDef, onLoaded) {
     );
 }
 
+function applyWorldSceneConfig(sceneConfig) {
+    let modelDefs = Array.isArray(sceneConfig.models) ? sceneConfig.models : [];
+    const primitiveDefs = Array.isArray(sceneConfig.primitives) ? sceneConfig.primitives : [];
+    if (sceneConfig.autoPopulateAllObjs) {
+        const spacingX = 260;
+        const spacingZ = 260;
+        const columns = 12;
+        const startX = 420;
+        const startZ = 420;
+        const generatedDefs = ALL_OBJ_MODEL_FILES.slice(0, PERFORMANCE_AUTOGRID_LIMIT).map((fileName, index) => {
+            const col = index % columns;
+            const row = Math.floor(index / columns);
+            return {
+                enabled: true,
+                path: `/models/${fileName}`,
+                position: { x: startX + col * spacingX, y: 0, z: startZ + row * spacingZ },
+                rotationDegrees: { y: (index % 4) * 90 },
+                scale: 1.0
+            };
+        });
+        modelDefs = [...modelDefs, ...generatedDefs];
+    }
+
+    worldPrimitiveGroup.clear();
+    for (const primitiveDef of primitiveDefs) {
+        if ((primitiveDef.type || "box") !== "box") {
+            continue;
+        }
+
+        const size = primitiveDef.size || {};
+        const position = primitiveDef.position || {};
+        const rotation = primitiveDef.rotation || {};
+        const material = primitiveDef.material || {};
+
+        const width = size.x ?? 100;
+        const height = size.y ?? 80;
+        const depth = size.z ?? 100;
+
+        const mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(width, height, depth),
+            new THREE.MeshStandardMaterial({
+                color: typeof material.color === "number" ? material.color : 0x8b5a2b,
+                roughness: material.roughness ?? 0.88,
+                metalness: material.metalness ?? 0.05
+            })
+        );
+
+        mesh.position.set(
+            position.x ?? 0,
+            position.y ?? height / 2,
+            position.z ?? 0
+        );
+        mesh.rotation.set(
+            rotation.x ?? 0,
+            rotation.y ?? 0,
+            rotation.z ?? 0
+        );
+
+        worldPrimitiveGroup.add(mesh);
+    }
+
+    editorSceneModels = [];
+    clearEditorSelectionHighlight();
+    cancelEditorDraft();
+    worldModelGroup.clear();
+
+    for (const modelDef of modelDefs) {
+        if (modelDef.enabled === false) {
+            continue;
+        }
+
+        if (!modelDef.path) {
+            continue;
+        }
+
+        const normalizedModelDef = {
+            enabled: true,
+            path: modelDef.path,
+            position: {
+                x: modelDef.position?.x ?? 0,
+                y: modelDef.position?.y ?? 0,
+                z: modelDef.position?.z ?? 0
+            },
+            rotationDegrees: {
+                y: modelDef.rotationDegrees?.y ?? 0
+            },
+            scale: typeof modelDef.scale === "number" ? modelDef.scale : 1
+        };
+        const nextIndex = editorSceneModels.length;
+        editorSceneModels.push(normalizedModelDef);
+        loadWorldModel(normalizedModelDef, root => {
+            root.userData.editorModelIndex = nextIndex;
+        });
+    }
+
+    retuneWorldMaterials();
+    applyWallhackState();
+}
+
+async function syncWorldSceneIfNeeded(force = false) {
+    const now = performance.now();
+    if (!force && now - lastWorldSceneSyncAtMs < WORLD_SCENE_SYNC_INTERVAL_MS) {
+        return;
+    }
+    if (worldSceneSyncInFlight) {
+        return;
+    }
+    worldSceneSyncInFlight = true;
+    lastWorldSceneSyncAtMs = now;
+
+    try {
+        const response = await fetch("/world/scene.json", { cache: "no-store" });
+        if (!response.ok) {
+            return;
+        }
+        const sceneText = await response.text();
+        if (!force && sceneText === worldSceneSignature) {
+            return;
+        }
+        worldSceneSignature = sceneText;
+        const sceneConfig = JSON.parse(sceneText);
+        applyWorldSceneConfig(sceneConfig);
+        worldSceneLoaded = true;
+    } catch (_error) {
+    } finally {
+        worldSceneSyncInFlight = false;
+    }
+}
+
 async function loadWorldScene() {
     if (worldSceneLoaded) {
         return;
     }
 
-    worldSceneLoaded = true;
-
-    try {
-        const response = await fetch("/world/scene.json", { cache: "no-store" });
-
-        if (!response.ok) {
-            return;
-        }
-
-        const sceneConfig = await response.json();
-        let modelDefs = Array.isArray(sceneConfig.models) ? sceneConfig.models : [];
-        const primitiveDefs = Array.isArray(sceneConfig.primitives) ? sceneConfig.primitives : [];
-        if (sceneConfig.autoPopulateAllObjs) {
-            const spacingX = 260;
-            const spacingZ = 260;
-            const columns = 12;
-            const startX = 420;
-            const startZ = 420;
-            const generatedDefs = ALL_OBJ_MODEL_FILES.map((fileName, index) => {
-                const col = index % columns;
-                const row = Math.floor(index / columns);
-                return {
-                    enabled: true,
-                    path: `/models/${fileName}`,
-                    position: { x: startX + col * spacingX, y: 0, z: startZ + row * spacingZ },
-                    rotationDegrees: { y: (index % 4) * 90 },
-                    scale: 1.0
-                };
-            });
-            modelDefs = [...modelDefs, ...generatedDefs];
-        }
-
-        for (const primitiveDef of primitiveDefs) {
-            if ((primitiveDef.type || "box") !== "box") {
-                continue;
-            }
-
-            const size = primitiveDef.size || {};
-            const position = primitiveDef.position || {};
-            const rotation = primitiveDef.rotation || {};
-            const material = primitiveDef.material || {};
-
-            const width = size.x ?? 100;
-            const height = size.y ?? 80;
-            const depth = size.z ?? 100;
-
-            const mesh = new THREE.Mesh(
-                new THREE.BoxGeometry(width, height, depth),
-                new THREE.MeshStandardMaterial({
-                    color: typeof material.color === "number" ? material.color : 0x8b5a2b,
-                    roughness: material.roughness ?? 0.88,
-                    metalness: material.metalness ?? 0.05
-                })
-            );
-
-            mesh.position.set(
-                position.x ?? 0,
-                position.y ?? height / 2,
-                position.z ?? 0
-            );
-            mesh.rotation.set(
-                rotation.x ?? 0,
-                rotation.y ?? 0,
-                rotation.z ?? 0
-            );
-
-            worldPrimitiveGroup.add(mesh);
-        }
-
-        editorSceneModels = [];
-        clearEditorSelectionHighlight();
-        worldModelGroup.clear();
-
-        for (const modelDef of modelDefs) {
-            if (modelDef.enabled === false) {
-                continue;
-            }
-
-            if (!modelDef.path) {
-                continue;
-            }
-
-            const normalizedModelDef = {
-                enabled: true,
-                path: modelDef.path,
-                position: {
-                    x: modelDef.position?.x ?? 0,
-                    y: modelDef.position?.y ?? 0,
-                    z: modelDef.position?.z ?? 0
-                },
-                rotationDegrees: {
-                    y: modelDef.rotationDegrees?.y ?? 0
-                },
-                scale: typeof modelDef.scale === "number" ? modelDef.scale : 1
-            };
-            const nextIndex = editorSceneModels.length;
-            editorSceneModels.push(normalizedModelDef);
-            loadWorldModel(normalizedModelDef, root => {
-                root.userData.editorModelIndex = nextIndex;
-            });
-        }
-    } catch (_error) {
-    }
-
-    applyWallhackState();
+    await syncWorldSceneIfNeeded(true);
 }
 
 function syncRemotePlayers() {
@@ -1722,10 +1990,15 @@ export async function toggleEditorMode() {
     state.editorMode = !state.editorMode;
     if (state.editorMode) {
         await ensureEditorModelCatalog();
+        mouse.down = false;
+        state.ads = false;
+        ensureEditorPreview();
     }
     updateEditorHud();
     if (!state.editorMode) {
         clearEditorSelectionHighlight();
+        cancelEditorDraft();
+        clearEditorPreview();
     }
 }
 
@@ -1735,9 +2008,10 @@ export function cycleEditorModel(direction) {
     }
     editorModelCursor = (editorModelCursor + direction + editorModelCatalog.length) % editorModelCatalog.length;
     updateEditorHud();
+    ensureEditorPreview();
 }
 
-export function editorHandleCanvasClick(clientX, clientY) {
+export function editorHandleCanvasClick(clientX, clientY, options = {}) {
     if (!state.editorMode) {
         return false;
     }
@@ -1745,44 +2019,90 @@ export function editorHandleCanvasClick(clientX, clientY) {
     const pointerX = typeof clientX === "number" ? (clientX - rect.left) : mouse.x;
     const pointerY = typeof clientY === "number" ? (clientY - rect.top) : mouse.y;
     const ndc = getEditorPointerNdc(pointerX, pointerY);
-    editorRaycaster.setFromCamera(ndc, camera3d);
+    const selectOnly = Boolean(options.selectOnly);
 
+    if (editorDraftModel && editorDraftRoot) {
+        clearEditorSelectionHighlight();
+        const placement = resolveEditorPlacementPoint(ndc);
+        if (!placement) {
+            return true;
+        }
+        editorDraftModel.position.x = placement.x;
+        editorDraftModel.position.y = placement.y;
+        editorDraftModel.position.z = placement.z;
+        applyModelTransform(editorDraftRoot, editorDraftModel);
+        return true;
+    }
+
+    if (!selectOnly) {
+        clearEditorSelectionHighlight();
+        const placement = resolveEditorPlacementPoint(ndc);
+        if (!placement) {
+            return true;
+        }
+
+        const path = editorModelCatalog[editorModelCursor];
+        if (!path) {
+            return true;
+        }
+        editorDraftModel = {
+            enabled: true,
+            path,
+            position: {
+                x: placement.x,
+                y: placement.y,
+                z: placement.z
+            },
+            rotationDegrees: { y: 0 },
+            scale: 1
+        };
+        clearEditorPreview();
+        loadWorldModel(editorDraftModel, root => {
+            editorDraftRoot = root;
+            applyDraftVisual(root);
+        });
+        return true;
+    }
+
+    editorRaycaster.setFromCamera(ndc, camera3d);
     const modelHits = editorRaycaster.intersectObjects(worldModelGroup.children, true);
     if (modelHits.length > 0) {
-        const topRoot = getEditorTopLevelRoot(modelHits[0].object);
-        if (topRoot && typeof topRoot.userData.editorModelIndex === "number") {
-            setEditorSelection(topRoot, topRoot.userData.editorModelIndex);
-            return true;
+        const uniqueRoots = [];
+        const seen = new Set();
+        for (const hit of modelHits) {
+            const root = getEditorTopLevelRoot(hit.object);
+            if (!root || seen.has(root.uuid)) {
+                continue;
+            }
+            seen.add(root.uuid);
+            uniqueRoots.push(root);
+        }
+
+        if (uniqueRoots.length > 0) {
+            const pickSignature = uniqueRoots.map(root => root.uuid).join("|");
+            const cycleRequested = Boolean(options.cycleSelection);
+
+            if (!cycleRequested || pickSignature !== editorLastPickSignature) {
+                editorLastPickSignature = pickSignature;
+                editorLastPickRoots = uniqueRoots;
+                editorLastPickCursor = 0;
+            } else {
+                editorLastPickCursor = (editorLastPickCursor + 1) % editorLastPickRoots.length;
+            }
+
+            const topRoot = editorLastPickRoots[editorLastPickCursor];
+            if (topRoot && typeof topRoot.userData.editorModelIndex === "number") {
+                if (!cycleRequested && topRoot === selectedEditorRoot) {
+                    clearEditorSelectionHighlight();
+                    return true;
+                }
+                setEditorSelection(topRoot, topRoot.userData.editorModelIndex);
+                return true;
+            }
         }
     }
 
     clearEditorSelectionHighlight();
-
-    if (!editorRaycaster.ray.intersectPlane(editorGroundPlane, editorGroundHit)) {
-        return true;
-    }
-
-    const path = editorModelCatalog[editorModelCursor];
-    if (!path) {
-        return true;
-    }
-    const newModel = {
-        enabled: true,
-        path,
-        position: {
-            x: Math.round(editorGroundHit.x),
-            y: 0,
-            z: Math.round(editorGroundHit.z)
-        },
-        rotationDegrees: { y: 0 },
-        scale: 1
-    };
-    const nextIndex = editorSceneModels.length;
-    editorSceneModels.push(newModel);
-    loadWorldModel(newModel, root => {
-        root.userData.editorModelIndex = nextIndex;
-        setEditorSelection(root, nextIndex);
-    });
     return true;
 }
 
@@ -1791,7 +2111,41 @@ export function editorHandleKeyDown(event) {
         return false;
     }
 
+    if (editorDraftModel && editorDraftRoot) {
+        const transformedDraft = applyEditorTransformByKey(event.code, editorDraftModel, editorDraftRoot);
+        if (transformedDraft) {
+            return true;
+        }
+    }
+
+    if (event.code === "Enter") {
+        if (editorDraftModel && editorDraftRoot) {
+            clearDraftVisual(editorDraftRoot);
+            const nextIndex = editorSceneModels.length;
+            editorSceneModels.push(editorDraftModel);
+            editorDraftRoot.userData.editorModelIndex = nextIndex;
+            clearEditorSelectionHighlight();
+            editorDraftModel = null;
+            editorDraftRoot = null;
+            ensureEditorPreview();
+            return true;
+        }
+        return false;
+    }
+
+    if (event.code === "Escape") {
+        if (editorDraftModel || editorDraftRoot) {
+            cancelEditorDraft();
+            return true;
+        }
+        return false;
+    }
+
     if (event.code === "Delete" || event.code === "Backspace") {
+        if (editorDraftModel || editorDraftRoot) {
+            cancelEditorDraft();
+            return true;
+        }
         if (selectedEditorRoot && selectedEditorModelIndex >= 0) {
             worldModelGroup.remove(selectedEditorRoot);
             editorSceneModels.splice(selectedEditorModelIndex, 1);
@@ -1848,17 +2202,51 @@ export async function saveEditorScene() {
     }
 }
 
+export function clearEditorSceneModels() {
+    cancelEditorDraft();
+    clearEditorSelectionHighlight();
+    worldModelGroup.clear();
+    editorSceneModels = [];
+    editorLastPickSignature = "";
+    editorLastPickRoots = [];
+    editorLastPickCursor = 0;
+    if (state.editorMode) {
+        ensureEditorPreview();
+    } else {
+        clearEditorPreview();
+    }
+}
+
+function updateEditorPreviewPosition() {
+    if (!state.editorMode || !editorPreviewRoot || editorDraftRoot) {
+        return;
+    }
+    const ndc = getEditorPointerNdc();
+    const placement = resolveEditorPlacementPoint(ndc);
+    if (!placement) {
+        return;
+    }
+    editorPreviewRoot.position.x = placement.x;
+    editorPreviewRoot.position.y = placement.y;
+    editorPreviewRoot.position.z = placement.z;
+}
+
 export function render() {
     if (!worldSceneLoaded) {
         void loadWorldScene();
+    } else {
+        void syncWorldSceneIfNeeded(false);
     }
 
     syncObstacles();
     syncRemotePlayers();
     syncBullets();
-    const self = getSelfPlayer();
+    updateEditorPreviewPosition();
+    const self = state.editorMode ? null : getSelfPlayer();
     syncLocalViewModel(self);
     updateLocalViewModel(self);
+    localViewModelPivot.visible = !state.editorMode;
+    localBodyPivot.visible = !state.editorMode;
     updateCameraFromSelf();
     renderer.render(scene, camera3d);
 }

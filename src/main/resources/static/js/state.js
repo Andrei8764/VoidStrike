@@ -21,6 +21,13 @@ export const state = {
     shopVisible: false,
     consoleVisible: false,
     wallhackEnabled: false,
+    performanceMode: true,
+    settingsVisible: false,
+    showFps: false,
+    renderScale: 1,
+    toneMappingEnabled: true,
+    textureFilter: "smooth",
+    anisotropyLevel: "max",
     editorMode: false,
 
     lastSelfAmmo: null,

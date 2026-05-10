@@ -643,6 +643,65 @@ input {
     backdrop-filter: blur(8px);
 }
 
+#settingsPanel {
+    position: fixed;
+    right: 18px;
+    top: 160px;
+    z-index: 40;
+    width: 230px;
+    padding: 12px;
+    border: 1px solid rgba(56, 189, 248, 0.48);
+    border-radius: 10px;
+    background: rgba(2, 6, 23, 0.86);
+    color: #e2e8f0;
+    backdrop-filter: blur(8px);
+}
+
+.settingsTitle {
+    color: #38bdf8;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+
+.settingsRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+    font-size: 13px;
+}
+
+.settingsColumn {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+#settingsPanel input[type="range"],
+#settingsPanel select {
+    width: 100%;
+}
+
+.settingsHint {
+    margin-top: 8px;
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+#fpsBadge {
+    position: fixed;
+    right: 18px;
+    top: 88px;
+    z-index: 41;
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    border-radius: 8px;
+    background: rgba(2, 6, 23, 0.86);
+    color: #f8fafc;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
 #chatMessages {
     height: 140px;
     padding: 8px 10px;

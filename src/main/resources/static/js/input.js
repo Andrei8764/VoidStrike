@@ -5,10 +5,19 @@ import {
     devConsoleElement,
     devConsoleInputElement,
     devConsoleOutputElement,
+    fpsBadgeElement,
     joinButton,
     nameError,
     nameInput,
     scoreboardElement,
+    settingAnisotropyElement,
+    settingPerformanceModeElement,
+    settingRenderScaleElement,
+    settingRenderScaleValueElement,
+    settingShowFpsElement,
+    settingTextureFilterElement,
+    settingToneMappingElement,
+    settingsPanelElement,
     shopCategoryTabs,
     weaponShopButtons,
     weaponShopElement
@@ -17,10 +26,16 @@ import { getSelfPlayer, keys, mouse, state } from "./state.js";
 import { resumeAudio } from "./audio.js";
 import { joinGame, sendAdminCommand, sendChatMessage } from "./websocket.js";
 import {
+    clearEditorSceneModels,
     cycleEditorModel,
     editorHandleCanvasClick,
     editorHandleKeyDown,
     saveEditorScene,
+    setAnisotropyLevel,
+    setPerformanceMode,
+    setRenderScale,
+    setTextureFilterMode,
+    setToneMappingEnabled,
     setWallhackEnabled,
     toggleEditorMode,
     updateMouseWorldPosition
@@ -150,7 +165,10 @@ export function registerInputHandlers() {
     canvas.addEventListener("mousedown", event => {
         if (state.editorMode && event.button === 0) {
             event.preventDefault();
-            editorHandleCanvasClick(event.clientX, event.clientY);
+            editorHandleCanvasClick(event.clientX, event.clientY, {
+                cycleSelection: event.shiftKey,
+                selectOnly: event.altKey
+            });
             return;
         }
 
@@ -188,6 +206,75 @@ export function registerInputHandlers() {
     canvas.addEventListener("contextmenu", event => {
         event.preventDefault();
     });
+
+    canvas.addEventListener("wheel", event => {
+        if (!state.editorMode) {
+            return;
+        }
+        event.preventDefault();
+        if (event.deltaY < 0) {
+            cycleEditorModel(-1);
+        } else if (event.deltaY > 0) {
+            cycleEditorModel(1);
+        }
+    }, { passive: false });
+
+    if (settingPerformanceModeElement) {
+        settingPerformanceModeElement.checked = state.performanceMode;
+        settingPerformanceModeElement.addEventListener("change", () => {
+            setPerformanceMode(settingPerformanceModeElement.checked);
+        });
+    }
+
+    if (settingShowFpsElement) {
+        settingShowFpsElement.checked = state.showFps;
+        settingShowFpsElement.addEventListener("change", () => {
+            setShowFpsEnabled(settingShowFpsElement.checked);
+        });
+    }
+
+    if (settingRenderScaleElement) {
+        settingRenderScaleElement.value = String(state.renderScale ?? 1);
+        if (settingRenderScaleValueElement) {
+            settingRenderScaleValueElement.textContent = `${Number(settingRenderScaleElement.value).toFixed(2)}x`;
+        }
+        settingRenderScaleElement.addEventListener("input", () => {
+            const value = Number(settingRenderScaleElement.value);
+            if (settingRenderScaleValueElement) {
+                settingRenderScaleValueElement.textContent = `${value.toFixed(2)}x`;
+            }
+        });
+        settingRenderScaleElement.addEventListener("change", () => {
+            setRenderScale(Number(settingRenderScaleElement.value));
+        });
+    }
+
+    if (settingToneMappingElement) {
+        settingToneMappingElement.checked = state.toneMappingEnabled;
+        settingToneMappingElement.addEventListener("change", () => {
+            setToneMappingEnabled(settingToneMappingElement.checked);
+        });
+    }
+
+    if (settingTextureFilterElement) {
+        settingTextureFilterElement.value = state.textureFilter || "smooth";
+        settingTextureFilterElement.addEventListener("change", () => {
+            setTextureFilterMode(settingTextureFilterElement.value);
+        });
+    }
+
+    if (settingAnisotropyElement) {
+        settingAnisotropyElement.value = state.anisotropyLevel || "max";
+        settingAnisotropyElement.addEventListener("change", () => {
+            setAnisotropyLevel(settingAnisotropyElement.value);
+        });
+    }
+
+    if (fpsBadgeElement) {
+        fpsBadgeElement.addEventListener("click", () => {
+            setShowFpsEnabled(!state.showFps);
+        });
+    }
 }
 
 function buyWeaponImmediately(weaponSlot) {
@@ -245,6 +332,12 @@ function setShopCategory(category) {
 }
 
 function handleKeyDown(event) {
+    if (event.code === "F7") {
+        event.preventDefault();
+        setSettingsVisible(!state.settingsVisible);
+        return;
+    }
+
     if (event.code === "F6") {
         event.preventDefault();
         void toggleEditorMode();
@@ -252,6 +345,8 @@ function handleKeyDown(event) {
     }
 
     if (state.editorMode) {
+        mouse.down = false;
+        state.ads = false;
         if (event.ctrlKey && event.code === "KeyS") {
             event.preventDefault();
             void saveEditorScene()
@@ -445,6 +540,40 @@ function setConsoleVisible(visible) {
     }
 }
 
+function setSettingsVisible(visible) {
+    state.settingsVisible = visible;
+    settingsPanelElement?.classList.toggle("hidden", !visible);
+    if (!visible) {
+        return;
+    }
+
+    settingPerformanceModeElement.checked = state.performanceMode;
+    settingShowFpsElement.checked = state.showFps;
+    if (settingRenderScaleElement) {
+        settingRenderScaleElement.value = String(state.renderScale ?? 1);
+    }
+    if (settingRenderScaleValueElement) {
+        settingRenderScaleValueElement.textContent = `${Number(state.renderScale ?? 1).toFixed(2)}x`;
+    }
+    if (settingToneMappingElement) {
+        settingToneMappingElement.checked = state.toneMappingEnabled;
+    }
+    if (settingTextureFilterElement) {
+        settingTextureFilterElement.value = state.textureFilter || "smooth";
+    }
+    if (settingAnisotropyElement) {
+        settingAnisotropyElement.value = state.anisotropyLevel || "max";
+    }
+}
+
+function setShowFpsEnabled(enabled) {
+    state.showFps = Boolean(enabled);
+    fpsBadgeElement?.classList.toggle("hidden", !state.showFps);
+    if (settingShowFpsElement) {
+        settingShowFpsElement.checked = state.showFps;
+    }
+}
+
 function appendConsoleLine(text) {
     if (!devConsoleOutputElement) {
         return;
@@ -479,6 +608,20 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
+    if (command === "performancemode" || command === "perf") {
+        let enabled = state.performanceMode;
+        if (arg === "on" || arg === "1" || arg === "true") {
+            enabled = true;
+        } else if (arg === "off" || arg === "0" || arg === "false") {
+            enabled = false;
+        } else {
+            enabled = !enabled;
+        }
+        setPerformanceMode(enabled);
+        appendConsoleLine(`performanceMode ${enabled ? "ON" : "OFF"}`);
+        return;
+    }
+
     if (command === "editor") {
         if (arg === "on" && !state.editorMode) {
             void toggleEditorMode();
@@ -496,6 +639,11 @@ function runConsoleCommand(rawCommand) {
                 .catch(() => appendConsoleLine("scene save failed"));
             return;
         }
+        if (arg === "clear") {
+            clearEditorSceneModels();
+            appendConsoleLine("editor scene cleared (run 'editor save' to persist)");
+            return;
+        }
         void toggleEditorMode();
         appendConsoleLine(`editor ${state.editorMode ? "OFF" : "ON"}`);
         return;
@@ -507,5 +655,5 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
-    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, wallhack on|off|toggle, editor on|off|save");
+    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, wallhack on|off|toggle, performancemode on|off|toggle, editor on|off|save|clear");
 }

@@ -163,14 +163,57 @@
 
 <div id="devConsole" class="hidden" aria-hidden="true">
     <div id="devConsoleOutput"></div>
-    <input id="devConsoleInput" type="text" maxlength="200" placeholder="~ freeze on | money 5000 | wallhack on" autocomplete="off">
+    <input id="devConsoleInput" type="text" maxlength="200" placeholder="~ freeze on | money 5000 | wallhack on | perf on" autocomplete="off">
 </div>
+
+<div id="settingsPanel" class="hidden" aria-hidden="true">
+    <div class="settingsTitle">Settings</div>
+    <label class="settingsRow">
+        <input id="settingPerformanceMode" type="checkbox">
+        <span>Performance Mode</span>
+    </label>
+    <label class="settingsRow">
+        <input id="settingShowFps" type="checkbox">
+        <span>Show FPS</span>
+    </label>
+    <label class="settingsRow settingsColumn">
+        <span>Render Scale</span>
+        <input id="settingRenderScale" type="range" min="0.6" max="1.5" step="0.05" value="1">
+        <span id="settingRenderScaleValue">1.00x</span>
+    </label>
+    <label class="settingsRow">
+        <input id="settingToneMapping" type="checkbox" checked>
+        <span>Tone Mapping</span>
+    </label>
+    <label class="settingsRow settingsColumn">
+        <span>Texture Filter</span>
+        <select id="settingTextureFilter">
+            <option value="smooth">Smooth</option>
+            <option value="crisp">Crisp</option>
+        </select>
+    </label>
+    <label class="settingsRow settingsColumn">
+        <span>Anisotropy</span>
+        <select id="settingAnisotropy">
+            <option value="2">2x</option>
+            <option value="4">4x</option>
+            <option value="8">8x</option>
+            <option value="16">16x</option>
+            <option value="max">Max</option>
+        </select>
+    </label>
+    <div class="settingsHint">F7 close</div>
+</div>
+
+<button id="fpsBadge" class="hidden" type="button" aria-label="FPS counter">FPS: --</button>
 
 <div id="editorHud" class="hidden" aria-hidden="true">
     <div><strong>Constructor Mode</strong></div>
     <div id="editorSelectedModel">Model: -</div>
-    <div>F6 toggle | [ ] model</div>
-    <div>Click select/place | Del remove</div>
+    <div>F6 toggle | [ ] / wheel model</div>
+    <div>Click select/place-draft | Shift+Click cycle</div>
+    <div>Enter confirm | Esc cancel draft</div>
+    <div>Del remove</div>
     <div>Arrows move | Q/E rotate</div>
     <div>R/F up/down | Z/X scale</div>
     <div>Ctrl+S save | L duplicate</div>
