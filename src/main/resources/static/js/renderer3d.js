@@ -2,6 +2,32 @@ import * as THREE from "/vendor/three/build/three.module.js";
 import { GLTFLoader } from "/vendor/three/examples/jsm/loaders/GLTFLoader.js";
 import { OBJLoader } from "/vendor/three/examples/jsm/loaders/OBJLoader.js";
 import { MTLLoader } from "/vendor/three/examples/jsm/loaders/MTLLoader.js";
+import { createCollisionDebugController } from "./renderer3d/collisionDebug.js";
+import {
+    applyEditorTransformByKey as applyEditorTransformByKeyController,
+    ensureEditorModelCatalog as ensureEditorModelCatalogController,
+    getEditorPointerNdc as getEditorPointerNdcController,
+    resolveEditorPlacementPoint as resolveEditorPlacementPointController,
+    updateEditorHud as updateEditorHudController
+} from "./renderer3d/editorController.js";
+import {
+    createWeaponPlaceholder as createWeaponPlaceholderHelper,
+    getHipViewModelPosByWeapon as getHipViewModelPosByWeaponHelper,
+    getLocalWeaponOffsetByName as getLocalWeaponOffsetByNameHelper,
+    getRemoteWeaponAnchorOffsetByName as getRemoteWeaponAnchorOffsetByNameHelper,
+    getRemoteWeaponMuzzleLiftByName as getRemoteWeaponMuzzleLiftByNameHelper,
+    getWeaponModelPathByName as getWeaponModelPathByNameHelper,
+    getWeaponScaleByName as getWeaponScaleByNameHelper,
+    normalizeWeaponModel as normalizeWeaponModelHelper
+} from "./renderer3d/weapons.js";
+import {
+    clamp as clampMath,
+    lerpAngle as lerpAngleMath,
+    normalizeAngle as normalizeAngleMath
+} from "./renderer3d/remoteAnimation.js";
+import { createViewmodelRuntime } from "./renderer3d/viewmodelRuntime.js";
+import { createRemotePlayersRuntime } from "./renderer3d/remotePlayers.js";
+import { createEditorRuntime } from "./renderer3d/editorRuntime.js";
 import { adsScopeElement, canvas, crosshairElement, editorHudElement, editorSelectedModelElement, nameLabelsElement } from "./dom.js";
 import {
     getRenderableBullets,
@@ -204,9 +230,7 @@ const worldInstancedGroup = new THREE.Group();
 scene.add(worldInstancedGroup);
 const worldPrimitiveGroup = new THREE.Group();
 scene.add(worldPrimitiveGroup);
-const collisionDebugGroup = new THREE.Group();
-collisionDebugGroup.visible = false;
-scene.add(collisionDebugGroup);
+let collisionDebugGroup = null;
 const editorPreviewGroup = new THREE.Group();
 scene.add(editorPreviewGroup);
 let wallhackEnabled = false;
@@ -228,10 +252,6 @@ let editorPreviewModelPath = null;
 let editorPreviewRequestId = 0;
 
 const gltfLoader = new GLTFLoader();
-const remotePlayerRoots = new Map();
-const remotePlayerModelPaths = new Map();
-const remotePlayerAnimPhase = new Map();
-const remotePlayerLabels = new Map();
 const remotePlayerWeaponModelPaths = new Map();
 const remotePlayerWeaponAnchors = new Map();
 const remotePlayerWeaponAim = new Map();
@@ -239,14 +259,9 @@ const remotePlayerLastAmmo = new Map();
 const remotePlayerShotRaise = new Map();
 const remotePlayerWeaponRecoil = new Map();
 const remotePlayerRightArm = new Map();
-const remotePlayerMoveFactor = new Map();
-const remotePlayerGaitWeight = new Map();
 const remotePlayerArmRotX = new Map();
 const remotePlayerLegRotX = new Map();
-const remotePlayerBodyYaw = new Map();
-const remotePlayerLocomotionState = new Map();
 const remotePlayerWeaponRot = new Map();
-const remotePlayerMoving = new Map();
 const remotePlayerWeaponCombatBlend = new Map();
 const remotePlayerWeaponInBackMount = new Map();
 const remotePlayerLastShotAt = new Map();
@@ -266,19 +281,10 @@ let worldSceneSignature = "";
 let worldSceneSyncInFlight = false;
 let lastWorldSceneSyncAtMs = 0;
 const WORLD_SCENE_SYNC_INTERVAL_MS = 1500;
-let collisionDebugBuilt = false;
-let collisionDebugEntries = [];
-let collisionDebugHoverLabel = null;
-const collisionDebugRaycaster = new THREE.Raycaster();
-const collisionDebugCenterNdc = new THREE.Vector2(0, 0);
-const collisionProfileRaycaster = new THREE.Raycaster();
-let lastAnimationTimeMs = performance.now();
-let localViewModelPath = null;
-let localViewModelObject = null;
-let localFirstPersonBody = null;
-let localWeaponOffsetX = WEAPON_MODEL_LOCAL_X;
-let localWeaponOffsetY = WEAPON_MODEL_LOCAL_Y;
-let localWeaponOffsetZ = WEAPON_MODEL_LOCAL_Z;
+let collisionDebugController = null;
+let viewmodelRuntime = null;
+let remotePlayersRuntime = null;
+let editorRuntime = null;
 const localViewModelPivot = new THREE.Group();
 camera3d.add(localViewModelPivot);
 localViewModelPivot.position.copy(VIEWMODEL_HIP_POS);
@@ -440,32 +446,6 @@ function readScale(scale) {
     };
 }
 
-function readUniformScale(scale) {
-    if (typeof scale === "number" && Number.isFinite(scale) && scale > 0) {
-        return scale;
-    }
-    const parsed = readScale(scale);
-    const x = Number(parsed.x);
-    const y = Number(parsed.y);
-    const z = Number(parsed.z);
-    if (Number.isFinite(x) && x > 0 && Number.isFinite(y) && y > 0 && Number.isFinite(z) && z > 0) {
-        return (x + y + z) / 3;
-    }
-    return 1;
-}
-
-function readModelYawDegrees(modelDef) {
-    const yawDegValue = Number(modelDef?.rotationDegrees?.y);
-    if (Number.isFinite(yawDegValue)) {
-        return yawDegValue;
-    }
-    const yawRadValue = Number(modelDef?.rotation?.y);
-    if (Number.isFinite(yawRadValue)) {
-        return yawRadValue * (180 / Math.PI);
-    }
-    return 0;
-}
-
 function createMissingModelPlaceholder(modelDef) {
     const size = modelDef.placeholderSize || { x: 120, y: 100, z: 120 };
     const position = modelDef.position || {};
@@ -623,208 +603,55 @@ export function setRemoteHandMountOffset(config) {
     }
 }
 
+collisionDebugController = createCollisionDebugController({
+    THREE,
+    camera3d,
+    canvas,
+    worldModelGroup,
+    nameLabelsElement,
+    getEditorTopLevelRoot,
+    getEditorModelByIndex: index => editorSceneModels[index] || null
+});
+collisionDebugGroup = collisionDebugController.group;
+scene.add(collisionDebugGroup);
+
 export function getCollisionProfileSuggestionAtCrosshair() {
-    collisionProfileRaycaster.setFromCamera(collisionDebugCenterNdc, camera3d);
-    const hits = collisionProfileRaycaster.intersectObjects(worldModelGroup.children, true);
-    if (hits.length === 0) {
-        return null;
-    }
-
-    const root = getEditorTopLevelRoot(hits[0].object);
-    if (!root) {
-        return null;
-    }
-
-    root.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(root);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-
-    const index = root.userData?.editorModelIndex;
-    const modelDef = Number.isInteger(index) && index >= 0 ? editorSceneModels[index] : null;
-    const modelScale = Number(modelDef?.scale ?? 1) || 1;
-    const divisor = Math.abs(modelScale) > 0.0001 ? Math.abs(modelScale) : 1;
-
-    const halfWidth = size.x / 2 / divisor;
-    const halfDepth = size.z / 2 / divisor;
-    const height = size.y / divisor;
-    const modelPath = String(root.userData?.modelPath || modelDef?.path || "").toLowerCase();
-    if (!modelPath) {
-        return null;
-    }
-
-    return {
-        value: modelPath,
-        halfWidth: Number(halfWidth.toFixed(2)),
-        halfDepth: Number(halfDepth.toFixed(2)),
-        height: Number(height.toFixed(2)),
-        yawOffsetDeg: 0,
-        offsetLocalX: 0,
-        offsetLocalY: 0,
-        solid: true,
-        walkable: true
-    };
-}
-
-function readCollisionTemplate(node, fallback) {
-    return {
-        halfWidth: Number(node?.halfWidth ?? fallback.halfWidth),
-        halfDepth: Number(node?.halfDepth ?? fallback.halfDepth),
-        height: Number(node?.height ?? fallback.height),
-        solid: node?.solid ?? fallback.solid,
-        walkable: node?.walkable ?? fallback.walkable,
-        yawOffsetDeg: Number(node?.yawOffsetDeg ?? fallback.yawOffsetDeg ?? 0),
-        offsetLocalX: Number(node?.offsetLocalX ?? fallback.offsetLocalX ?? 0),
-        offsetLocalY: Number(node?.offsetLocalY ?? fallback.offsetLocalY ?? 0)
-    };
-}
-
-function resolveCollisionTemplateForPath(modelPath, profiles) {
-    const normalized = (modelPath || "").toLowerCase();
-    const defaultTemplate = profiles.default || {
-        halfWidth: 48, halfDepth: 48, height: 64, solid: true, walkable: true, yawOffsetDeg: 0, offsetLocalX: 0, offsetLocalY: 0
-    };
-    const exact = Array.isArray(profiles.exact) ? profiles.exact : [];
-    const exactMatch = exact.find(item => (item?.value || "").toLowerCase() === normalized);
-    if (exactMatch) {
-        return readCollisionTemplate(exactMatch, defaultTemplate);
-    }
-    const prefix = Array.isArray(profiles.prefix) ? profiles.prefix : [];
-    const prefixMatch = prefix.find(item => normalized.startsWith((item?.value || "").toLowerCase()));
-    if (prefixMatch) {
-        return readCollisionTemplate(prefixMatch, defaultTemplate);
-    }
-    return defaultTemplate;
-}
-
-async function buildCollisionDebugBoxes() {
-    collisionDebugHoverLabel?.remove();
-    collisionDebugHoverLabel = null;
-    collisionDebugEntries = [];
-    collisionDebugGroup.clear();
-    try {
-        const [sceneResponse, profileResponse] = await Promise.all([
-            fetch("/world/scene.json", { cache: "no-store" }),
-            fetch("/world/collision-profiles.json", { cache: "no-store" })
-        ]);
-        if (!sceneResponse.ok || !profileResponse.ok) {
-            return;
-        }
-        const sceneConfig = await sceneResponse.json();
-        const profiles = await profileResponse.json();
-        const models = Array.isArray(sceneConfig.models) ? sceneConfig.models : [];
-
-        for (const modelDef of models) {
-            if (modelDef?.enabled === false || !modelDef?.path) {
-                continue;
-            }
-            const template = resolveCollisionTemplateForPath(modelDef.path, profiles);
-            if (!template?.solid) {
-                continue;
-            }
-
-            const modelScale = readUniformScale(modelDef.scale);
-            const width = Math.max(1, template.halfWidth * 2 * modelScale);
-            const depth = Math.max(1, template.halfDepth * 2 * modelScale);
-            const height = Math.max(1, template.height * modelScale);
-            const geometry = new THREE.BoxGeometry(width, height, depth);
-            const material = new THREE.MeshBasicMaterial({
-                color: template.walkable ? 0x22d3ee : 0xef4444,
-                wireframe: true,
-                transparent: true,
-                opacity: 0.48,
-                depthWrite: false
-            });
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.position.set(
-                modelDef.position?.x ?? 0,
-                (modelDef.position?.y ?? 0) + (height / 2),
-                modelDef.position?.z ?? 0
-            );
-            const yawDeg = readModelYawDegrees(modelDef);
-            const yawOffsetDeg = Number(template?.yawOffsetDeg ?? 0);
-            const finalYawDeg = yawDeg + yawOffsetDeg;
-            const finalYawRad = (finalYawDeg * Math.PI) / 180;
-            mesh.rotation.y = (yawDeg * Math.PI) / 180;
-            mesh.rotation.y += (yawOffsetDeg * Math.PI) / 180;
-            const offsetLocalX = Number(template?.offsetLocalX ?? 0) * modelScale;
-            const offsetLocalY = Number(template?.offsetLocalY ?? 0) * modelScale;
-            const cosYaw = Math.cos(finalYawRad);
-            const sinYaw = Math.sin(finalYawRad);
-            mesh.position.x += (offsetLocalX * cosYaw) - (offsetLocalY * sinYaw);
-            mesh.position.z += (offsetLocalX * sinYaw) + (offsetLocalY * cosYaw);
-            mesh.userData.collisionModelName = String(modelDef.path || "").replace("/models/", "");
-            mesh.userData.collisionYawDeg = Math.round(finalYawDeg);
-            collisionDebugGroup.add(mesh);
-            collisionDebugEntries.push({ mesh });
-        }
-        collisionDebugBuilt = true;
-    } catch (_error) {
-    }
+    return collisionDebugController.getCollisionProfileSuggestionAtCrosshair();
 }
 
 export async function setCollisionDebugVisible(visible) {
-    const next = Boolean(visible);
-    if (next) {
-        await buildCollisionDebugBoxes();
-    }
-    collisionDebugGroup.visible = next;
-    if (!next) {
-        if (collisionDebugHoverLabel) {
-            collisionDebugHoverLabel.style.display = "none";
-        }
-    }
+    await collisionDebugController.setCollisionDebugVisible(visible);
 }
 
 function updateCollisionDebugLabels() {
-    if (!collisionDebugGroup.visible || collisionDebugEntries.length === 0 || !nameLabelsElement) {
-        return;
-    }
-
-    if (!collisionDebugHoverLabel) {
-        collisionDebugHoverLabel = document.createElement("div");
-        collisionDebugHoverLabel.className = "nameLabel";
-        collisionDebugHoverLabel.style.display = "none";
-        nameLabelsElement.appendChild(collisionDebugHoverLabel);
-    }
-
-    collisionDebugRaycaster.setFromCamera(collisionDebugCenterNdc, camera3d);
-    const hits = collisionDebugRaycaster.intersectObjects(collisionDebugGroup.children, false);
-    if (hits.length === 0) {
-        collisionDebugHoverLabel.style.display = "none";
-        return;
-    }
-
-    const hitMesh = hits[0].object;
-    const worldPoint = hits[0].point.clone();
-    worldPoint.y += 8;
-    const projected = worldPoint.project(camera3d);
-    const visible = projected.z > -1 && projected.z < 1;
-    if (!visible) {
-        collisionDebugHoverLabel.style.display = "none";
-        return;
-    }
-
-    const screenX = (projected.x * 0.5 + 0.5) * canvas.clientWidth;
-    const screenY = (-projected.y * 0.5 + 0.5) * canvas.clientHeight;
-    const modelName = hitMesh.userData?.collisionModelName || "unknown";
-    const yawDeg = Number(hitMesh.userData?.collisionYawDeg ?? 0);
-    collisionDebugHoverLabel.textContent = `${modelName} | ry=${yawDeg}`;
-    collisionDebugHoverLabel.style.display = "block";
-    collisionDebugHoverLabel.style.left = `${screenX}px`;
-    collisionDebugHoverLabel.style.top = `${screenY}px`;
+    collisionDebugController?.updateCollisionDebugLabels();
 }
 
-function updateEditorHud() {
-    if (!editorHudElement) {
-        return;
-    }
-    editorHudElement.classList.toggle("hidden", !state.editorMode);
-    if (editorSelectedModelElement) {
-        const current = editorModelCatalog[editorModelCursor] || "-";
-        editorSelectedModelElement.textContent = `Model: ${current.replace("/models/", "")}`;
-    }
-}
+viewmodelRuntime = createViewmodelRuntime({
+    state,
+    crosshairElement,
+    adsScopeElement,
+    VIEWMODEL_ADS_POS,
+    VIEWMODEL_ADS_ROT,
+    VIEWMODEL_HIP_ROT,
+    VIEWMODEL_BLEND_SPEED,
+    ADS_WEAPON_OFFSET_X,
+    ADS_WEAPON_OFFSET_Y,
+    ADS_WEAPON_OFFSET_Z,
+    loadWeaponTemplate,
+    createLocalViewModelFallback,
+    loadModularCharacterTemplate,
+    getWeaponPathForSelf,
+    getWeaponScaleByName,
+    getLocalWeaponOffsetByName,
+    getHipViewModelPosByWeapon,
+    normalizeWeaponModel,
+    localViewModelPivot,
+    localBodyPivot,
+    WEAPON_MODEL_ROT_X,
+    WEAPON_MODEL_ROT_Y,
+    WEAPON_MODEL_ROT_Z
+});
 
 function clearEditorSelectionHighlight() {
     if (!selectedEditorRoot) {
@@ -1010,114 +837,6 @@ function getEditorTopLevelRoot(object) {
     return current?.parent === worldModelGroup ? current : null;
 }
 
-function getEditorPointerNdc(pointerX = mouse.x, pointerY = mouse.y) {
-    const width = canvas.clientWidth || window.innerWidth;
-    const height = canvas.clientHeight || window.innerHeight;
-    const x = (pointerX / Math.max(width, 1)) * 2 - 1;
-    const y = -(pointerY / Math.max(height, 1)) * 2 + 1;
-    return { x, y };
-}
-
-function resolveEditorPlacementPoint(ndc) {
-    editorRaycaster.setFromCamera(ndc, camera3d);
-
-    const placementTargets = [
-        ...worldModelGroup.children,
-        ...worldPrimitiveGroup.children
-    ].filter(object => object !== editorDraftRoot && object !== editorPreviewRoot);
-
-    const hits = editorRaycaster.intersectObjects(placementTargets, true);
-    if (hits.length > 0) {
-        return {
-            x: Math.round(hits[0].point.x),
-            y: Math.round(hits[0].point.y + MODEL_GROUND_EPSILON),
-            z: Math.round(hits[0].point.z)
-        };
-    }
-
-    if (!editorRaycaster.ray.intersectPlane(editorGroundPlane, editorGroundHit)) {
-        return null;
-    }
-
-    return {
-        x: Math.round(editorGroundHit.x),
-        y: 0,
-        z: Math.round(editorGroundHit.z)
-    };
-}
-
-async function ensureEditorModelCatalog() {
-    if (editorModelCatalog.length > 0) {
-        return;
-    }
-    try {
-        const response = await fetch("/api/world/models", { cache: "no-store" });
-        if (!response.ok) {
-            return;
-        }
-        const list = await response.json();
-        if (Array.isArray(list) && list.length > 0) {
-            editorModelCatalog = list;
-            editorModelCursor = 0;
-            updateEditorHud();
-            return;
-        }
-    } catch (_error) {
-    }
-    editorModelCatalog = ALL_OBJ_MODEL_FILES.map(name => `/models/${name}`);
-    editorModelCursor = 0;
-    updateEditorHud();
-}
-
-function applyEditorTransformByKey(code, modelDefOverride = null, rootOverride = null) {
-    const modelDef = modelDefOverride || editorSceneModels[selectedEditorModelIndex];
-    const targetRoot = rootOverride || selectedEditorRoot;
-    if (!modelDef || !targetRoot) {
-        return false;
-    }
-
-    const moveStep = 30;
-    const rotStep = 15;
-    const scaleStep = 0.05;
-    switch (code) {
-        case "ArrowUp":
-            modelDef.position.z -= moveStep;
-            break;
-        case "ArrowDown":
-            modelDef.position.z += moveStep;
-            break;
-        case "ArrowLeft":
-            modelDef.position.x -= moveStep;
-            break;
-        case "ArrowRight":
-            modelDef.position.x += moveStep;
-            break;
-        case "KeyR":
-            modelDef.position.y += moveStep * 0.5;
-            break;
-        case "KeyF":
-            modelDef.position.y -= moveStep * 0.5;
-            break;
-        case "KeyQ":
-            modelDef.rotationDegrees.y -= rotStep;
-            break;
-        case "KeyE":
-            modelDef.rotationDegrees.y += rotStep;
-            break;
-        case "KeyZ":
-            modelDef.scale = Math.max(0.05, (modelDef.scale || 1) - scaleStep);
-            break;
-        case "KeyX":
-            modelDef.scale = Math.min(20, (modelDef.scale || 1) + scaleStep);
-            break;
-        default:
-            return false;
-    }
-
-    applyModelTransform(targetRoot, modelDef);
-    return true;
-}
-
 function getCharacterModelPathForPlayer(player) {
     return `/models/${SINGLE_CHARACTER_MODEL}`;
 }
@@ -1243,129 +962,39 @@ function loadModularCharacterTemplate() {
 }
 
 function getWeaponModelPathByName(weaponName) {
-    switch (weaponName) {
-        case "Pistol":
-            return "/models/blaster-a.glb";
-        case "Rifle":
-            return "/models/blaster-f.glb";
-        case "SMG":
-            return "/models/blaster-j.glb";
-        case "Shotgun":
-            return "/models/blaster-n.glb";
-        case "Sniper":
-            return "/models/blaster-q.glb";
-        default:
-            return "/models/blaster.glb";
-    }
+    return getWeaponModelPathByNameHelper(weaponName);
 }
 
 function getWeaponScaleByName(weaponName) {
-    switch (weaponName) {
-        case "SMG":
-            return WEAPON_MODEL_SCALE * 0.50;
-        case "Pistol":
-            return WEAPON_MODEL_SCALE * 0.50;
-        case "Shotgun":
-            return WEAPON_MODEL_SCALE * 0.50;
-        case "Sniper":
-            return WEAPON_MODEL_SCALE * 0.50;
-        default:
-            return WEAPON_MODEL_SCALE;
-    }
+    return getWeaponScaleByNameHelper(weaponName, WEAPON_MODEL_SCALE);
 }
 
 function getLocalWeaponOffsetByName(weaponName) {
-    switch (weaponName) {
-        case "SMG":
-            return { x: WEAPON_MODEL_LOCAL_X + 0.20, y: WEAPON_MODEL_LOCAL_Y - 0.08, z: WEAPON_MODEL_LOCAL_Z - 0.12 };
-        case "Pistol":
-            return { x: WEAPON_MODEL_LOCAL_X + 0.20, y: WEAPON_MODEL_LOCAL_Y - 0.08, z: WEAPON_MODEL_LOCAL_Z - 0.12 };
-        case "Shotgun":
-            return { x: WEAPON_MODEL_LOCAL_X + 0.20, y: WEAPON_MODEL_LOCAL_Y - 0.08, z: WEAPON_MODEL_LOCAL_Z - 0.12 };
-        case "Sniper":
-            return { x: WEAPON_MODEL_LOCAL_X + 0.20, y: WEAPON_MODEL_LOCAL_Y - 0.08, z: WEAPON_MODEL_LOCAL_Z - 0.12 };
-        default:
-            return { x: WEAPON_MODEL_LOCAL_X + 0.14, y: WEAPON_MODEL_LOCAL_Y - 0.06, z: WEAPON_MODEL_LOCAL_Z - 0.10 };
-    }
+    return getLocalWeaponOffsetByNameHelper(weaponName, {
+        x: WEAPON_MODEL_LOCAL_X,
+        y: WEAPON_MODEL_LOCAL_Y,
+        z: WEAPON_MODEL_LOCAL_Z
+    });
 }
 
 function getHipViewModelPosByWeapon(weaponName) {
-    switch (weaponName) {
-        case "Rifle":
-            return new THREE.Vector3(0.66, -0.58, -1.05);
-        case "Pistol":
-            return new THREE.Vector3(0.68, -0.60, -1.08);
-        case "Shotgun":
-            return new THREE.Vector3(0.70, -0.62, -1.10);
-        case "Sniper":
-            return new THREE.Vector3(0.72, -0.63, -1.12);
-        default:
-            return VIEWMODEL_HIP_POS;
-    }
+    return getHipViewModelPosByWeaponHelper(weaponName, THREE, VIEWMODEL_HIP_POS);
 }
 
 function getRemoteWeaponAnchorOffsetByName(weaponName) {
-    return REMOTE_WEAPON_HAND_OFFSETS[weaponName] || REMOTE_WEAPON_HAND_OFFSETS.default;
+    return getRemoteWeaponAnchorOffsetByNameHelper(weaponName, REMOTE_WEAPON_HAND_OFFSETS);
 }
 
 function getRemoteWeaponMuzzleLiftByName(weaponName) {
-    return REMOTE_WEAPON_MUZZLE_LIFT[weaponName] ?? REMOTE_WEAPON_MUZZLE_LIFT.default;
+    return getRemoteWeaponMuzzleLiftByNameHelper(weaponName, REMOTE_WEAPON_MUZZLE_LIFT);
 }
 
 function normalizeWeaponModel(root, targetLength) {
-    const box = new THREE.Box3().setFromObject(root);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z);
-
-    if (maxDim <= 0.0001) {
-        return;
-    }
-
-    const scale = targetLength / maxDim;
-    root.scale.setScalar(scale);
-
-    const normalizedBox = new THREE.Box3().setFromObject(root);
-    const center = new THREE.Vector3();
-    normalizedBox.getCenter(center);
-
-    root.position.x -= center.x;
-    root.position.y -= center.y;
-    root.position.z -= center.z;
+    normalizeWeaponModelHelper(root, targetLength, THREE);
 }
 
 function createWeaponPlaceholder() {
-    return new THREE.Mesh(
-        new THREE.BoxGeometry(14, 4, 3),
-        new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.55, metalness: 0.18 })
-    );
-}
-
-function ensureWeaponAnchor(root, player) {
-    if (remotePlayerWeaponAnchors.has(player.id)) {
-        return remotePlayerWeaponAnchors.get(player.id);
-    }
-
-    const weaponAnchor = new THREE.Group();
-    weaponAnchor.position.set(12.2, CHARACTER_HEIGHT * 0.69, 5.8);
-    const baseWeapon = createWeaponPlaceholder();
-    baseWeapon.name = "baseWeapon";
-    baseWeapon.position.set(WEAPON_MODEL_LOCAL_X, WEAPON_MODEL_LOCAL_Y, WEAPON_MODEL_LOCAL_Z);
-    baseWeapon.rotation.set(WEAPON_MODEL_ROT_X, WEAPON_MODEL_ROT_Y, WEAPON_MODEL_ROT_Z);
-    weaponAnchor.add(baseWeapon);
-
-    if (DEBUG_WEAPON_ANCHOR) {
-        const pivot = new THREE.Mesh(
-            new THREE.SphereGeometry(3.2, 12, 12),
-            new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x0ea5e9, emissiveIntensity: 1.0 })
-        );
-        pivot.name = "weaponPivotDebug";
-        weaponAnchor.add(pivot);
-    }
-
-    root.add(weaponAnchor);
-    remotePlayerWeaponAnchors.set(player.id, weaponAnchor);
-    return weaponAnchor;
+    return createWeaponPlaceholderHelper(THREE);
 }
 
 function ensureLimbRig(root, player) {
@@ -1479,179 +1108,23 @@ function getWeaponPathForSelf(self) {
 }
 
 function syncLocalViewModel(self) {
-    if (!self) {
-        if (localViewModelObject) {
-            localViewModelPivot.remove(localViewModelObject);
-            localViewModelObject = null;
-            localViewModelPath = null;
-        }
-        if (localFirstPersonBody) {
-            localBodyPivot.remove(localFirstPersonBody);
-            localFirstPersonBody = null;
-        }
-        if (adsScopeElement) {
-            adsScopeElement.classList.add("hidden");
-        }
-        return;
-    }
-
-    const weaponPath = getWeaponPathForSelf(self);
-    const weaponScale = getWeaponScaleByName(self.weapon);
-    const localWeaponOffset = getLocalWeaponOffsetByName(self.weapon);
-    localWeaponOffsetX = localWeaponOffset.x;
-    localWeaponOffsetY = localWeaponOffset.y;
-    localWeaponOffsetZ = localWeaponOffset.z;
-    if (!weaponPath) {
-        return;
-    }
-
-    if (localViewModelPath === weaponPath && localViewModelObject) {
-        return;
-    }
-
-    if (!localViewModelObject) {
-        localViewModelObject = createLocalViewModelFallback();
-        localViewModelPivot.add(localViewModelObject);
-    }
-
-    localViewModelPath = weaponPath;
-    loadWeaponTemplate(weaponPath)
-        .then(template => {
-            if (localViewModelPath !== weaponPath) {
-                return;
-            }
-
-            const model = template.clone(true);
-            model.rotation.set(WEAPON_MODEL_ROT_X, WEAPON_MODEL_ROT_Y, WEAPON_MODEL_ROT_Z);
-            normalizeWeaponModel(model, weaponScale);
-            model.position.set(localWeaponOffsetX, localWeaponOffsetY, localWeaponOffsetZ);
-            model.traverse(node => {
-                if (!node.isMesh || !node.material) {
-                    return;
-                }
-                if (Array.isArray(node.material)) {
-                    node.material = node.material.map(material => material?.clone?.() ?? material);
-                } else if (node.material.clone) {
-                    node.material = node.material.clone();
-                }
-                node.frustumCulled = false;
-                node.renderOrder = 50;
-                if (Array.isArray(node.material)) {
-                    for (const material of node.material) {
-                        if (!material) {
-                            continue;
-                        }
-                        // First-person weapon should not clip into player body/world.
-                        material.depthTest = false;
-                        material.depthWrite = false;
-                        material.needsUpdate = true;
-                    }
-                } else {
-                    // First-person weapon should not clip into player body/world.
-                    node.material.depthTest = false;
-                    node.material.depthWrite = false;
-                    node.material.needsUpdate = true;
-                }
-            });
-
-            if (localViewModelObject) {
-                localViewModelPivot.remove(localViewModelObject);
-            }
-
-            localViewModelObject = model;
-            localViewModelPivot.add(localViewModelObject);
-        })
-        .catch(() => {
-        });
-
-    if (!localFirstPersonBody) {
-        loadModularCharacterTemplate()
-            .then(template => {
-                if (!getSelfPlayer()) {
-                    return;
-                }
-
-                const model = template.clone(true);
-                model.traverse(node => {
-                    if (!node.isMesh || !node.material) {
-                        return;
-                    }
-                    node.frustumCulled = false;
-                    node.renderOrder = 45;
-                });
-
-                model.scale.setScalar(0.42);
-                model.position.set(0.0, -0.58, -0.15);
-                model.rotation.set(0, Math.PI, 0);
-
-                localFirstPersonBody = model;
-                localBodyPivot.add(localFirstPersonBody);
-            })
-            .catch(() => {
-            });
-    }
+    viewmodelRuntime.syncLocalViewModel(self, getSelfPlayer);
 }
 
 function updateLocalViewModel(self) {
-    if (self?.reloading && state.ads) {
-        state.ads = false;
-    }
-
-    const adsWeight = state.ads ? 1 : 0;
-    const targetHipPos = getHipViewModelPosByWeapon(self?.weapon);
-    const targetPos = adsWeight > 0.5 ? VIEWMODEL_ADS_POS : targetHipPos;
-    const targetRot = adsWeight > 0.5 ? VIEWMODEL_ADS_ROT : VIEWMODEL_HIP_ROT;
-
-    localViewModelPivot.position.lerp(targetPos, VIEWMODEL_BLEND_SPEED);
-    localViewModelPivot.rotation.x += (targetRot.x - localViewModelPivot.rotation.x) * VIEWMODEL_BLEND_SPEED;
-    localViewModelPivot.rotation.y += (targetRot.y - localViewModelPivot.rotation.y) * VIEWMODEL_BLEND_SPEED;
-    localViewModelPivot.rotation.z += (targetRot.z - localViewModelPivot.rotation.z) * VIEWMODEL_BLEND_SPEED;
-
-    if (localViewModelObject) {
-        const recoilOffset = Math.min(1, state.recoilKick / 18);
-        const adsOffsetWeight = state.ads ? 1 : 0;
-        const targetWeaponX = localWeaponOffsetX + ADS_WEAPON_OFFSET_X * adsOffsetWeight;
-        const targetWeaponY = localWeaponOffsetY + ADS_WEAPON_OFFSET_Y * adsOffsetWeight;
-        const targetWeaponZ = localWeaponOffsetZ + ADS_WEAPON_OFFSET_Z * adsOffsetWeight;
-
-        localViewModelObject.position.x += (targetWeaponX - localViewModelObject.position.x) * VIEWMODEL_BLEND_SPEED;
-        localViewModelObject.position.z += ((targetWeaponZ - recoilOffset * 0.22) - localViewModelObject.position.z) * VIEWMODEL_BLEND_SPEED;
-        localViewModelObject.position.y += ((targetWeaponY + recoilOffset * 0.06) - localViewModelObject.position.y) * VIEWMODEL_BLEND_SPEED;
-    }
-
-    if (crosshairElement) {
-        crosshairElement.classList.toggle("hidden", !self);
-        const recoilSpread = Math.min(18, state.recoilKick || 0);
-        const adsTighten = state.ads ? 3 : 0;
-        const dynamicGap = Math.max(5, 8 + recoilSpread - adsTighten);
-        crosshairElement.style.setProperty("--crosshair-gap", `${dynamicGap.toFixed(2)}px`);
-    }
-
-    if (adsScopeElement) {
-        adsScopeElement.classList.add("hidden");
-    }
+    viewmodelRuntime.updateLocalViewModel(self);
 }
 
 function normalizeAngle(angle) {
-    let normalized = angle;
-
-    while (normalized > Math.PI) {
-        normalized -= Math.PI * 2;
-    }
-
-    while (normalized < -Math.PI) {
-        normalized += Math.PI * 2;
-    }
-
-    return normalized;
+    return normalizeAngleMath(angle);
 }
 
 function lerpAngle(from, to, t) {
-    return from + normalizeAngle(to - from) * t;
+    return lerpAngleMath(from, to, t);
 }
 
 function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
+    return clampMath(value, min, max);
 }
 
 function updateWeaponAim(player, root, runLean, pitchLean, gaitWeight, phase) {
@@ -1826,82 +1299,6 @@ function updateWeaponAim(player, root, runLean, pitchLean, gaitWeight, phase) {
     if (rig.legRight) {
         rig.legRight.rotation.x = smoothRightLeg;
     }
-}
-
-function createRemoteFallbackCapsule(player) {
-    const color = TEAM_COLORS[player.team] || 0xffffff;
-    return new THREE.Mesh(
-        new THREE.CapsuleGeometry(10, 30, 4, 8),
-        new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.1 })
-    );
-}
-
-function createRemoteRoot(player) {
-    const root = new THREE.Group();
-    const placeholder = createRemoteFallbackCapsule(player);
-    placeholder.name = "placeholder";
-    root.add(placeholder);
-
-    loadModularCharacterTemplate()
-        .then(template => {
-            const model = template.clone(true);
-            tintCharacter(model, TEAM_COLORS[player.team] || 0xffffff);
-            const debugHead = root.getObjectByName("remoteDebugHead") || null;
-            root.clear();
-            root.add(model);
-            remotePlayerRightArm.delete(player.id);
-
-            if (debugHead) {
-                root.add(debugHead);
-            }
-        })
-        .catch(() => {
-        });
-
-    return root;
-}
-
-function ensureNameLabel(player) {
-    if (!nameLabelsElement) {
-        return null;
-    }
-
-    if (remotePlayerLabels.has(player.id)) {
-        return remotePlayerLabels.get(player.id);
-    }
-
-    const label = document.createElement("div");
-    label.className = "nameLabel";
-    label.textContent = player.name;
-    label.style.display = "none";
-    nameLabelsElement.appendChild(label);
-    remotePlayerLabels.set(player.id, label);
-    return label;
-}
-
-function updateNameLabel(player, root) {
-    const label = ensureNameLabel(player);
-
-    if (!label) {
-        return;
-    }
-
-    const worldPoint = new THREE.Vector3(root.position.x, root.position.y + CHARACTER_HEIGHT + 14, root.position.z);
-    const projected = worldPoint.project(camera3d);
-    const visible = projected.z > -1 && projected.z < 1;
-
-    if (!visible) {
-        label.style.display = "none";
-        return;
-    }
-
-    const screenX = (projected.x * 0.5 + 0.5) * canvas.clientWidth;
-    const screenY = (-projected.y * 0.5 + 0.5) * canvas.clientHeight;
-
-    label.style.display = "block";
-    label.textContent = player.name;
-    label.style.left = `${screenX}px`;
-    label.style.top = `${screenY}px`;
 }
 
 function syncObstacles() {
@@ -2284,129 +1681,77 @@ async function loadWorldScene() {
     await syncWorldSceneIfNeeded(true);
 }
 
+remotePlayersRuntime = createRemotePlayersRuntime({
+    THREE,
+    performanceNow: () => performance.now(),
+    getRenderableRemotePlayers,
+    remotePlayerGroup,
+    nameLabelsElement,
+    camera3d,
+    canvas,
+    TEAM_COLORS,
+    CHARACTER_HEIGHT,
+    CHARACTER_YAW_OFFSET,
+    PLAYER_MAX_SPEED,
+    REMOTE_RUN_SPEED_THRESHOLD,
+    MOVE_FACTOR_SMOOTHING,
+    MOVE_START_THRESHOLD,
+    MOVE_STOP_THRESHOLD,
+    GAIT_WEIGHT_SMOOTHING,
+    WALK_RUN_THRESHOLD,
+    IDLE_PHASE_SPEED,
+    WALK_CYCLE_HZ,
+    RUN_CYCLE_HZ,
+    STABLE_BLOCK_WALK,
+    BODY_YAW_SMOOTHING,
+    DEBUG_REMOTE_MARKERS,
+    loadModularCharacterTemplate,
+    tintCharacter,
+    getCharacterModelPathForPlayer,
+    loadWeaponTemplate,
+    normalizeWeaponModel,
+    createWeaponPlaceholder,
+    getWeaponModelPathByName,
+    getWeaponScaleByName,
+    getRemoteWeaponAnchorOffsetByName,
+    getRemoteWeaponMuzzleLiftByName,
+    lerpAngle: lerpAngleMath,
+    clamp: clampMath,
+    WEAPON_MODEL_LOCAL_X,
+    WEAPON_MODEL_LOCAL_Y,
+    WEAPON_MODEL_LOCAL_Z,
+    WEAPON_MODEL_ROT_X,
+    WEAPON_MODEL_ROT_Y,
+    WEAPON_MODEL_ROT_Z,
+    WEAPON_AIM_SMOOTHING,
+    WEAPON_IDLE_PITCH,
+    WEAPON_RAISED_PITCH,
+    REMOTE_WEAPON_IDLE_TO_BACK_DELAY_MS,
+    REMOTE_WEAPON_COMBAT_BLEND_IN,
+    REMOTE_WEAPON_COMBAT_BLEND_OUT,
+    REMOTE_WEAPON_LOWERED_PITCH,
+    REMOTE_BACK_POS_X,
+    REMOTE_BACK_POS_Y,
+    REMOTE_BACK_POS_Z,
+    REMOTE_BACK_ROT_X,
+    REMOTE_BACK_ROT_Y,
+    REMOTE_BACK_ROT_Z,
+    WEAPON_RECOIL_PITCH,
+    WEAPON_SHOT_RAISE_DECAY,
+    WEAPON_RECOIL_DECAY,
+    WEAPON_RUN_SWAY_ROT,
+    WALK_SWING_SPEED,
+    IDLE_SWAY,
+    WALK_ARM_SWING,
+    WALK_LEG_SWING,
+    ARM_ROTATION_SMOOTHING,
+    ARM_ROTATION_MAX_DELTA,
+    LEG_ROTATION_SMOOTHING,
+    LEG_ROTATION_MAX_DELTA
+});
+
 function syncRemotePlayers() {
-    const nowMs = performance.now();
-    const deltaTime = Math.min(0.05, Math.max(0.001, (nowMs - lastAnimationTimeMs) / 1000));
-    lastAnimationTimeMs = nowMs;
-
-    const activePlayerIds = new Set();
-
-    for (const player of getRenderableRemotePlayers()) {
-        activePlayerIds.add(player.id);
-
-        let root = remotePlayerRoots.get(player.id);
-
-        if (!root) {
-            root = createRemoteRoot(player);
-            remotePlayerRoots.set(player.id, root);
-            remotePlayerModelPaths.set(player.id, getCharacterModelPathForPlayer(player));
-            remotePlayerGroup.add(root);
-
-            if (DEBUG_REMOTE_MARKERS) {
-                const debugHead = new THREE.Mesh(
-                    new THREE.SphereGeometry(4, 12, 12),
-                    new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 0.8 })
-                );
-                debugHead.name = "remoteDebugHead";
-                debugHead.position.set(0, CHARACTER_HEIGHT + 10, 0);
-                root.add(debugHead);
-            }
-        } else {
-            const currentPath = getCharacterModelPathForPlayer(player);
-            const previousPath = remotePlayerModelPaths.get(player.id);
-
-            if (currentPath !== previousPath) {
-                remotePlayerGroup.remove(root);
-                root = createRemoteRoot(player);
-                remotePlayerRoots.set(player.id, root);
-                remotePlayerModelPaths.set(player.id, currentPath);
-                remotePlayerGroup.add(root);
-            }
-        }
-
-        const velocityX = player.velocityX || 0;
-        const velocityY = player.velocityY || 0;
-        const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
-        const targetMoveFactor = Math.min(speed / PLAYER_MAX_SPEED, 1.8);
-        const previousMoveFactor = remotePlayerMoveFactor.get(player.id) || 0;
-        const moveFactor = previousMoveFactor + (targetMoveFactor - previousMoveFactor) * MOVE_FACTOR_SMOOTHING;
-        remotePlayerMoveFactor.set(player.id, moveFactor);
-
-        const wasMoving = remotePlayerMoving.get(player.id) || false;
-        const isMoving = wasMoving ? moveFactor > MOVE_STOP_THRESHOLD : moveFactor > MOVE_START_THRESHOLD;
-        remotePlayerMoving.set(player.id, isMoving);
-
-        const previousGaitWeight = remotePlayerGaitWeight.get(player.id) || 0;
-        const targetGaitWeight = isMoving ? 1 : 0;
-        const gaitWeight = previousGaitWeight + (targetGaitWeight - previousGaitWeight) * GAIT_WEIGHT_SMOOTHING;
-        remotePlayerGaitWeight.set(player.id, gaitWeight);
-
-        const previousLocomotionState = remotePlayerLocomotionState.get(player.id) || "idle";
-        const locomotionState = !isMoving ? "idle" : (moveFactor < WALK_RUN_THRESHOLD ? "walk" : "run");
-        remotePlayerLocomotionState.set(player.id, locomotionState);
-        let phase = remotePlayerAnimPhase.get(player.id) || 0;
-        if (!isMoving) {
-            phase += IDLE_PHASE_SPEED;
-        } else {
-            const cycleHz = locomotionState === "run" ? RUN_CYCLE_HZ : WALK_CYCLE_HZ;
-            phase += deltaTime * Math.PI * 2 * cycleHz;
-        }
-        remotePlayerAnimPhase.set(player.id, phase);
-
-        const bobAmount = STABLE_BLOCK_WALK ? 0 : (gaitWeight > 0.02 ? Math.sin(phase * 8) * 1.2 * gaitWeight : 0);
-        const pitchLean = STABLE_BLOCK_WALK ? 0 : (gaitWeight > 0.02 ? Math.cos(phase * 8) * 0.022 * gaitWeight : 0);
-        const runLean = STABLE_BLOCK_WALK ? 0 : (speed > REMOTE_RUN_SPEED_THRESHOLD ? -0.08 : 0);
-
-        syncPlayerWeapon(player, root);
-        updateWeaponAim(player, root, runLean, pitchLean, gaitWeight, phase);
-
-        const crouchVisualOffset = player.crouching ? -14 : 0;
-        root.position.set(player.x, (player.z || 0) + bobAmount + crouchVisualOffset, player.y);
-        const targetYaw = player.angle + CHARACTER_YAW_OFFSET;
-        const previousYaw = remotePlayerBodyYaw.get(player.id) ?? targetYaw;
-        const smoothYaw = lerpAngle(previousYaw, targetYaw, BODY_YAW_SMOOTHING);
-        remotePlayerBodyYaw.set(player.id, smoothYaw);
-        root.rotation.y = smoothYaw;
-        // Keep the body stable; only arm/weapon should animate for aiming/recoil.
-        root.rotation.z = 0;
-        root.rotation.x = 0;
-        updateNameLabel(player, root);
-    }
-
-    for (const [playerId, root] of remotePlayerRoots.entries()) {
-        if (activePlayerIds.has(playerId)) {
-            continue;
-        }
-
-        remotePlayerGroup.remove(root);
-        remotePlayerRoots.delete(playerId);
-        remotePlayerModelPaths.delete(playerId);
-        remotePlayerAnimPhase.delete(playerId);
-        remotePlayerWeaponModelPaths.delete(playerId);
-        remotePlayerWeaponAnchors.delete(playerId);
-        remotePlayerWeaponAim.delete(playerId);
-        remotePlayerLastAmmo.delete(playerId);
-        remotePlayerShotRaise.delete(playerId);
-        remotePlayerWeaponRecoil.delete(playerId);
-        remotePlayerRightArm.delete(playerId);
-        remotePlayerMoveFactor.delete(playerId);
-        remotePlayerGaitWeight.delete(playerId);
-        remotePlayerArmRotX.delete(playerId);
-        remotePlayerLegRotX.delete(playerId);
-        remotePlayerBodyYaw.delete(playerId);
-        remotePlayerLocomotionState.delete(playerId);
-        remotePlayerWeaponRot.delete(playerId);
-        remotePlayerMoving.delete(playerId);
-        remotePlayerWeaponCombatBlend.delete(playerId);
-        remotePlayerWeaponInBackMount.delete(playerId);
-        remotePlayerLastShotAt.delete(playerId);
-
-        const label = remotePlayerLabels.get(playerId);
-        if (label) {
-            label.remove();
-            remotePlayerLabels.delete(playerId);
-        }
-    }
+    remotePlayersRuntime.syncRemotePlayers();
 }
 
 function syncBullets() {
@@ -2588,254 +1933,101 @@ export function getRendererPerfStats() {
     };
 }
 
+editorRuntime = createEditorRuntime({
+    getState: () => state,
+    getMouse: () => mouse,
+    getCanvas: () => canvas,
+    getWorldModelGroup: () => worldModelGroup,
+    getCamera3d: () => camera3d,
+    fetchImpl: (...args) => fetch(...args),
+    ensureEditorModelCatalog: async () => {
+        editorModelCatalog = await ensureEditorModelCatalogController(fetch, editorModelCatalog, ALL_OBJ_MODEL_FILES);
+        editorModelCursor = 0;
+        updateEditorHudController(editorHudElement, editorSelectedModelElement, state.editorMode, editorModelCatalog, editorModelCursor);
+    },
+    updateEditorHud: () => {
+        updateEditorHudController(editorHudElement, editorSelectedModelElement, state.editorMode, editorModelCatalog, editorModelCursor);
+    },
+    ensureEditorPreview,
+    updateWorldModelRenderMode,
+    clearEditorSelectionHighlight,
+    cancelEditorDraft,
+    clearEditorPreview,
+    getEditorPointerNdc: (pointerX = mouse.x, pointerY = mouse.y) =>
+        getEditorPointerNdcController(THREE, canvas, pointerX, pointerY),
+    resolveEditorPlacementPoint: ndc =>
+        resolveEditorPlacementPointController({
+            editorRaycaster,
+            camera3d,
+            worldModelGroup,
+            worldPrimitiveGroup,
+            editorDraftRoot,
+            editorPreviewRoot,
+            editorGroundPlane,
+            editorGroundHit,
+            MODEL_GROUND_EPSILON,
+            ndc
+        }),
+    applyModelTransform,
+    loadWorldModel,
+    applyDraftVisual,
+    clearDraftVisual,
+    getEditorTopLevelRoot,
+    setEditorSelection,
+    applyEditorTransformByKey: (code, modelDefOverride = null, rootOverride = null) => {
+        const modelDef = modelDefOverride || editorSceneModels[selectedEditorModelIndex];
+        const targetRoot = rootOverride || selectedEditorRoot;
+        return applyEditorTransformByKeyController(code, modelDef, applyModelTransform, targetRoot);
+    },
+    clearInstancedWorldModels,
+    rebuildInstancedWorldModels,
+    getEditorRaycaster: () => editorRaycaster,
+    getEditorModelCatalog: () => editorModelCatalog,
+    getEditorModelCursor: () => editorModelCursor,
+    setEditorModelCursor: value => { editorModelCursor = value; },
+    getEditorSceneModels: () => editorSceneModels,
+    setEditorSceneModels: value => { editorSceneModels = value; },
+    getSelectedEditorRoot: () => selectedEditorRoot,
+    getSelectedEditorModelIndex: () => selectedEditorModelIndex,
+    getEditorLastPickSignature: () => editorLastPickSignature,
+    setEditorLastPickSignature: value => { editorLastPickSignature = value; },
+    getEditorLastPickRoots: () => editorLastPickRoots,
+    setEditorLastPickRoots: value => { editorLastPickRoots = value; },
+    getEditorLastPickCursor: () => editorLastPickCursor,
+    setEditorLastPickCursor: value => { editorLastPickCursor = value; },
+    getEditorDraftModel: () => editorDraftModel,
+    setEditorDraftModel: value => { editorDraftModel = value; },
+    getEditorDraftRoot: () => editorDraftRoot,
+    setEditorDraftRoot: value => { editorDraftRoot = value; },
+    getEditorPreviewRoot: () => editorPreviewRoot
+});
+
 export async function toggleEditorMode() {
-    state.editorMode = !state.editorMode;
-    if (state.editorMode) {
-        await ensureEditorModelCatalog();
-        mouse.down = false;
-        state.ads = false;
-        ensureEditorPreview();
-        updateWorldModelRenderMode();
-    }
-    updateEditorHud();
-    if (!state.editorMode) {
-        clearEditorSelectionHighlight();
-        cancelEditorDraft();
-        clearEditorPreview();
-        rebuildInstancedWorldModels();
-    }
+    await editorRuntime.toggleEditorMode();
 }
 
 export function cycleEditorModel(direction) {
-    if (!state.editorMode || editorModelCatalog.length === 0) {
-        return;
-    }
-    editorModelCursor = (editorModelCursor + direction + editorModelCatalog.length) % editorModelCatalog.length;
-    updateEditorHud();
-    ensureEditorPreview();
+    editorRuntime.cycleEditorModel(direction);
 }
 
 export function editorHandleCanvasClick(clientX, clientY, options = {}) {
-    if (!state.editorMode) {
-        return false;
-    }
-    const rect = canvas.getBoundingClientRect();
-    const pointerX = typeof clientX === "number" ? (clientX - rect.left) : mouse.x;
-    const pointerY = typeof clientY === "number" ? (clientY - rect.top) : mouse.y;
-    const ndc = getEditorPointerNdc(pointerX, pointerY);
-    const selectOnly = Boolean(options.selectOnly);
-
-    if (editorDraftModel && editorDraftRoot) {
-        clearEditorSelectionHighlight();
-        const placement = resolveEditorPlacementPoint(ndc);
-        if (!placement) {
-            return true;
-        }
-        editorDraftModel.position.x = placement.x;
-        editorDraftModel.position.y = placement.y;
-        editorDraftModel.position.z = placement.z;
-        applyModelTransform(editorDraftRoot, editorDraftModel);
-        return true;
-    }
-
-    if (!selectOnly) {
-        clearEditorSelectionHighlight();
-        const placement = resolveEditorPlacementPoint(ndc);
-        if (!placement) {
-            return true;
-        }
-
-        const path = editorModelCatalog[editorModelCursor];
-        if (!path) {
-            return true;
-        }
-        editorDraftModel = {
-            enabled: true,
-            path,
-            position: {
-                x: placement.x,
-                y: placement.y,
-                z: placement.z
-            },
-            rotationDegrees: { y: 0 },
-            scale: 1
-        };
-        clearEditorPreview();
-        loadWorldModel(editorDraftModel, root => {
-            editorDraftRoot = root;
-            applyDraftVisual(root);
-        });
-        return true;
-    }
-
-    editorRaycaster.setFromCamera(ndc, camera3d);
-    const modelHits = editorRaycaster.intersectObjects(worldModelGroup.children, true);
-    if (modelHits.length > 0) {
-        const uniqueRoots = [];
-        const seen = new Set();
-        for (const hit of modelHits) {
-            const root = getEditorTopLevelRoot(hit.object);
-            if (!root || seen.has(root.uuid)) {
-                continue;
-            }
-            seen.add(root.uuid);
-            uniqueRoots.push(root);
-        }
-
-        if (uniqueRoots.length > 0) {
-            const pickSignature = uniqueRoots.map(root => root.uuid).join("|");
-            const cycleRequested = Boolean(options.cycleSelection);
-
-            if (!cycleRequested || pickSignature !== editorLastPickSignature) {
-                editorLastPickSignature = pickSignature;
-                editorLastPickRoots = uniqueRoots;
-                editorLastPickCursor = 0;
-            } else {
-                editorLastPickCursor = (editorLastPickCursor + 1) % editorLastPickRoots.length;
-            }
-
-            const topRoot = editorLastPickRoots[editorLastPickCursor];
-            if (topRoot && typeof topRoot.userData.editorModelIndex === "number") {
-                if (!cycleRequested && topRoot === selectedEditorRoot) {
-                    clearEditorSelectionHighlight();
-                    return true;
-                }
-                setEditorSelection(topRoot, topRoot.userData.editorModelIndex);
-                return true;
-            }
-        }
-    }
-
-    clearEditorSelectionHighlight();
-    return true;
+    return editorRuntime.editorHandleCanvasClick(clientX, clientY, options);
 }
 
 export function editorHandleKeyDown(event) {
-    if (!state.editorMode) {
-        return false;
-    }
-
-    if (editorDraftModel && editorDraftRoot) {
-        const transformedDraft = applyEditorTransformByKey(event.code, editorDraftModel, editorDraftRoot);
-        if (transformedDraft) {
-            return true;
-        }
-    }
-
-    if (event.code === "Enter") {
-        if (editorDraftModel && editorDraftRoot) {
-            clearDraftVisual(editorDraftRoot);
-            const nextIndex = editorSceneModels.length;
-            editorSceneModels.push(editorDraftModel);
-            editorDraftRoot.userData.editorModelIndex = nextIndex;
-            clearEditorSelectionHighlight();
-            editorDraftModel = null;
-            editorDraftRoot = null;
-            ensureEditorPreview();
-            return true;
-        }
-        return false;
-    }
-
-    if (event.code === "Escape") {
-        if (editorDraftModel || editorDraftRoot) {
-            cancelEditorDraft();
-            return true;
-        }
-        return false;
-    }
-
-    if (event.code === "Delete" || event.code === "Backspace") {
-        if (editorDraftModel || editorDraftRoot) {
-            cancelEditorDraft();
-            return true;
-        }
-        if (selectedEditorRoot && selectedEditorModelIndex >= 0) {
-            worldModelGroup.remove(selectedEditorRoot);
-            editorSceneModels.splice(selectedEditorModelIndex, 1);
-            for (const child of worldModelGroup.children) {
-                if (typeof child.userData.editorModelIndex === "number" && child.userData.editorModelIndex > selectedEditorModelIndex) {
-                    child.userData.editorModelIndex -= 1;
-                }
-            }
-            clearEditorSelectionHighlight();
-        }
-        return true;
-    }
-
-    if (event.code === "KeyL") {
-        if (selectedEditorModelIndex >= 0) {
-            const source = editorSceneModels[selectedEditorModelIndex];
-            if (source) {
-                const duplicate = {
-                    ...source,
-                    position: {
-                        x: (source.position?.x ?? 0) + 80,
-                        y: source.position?.y ?? 0,
-                        z: (source.position?.z ?? 0) + 80
-                    },
-                    rotationDegrees: { y: source.rotationDegrees?.y ?? 0 }
-                };
-                const nextIndex = editorSceneModels.length;
-                editorSceneModels.push(duplicate);
-                loadWorldModel(duplicate, root => {
-                    root.userData.editorModelIndex = nextIndex;
-                    setEditorSelection(root, nextIndex);
-                });
-            }
-        }
-        return true;
-    }
-
-    return applyEditorTransformByKey(event.code);
+    return editorRuntime.editorHandleKeyDown(event);
 }
 
 export async function saveEditorScene() {
-    const payload = {
-        version: 1,
-        models: editorSceneModels,
-        primitives: []
-    };
-    const response = await fetch("/api/world/scene", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    });
-    if (!response.ok) {
-        throw new Error(`Save failed: ${response.status}`);
-    }
+    await editorRuntime.saveEditorScene();
 }
 
 export function clearEditorSceneModels() {
-    cancelEditorDraft();
-    clearEditorSelectionHighlight();
-    clearInstancedWorldModels();
-    worldModelGroup.clear();
-    editorSceneModels = [];
-    editorLastPickSignature = "";
-    editorLastPickRoots = [];
-    editorLastPickCursor = 0;
-    if (state.editorMode) {
-        ensureEditorPreview();
-        updateWorldModelRenderMode();
-    } else {
-        clearEditorPreview();
-        rebuildInstancedWorldModels();
-    }
+    editorRuntime.clearEditorSceneModels();
 }
 
 function updateEditorPreviewPosition() {
-    if (!state.editorMode || !editorPreviewRoot || editorDraftRoot) {
-        return;
-    }
-    const ndc = getEditorPointerNdc();
-    const placement = resolveEditorPlacementPoint(ndc);
-    if (!placement) {
-        return;
-    }
-    editorPreviewRoot.position.x = placement.x;
-    editorPreviewRoot.position.y = placement.y;
-    editorPreviewRoot.position.z = placement.z;
+    editorRuntime.updateEditorPreviewPosition();
 }
 
 export function render() {
