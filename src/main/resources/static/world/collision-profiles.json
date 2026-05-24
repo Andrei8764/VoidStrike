@@ -1,61 +1,3039 @@
 {
-  "default": {
-    "halfWidth": 0,
-    "halfDepth": 0,
-    "height": 0,
-    "solid": false,
-    "walkable": true
+  "default" : {
+    "halfWidth" : 48,
+    "halfDepth" : 48,
+    "height" : 64,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0,
+    "offsetLocalX" : 0,
+    "offsetLocalY" : 0,
+    "offsetLocalZ" : 0
   },
-  "exact": [
-    { "value": "/models/detail-barrier-strong-type-b.obj", "halfWidth": 42.5, "halfDepth": 15.94, "height": 42.5, "yawOffsetDeg": 0, "solid": true, "walkable": true },
-    { "value": "/models/detail-light-single.obj", "halfWidth": 5.52, "halfDepth": 16.91, "height": 122.88, "solid": true, "walkable": true},
-    { "value": "/models/detail-barrier-type-a.obj", "halfWidth": 27.71, "halfDepth": 8.58, "height": 51.2, "solid": true, "walkable": true },
-    { "value": "/models/detail-barrier-strong-damaged.obj", "halfWidth": 42.5, "halfDepth": 15.94, "height": 42.5, "yawOffsetDeg": 0, "solid": true, "walkable": true },
-    { "value": "/models/detail-barrier-strong-type-a.obj", "halfWidth": 42.5, "halfDepth": 15.94, "height": 42.5, "yawOffsetDeg": 0, "offsetLocalX": 0, "offsetLocalY": 0, "solid": true, "walkable": true },
-    { "value": "/models/wall-a-roof-slant-detailed.obj", "halfWidth": 64, "halfDepth": 72.78, "height": 64, "solid": true, "walkable": true },
-    { "value": "/models/wall-a-roof.obj", "halfWidth": 64, "halfDepth": 64, "height": 64, "solid": true, "walkable": true },
-    { "value": "/models/wall-b-roof-slant-detailed.obj", "halfWidth": 64, "halfDepth": 72.78, "height": 64, "solid": true, "walkable": true },
-    { "value": "/models/wall-b-garage.obj", "halfWidth": 64, "halfDepth": 64, "height": 128, "solid": true, "walkable": true },
-    { "value": "/models/wall-type-b.obj", "halfWidth": 4.48, "halfDepth": 64, "height": 64, "yawOffsetDeg": 90, "solid": true, "walkable": true },
-    { "value": "/models/cliff-corner.obj", "halfWidth": 64, "halfDepth": 6.5, "height": 64, "yawOffsetDeg": 0, "offsetLocalX": 0, "offsetLocalY": 0, "solid": true, "walkable": true },
-    { "value": "/models/cliff-side.obj", "halfWidth": 64, "halfDepth": 6.5, "height": 64, "yawOffsetDeg": 0, "offsetLocalX": 0, "offsetLocalY": 0, "solid": true, "walkable": true },
-    { "value": "/models/road-asphalt-center.obj", "halfWidth": 64, "halfDepth": 64, "height": 0, "solid": false, "walkable": true },
-    { "value": "/models/road-asphalt-straight.obj", "halfWidth": 64, "halfDepth": 64, "height": 0, "solid": false, "walkable": true },
-    { "value": "/models/road-asphalt-corner.obj", "halfWidth": 64, "halfDepth": 64, "height": 0, "solid": false, "walkable": true },
-    { "value": "/models/road-asphalt-corner-inner.obj", "halfWidth": 64, "halfDepth": 64, "height": 0, "solid": false, "walkable": true },
-    { "value": "/models/road-asphalt-corner-outer.obj", "halfWidth": 64, "halfDepth": 64, "height": 0, "solid": false, "walkable": true },
-    { "value": "/models/road-asphalt-side.obj", "halfWidth": 64, "halfDepth": 64, "height": 0, "solid": false, "walkable": true },
-    { "value": "/models/road-asphalt-pavement.obj", "halfWidth": 64, "halfDepth": 64, "height": 0, "solid": false, "walkable": true },
-    { "value": "/models/road-asphalt-damaged.obj", "halfWidth": 64, "halfDepth": 64, "height": 0, "solid": false, "walkable": true },
-    { "value": "/models/wall-fence.obj", "halfWidth": 64, "halfDepth": 4.48, "height": 64, "solid": true, "walkable": true },
-    { "value": "/models/detail-bench.obj", "halfWidth": 41.91, "halfDepth": 41.91, "height": 52.36, "solid": true, "walkable": true },
-    { "value": "/models/tree-park-large.obj", "halfWidth": 66.56, "halfDepth": 66.56, "height": 25, "solid": true, "walkable": true },
-    { "value": "/models/tree-park-pine-large.obj", "halfWidth": 66.56, "halfDepth": 66.56, "height": 25, "solid": true, "walkable": true },
-    { "value": "/models/truck-grey.obj", "halfWidth": 98.59, "halfDepth": 117.65, "height": 128.76, "solid": true, "walkable": true },
-    { "value": "/models/wall-steps-type-b.obj", "halfWidth": 64, "halfDepth": 4.48, "height": 64, "solid": true, "walkable": true },
-    { "value": "/models/wall-c-flat-low.obj", "halfWidth": 64, "halfDepth": 0, "height": 64, "solid": true, "walkable": true },
-    { "value": "/models/detail-dumpster-open.obj", "halfWidth": 31.01, "halfDepth": 38.4, "height": 70.34, "solid": true, "walkable": true },
-    { "value": "/models/truck-green.obj", "halfWidth": 53.12, "halfDepth": 105.18, "height": 128.76, "solid": true, "walkable": true },
-    { "value": "/models/detail-bricks-type-b.obj", "halfWidth": 41.26, "halfDepth": 27.24, "height": 25.6, "solid": true, "walkable": false },
-    { "value": "/models/detail-light-double.obj", "halfWidth": 5.52, "halfDepth": 28.3, "height": 122.88, "solid": true, "walkable": true },
-
-    { "value": "/models/wall-a.obj", "halfWidth": 64, "halfDepth": 64, "height": 96, "solid": true, "walkable": true },
-    { "value": "/models/wall-b.obj", "halfWidth": 64, "halfDepth": 64, "height": 96, "solid": true, "walkable": true },
-    { "value": "/models/wall-type-a.obj", "halfWidth": 64, "halfDepth": 64, "height": 96, "solid": true, "walkable": true },
-    { "value": "/models/truck-flat.obj", "halfWidth": 92, "halfDepth": 56, "height": 88, "solid": true, "walkable": true },
-    { "value": "/models/truck-green-cargo.obj", "halfWidth": 92, "halfDepth": 56, "height": 88, "solid": true, "walkable": true },
-    { "value": "/models/truck-grey-cargo.obj", "halfWidth": 92, "halfDepth": 56, "height": 88, "solid": true, "walkable": true }
-  ],
-  "prefix": [
-    { "value": "/models/road-", "halfWidth": 64, "halfDepth": 64, "height": 8, "solid": false, "walkable": true },
-    { "value": "/models/grass", "halfWidth": 64, "halfDepth": 64, "height": 8, "solid": false, "walkable": true },
-    { "value": "/models/wall-", "halfWidth": 64, "halfDepth": 64, "height": 96, "solid": true, "walkable": true },
-    { "value": "/models/window-", "halfWidth": 48, "halfDepth": 24, "height": 96, "solid": true, "walkable": true },
-    { "value": "/models/door-", "halfWidth": 40, "halfDepth": 20, "height": 96, "solid": true, "walkable": true },
-    { "value": "/models/detail-barrier", "halfWidth": 52, "halfDepth": 36, "height": 52, "solid": true, "walkable": true },
-    { "value": "/models/detail-dumpster", "halfWidth": 60, "halfDepth": 46, "height": 58, "solid": true, "walkable": true },
-    { "value": "/models/detail-block", "halfWidth": 56, "halfDepth": 56, "height": 72, "solid": true, "walkable": true },
-    { "value": "/models/truck-", "halfWidth": 92, "halfDepth": 56, "height": 88, "solid": true, "walkable": true },
-    { "value": "/models/cliff-", "halfWidth": 92, "halfDepth": 56, "height": 88, "solid": true, "walkable": true }
-  ]
+  "exact" : [ {
+    "value" : "/models/road-asphalt-straight.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 128.0,
+    "height" : 6.4,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 128.0,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 116.48,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 2.13
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 104.96,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 4.27
+    } ]
+  }, {
+    "value" : "/models/detail-barrier-strong-type-b.obj",
+    "halfWidth" : 42.5,
+    "halfDepth" : 15.94,
+    "height" : 42.5,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 38.25,
+      "halfDepth" : 14.34,
+      "height" : 40.37,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/detail-dumpster-closed.obj",
+    "halfWidth" : 38.4,
+    "halfDepth" : 29.03,
+    "height" : 69.72,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 34.56,
+      "halfDepth" : 26.13,
+      "height" : 66.24,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/detail-light-double.obj",
+    "halfWidth" : 5.52,
+    "halfDepth" : 28.3,
+    "height" : 122.88,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 4.63,
+      "halfDepth" : 23.77,
+      "height" : 41.78,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 68.81
+    } ]
+  }, {
+    "value" : "/models/detail-barrier-strong-damaged.obj",
+    "halfWidth" : 42.5,
+    "halfDepth" : 15.94,
+    "height" : 42.5,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 38.25,
+      "halfDepth" : 14.34,
+      "height" : 40.37,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/road-asphalt-corner-inner.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 6.4,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 2.13
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 4.27
+    } ]
+  }, {
+    "value" : "/models/road-asphalt-corner-outer.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 6.4,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 2.13
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 4.27
+    } ]
+  }, {
+    "value" : "/models/road-asphalt-corner.obj",
+    "halfWidth" : 128.0,
+    "halfDepth" : 128.0,
+    "height" : 6.4,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 128.0,
+      "halfDepth" : 128.0,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 116.48,
+      "halfDepth" : 116.48,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 2.13
+    }, {
+      "halfWidth" : 104.96,
+      "halfDepth" : 104.96,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 4.27
+    } ]
+  }, {
+    "value" : "/models/road-asphalt-side.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 6.4,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 2.13
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 4.27
+    } ]
+  }, {
+    "value" : "/models/pallet-small.obj",
+    "halfWidth" : 32.0,
+    "halfDepth" : 36.8,
+    "height" : 19.2,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 32.0,
+      "halfDepth" : 36.8,
+      "height" : 6.4,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 29.12,
+      "halfDepth" : 33.49,
+      "height" : 6.4,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 6.4
+    }, {
+      "halfWidth" : 26.24,
+      "halfDepth" : 30.18,
+      "height" : 6.4,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 12.8
+    } ]
+  }, {
+    "value" : "/models/planks.obj",
+    "halfWidth" : 72.3,
+    "halfDepth" : 36.5,
+    "height" : 12.8,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 72.3,
+      "halfDepth" : 36.5,
+      "height" : 4.27,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 65.79,
+      "halfDepth" : 33.21,
+      "height" : 4.27,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 4.27
+    }, {
+      "halfWidth" : 59.29,
+      "halfDepth" : 29.93,
+      "height" : 4.27,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 8.53
+    } ]
+  }, {
+    "value" : "/models/truck-flat.obj",
+    "halfWidth" : 53.12,
+    "halfDepth" : 105.18,
+    "height" : 128.76,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 47.81,
+      "halfDepth" : 94.66,
+      "height" : 19.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 46.53,
+      "halfDepth" : 92.14,
+      "height" : 19.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 19.96
+    }, {
+      "halfWidth" : 45.26,
+      "halfDepth" : 89.61,
+      "height" : 19.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 39.92
+    }, {
+      "halfWidth" : 43.98,
+      "halfDepth" : 87.09,
+      "height" : 19.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 59.87
+    }, {
+      "halfWidth" : 29.22,
+      "halfDepth" : 47.33,
+      "height" : 24.46,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 9.56,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 27.94
+    }, {
+      "halfWidth" : 24.83,
+      "halfDepth" : 40.23,
+      "height" : 24.46,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 9.56,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 52.4
+    } ]
+  }, {
+    "value" : "/models/scaffolding-structure.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 53.76,
+      "halfDepth" : 53.76,
+      "height" : 43.52,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 71.68
+    } ]
+  }, {
+    "value" : "/models/wall-a-diagonal.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-a-corner-painted.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/tree-park-pine-large.obj",
+    "halfWidth" : 66.56,
+    "halfDepth" : 66.56,
+    "height" : 186.88,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 22.63,
+      "halfDepth" : 22.63,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 21.0,
+      "halfDepth" : 21.0,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 14.95
+    }, {
+      "halfWidth" : 19.37,
+      "halfDepth" : 19.37,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 29.9
+    }, {
+      "halfWidth" : 17.74,
+      "halfDepth" : 17.74,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 44.85
+    }, {
+      "halfWidth" : 16.11,
+      "halfDepth" : 16.11,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 59.8
+    }, {
+      "halfWidth" : 14.48,
+      "halfDepth" : 14.48,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 74.75
+    }, {
+      "halfWidth" : 12.85,
+      "halfDepth" : 12.85,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 89.7
+    }, {
+      "halfWidth" : 11.22,
+      "halfDepth" : 11.22,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 104.65
+    }, {
+      "halfWidth" : 9.6,
+      "halfDepth" : 9.6,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 119.6
+    }, {
+      "halfWidth" : 7.97,
+      "halfDepth" : 7.97,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 134.55
+    }, {
+      "halfWidth" : 6.34,
+      "halfDepth" : 6.34,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 149.5
+    } ]
+  }, {
+    "value" : "/models/wall-a-flat-window.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 6.4,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 6.14,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-a-open.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-a-roof-detailed.obj",
+    "halfWidth" : 72.78,
+    "halfDepth" : 64.0,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 69.87,
+      "halfDepth" : 61.44,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-fence.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 4.48,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 4.3,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/window-wide-type-a.obj",
+    "halfWidth" : 38.26,
+    "halfDepth" : 3.2,
+    "height" : 76.52,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 36.73,
+      "halfDepth" : 3.07,
+      "height" : 74.99,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/detail-beam.obj",
+    "halfWidth" : 16.0,
+    "halfDepth" : 64.0,
+    "height" : 32.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 14.4,
+      "halfDepth" : 57.6,
+      "height" : 30.4,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/detail-bricks-type-b.obj",
+    "halfWidth" : 41.26,
+    "halfDepth" : 27.24,
+    "height" : 25.6,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 37.13,
+      "halfDepth" : 24.52,
+      "height" : 24.32,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/road-dirt-pavement.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 0.1,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.5
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 1.0
+    } ]
+  }, {
+    "value" : "/models/wall-a-flat-garage.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 6.4,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 6.14,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-a-door.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-a-painted-diagonal.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-b-corner.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-broken-type-b.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 4.48,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 4.3,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-b-window.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-broken-type-a.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 4.48,
+    "height" : 51.2,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 4.3,
+      "height" : 50.18,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-c-flat-low.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 0.1,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 1.0,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-c-flat.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 0.1,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 1.0,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-type-b.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 4.48,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 4.3,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/cliff-side.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 42.67,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 42.67,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 42.67
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 42.67,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 85.33
+    } ]
+  }, {
+    "value" : "/models/cliff-corner.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 42.67,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 42.67,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 42.67
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 42.67,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 85.33
+    } ]
+  }, {
+    "value" : "/models/detail-bench.obj",
+    "halfWidth" : 38.65,
+    "halfDepth" : 20.62,
+    "height" : 52.36,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 34.78,
+      "halfDepth" : 18.55,
+      "height" : 49.75,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/detail-bricks-type-a.obj",
+    "halfWidth" : 36.51,
+    "halfDepth" : 34.19,
+    "height" : 25.6,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 32.86,
+      "halfDepth" : 30.77,
+      "height" : 24.32,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/tree-park-large.obj",
+    "halfWidth" : 66.56,
+    "halfDepth" : 66.56,
+    "height" : 186.88,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 22.63,
+      "halfDepth" : 22.63,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 21.0,
+      "halfDepth" : 21.0,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 14.95
+    }, {
+      "halfWidth" : 19.37,
+      "halfDepth" : 19.37,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 29.9
+    }, {
+      "halfWidth" : 17.74,
+      "halfDepth" : 17.74,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 44.85
+    }, {
+      "halfWidth" : 16.11,
+      "halfDepth" : 16.11,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 59.8
+    }, {
+      "halfWidth" : 14.48,
+      "halfDepth" : 14.48,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 74.75
+    }, {
+      "halfWidth" : 12.85,
+      "halfDepth" : 12.85,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 89.7
+    }, {
+      "halfWidth" : 11.22,
+      "halfDepth" : 11.22,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 104.65
+    }, {
+      "halfWidth" : 9.6,
+      "halfDepth" : 9.6,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 119.6
+    }, {
+      "halfWidth" : 7.97,
+      "halfDepth" : 7.97,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 134.55
+    }, {
+      "halfWidth" : 6.34,
+      "halfDepth" : 6.34,
+      "height" : 14.95,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 149.5
+    } ]
+  }, {
+    "value" : "/models/truck-grey-cargo.obj",
+    "halfWidth" : 53.12,
+    "halfDepth" : 74.77,
+    "height" : 94.51,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 47.81,
+      "halfDepth" : 67.29,
+      "height" : 14.65,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 46.53,
+      "halfDepth" : 65.49,
+      "height" : 14.65,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 14.65
+    }, {
+      "halfWidth" : 45.26,
+      "halfDepth" : 63.7,
+      "height" : 14.65,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 29.3
+    }, {
+      "halfWidth" : 43.98,
+      "halfDepth" : 61.91,
+      "height" : 14.65,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 43.95
+    }, {
+      "halfWidth" : 29.22,
+      "halfDepth" : 33.64,
+      "height" : 17.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 9.56,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 20.51
+    }, {
+      "halfWidth" : 24.83,
+      "halfDepth" : 28.6,
+      "height" : 17.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 9.56,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 38.47
+    } ]
+  }, {
+    "value" : "/models/wall-a-column-painted.obj",
+    "halfWidth" : 16.0,
+    "halfDepth" : 16.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 15.36,
+      "halfDepth" : 15.36,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-a-detail.obj",
+    "halfWidth" : 38.4,
+    "halfDepth" : 12.8,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 36.86,
+      "halfDepth" : 12.29,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/truck-grey.obj",
+    "halfWidth" : 53.12,
+    "halfDepth" : 105.18,
+    "height" : 128.76,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 47.81,
+      "halfDepth" : 94.66,
+      "height" : 19.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 46.53,
+      "halfDepth" : 92.14,
+      "height" : 19.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 19.96
+    }, {
+      "halfWidth" : 45.26,
+      "halfDepth" : 89.61,
+      "height" : 19.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 39.92
+    }, {
+      "halfWidth" : 43.98,
+      "halfDepth" : 87.09,
+      "height" : 19.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 59.87
+    }, {
+      "halfWidth" : 29.22,
+      "halfDepth" : 47.33,
+      "height" : 24.46,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 9.56,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 27.94
+    }, {
+      "halfWidth" : 24.83,
+      "halfDepth" : 40.23,
+      "height" : 24.46,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 9.56,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 52.4
+    } ]
+  }, {
+    "value" : "/models/balcony-ladder-top.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 18.16,
+    "height" : 35.94,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 53.76,
+      "halfDepth" : 15.25,
+      "height" : 12.22,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 20.13
+    } ]
+  }, {
+    "value" : "/models/wall-a-corner.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-a-roof-slant-detailed.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 72.78,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 69.87,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-a-roof.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-steps-type-b.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 4.48,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 4.3,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/detail-dumpster-open.obj",
+    "halfWidth" : 38.4,
+    "halfDepth" : 31.01,
+    "height" : 70.34,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 34.56,
+      "halfDepth" : 27.91,
+      "height" : 66.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/road-dirt-straight.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 128.0,
+    "height" : 6.4,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 128.0,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 116.48,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 2.13
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 104.96,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 4.27
+    } ]
+  }, {
+    "value" : "/models/detail-light-traffic.obj",
+    "halfWidth" : 10.0,
+    "halfDepth" : 37.38,
+    "height" : 133.12,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 8.4,
+      "halfDepth" : 31.4,
+      "height" : 45.26,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 74.55
+    } ]
+  }, {
+    "value" : "/models/wall-b-roof-detailed.obj",
+    "halfWidth" : 72.78,
+    "halfDepth" : 64.0,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 69.87,
+      "halfDepth" : 61.44,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-b-roof-slant-detailed.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 72.78,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 69.87,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-b-roof.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/detail-barrier-type-a.obj",
+    "halfWidth" : 27.71,
+    "halfDepth" : 8.58,
+    "height" : 51.2,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 24.94,
+      "halfDepth" : 7.72,
+      "height" : 48.64,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/detail-barrier-type-b.obj",
+    "halfWidth" : 36.29,
+    "halfDepth" : 8.58,
+    "height" : 38.4,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 32.66,
+      "halfDepth" : 7.72,
+      "height" : 36.48,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/road-dirt-corner.obj",
+    "halfWidth" : 128.0,
+    "halfDepth" : 128.0,
+    "height" : 6.4,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 128.0,
+      "halfDepth" : 128.0,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 116.48,
+      "halfDepth" : 116.48,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 2.13
+    }, {
+      "halfWidth" : 104.96,
+      "halfDepth" : 104.96,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 4.27
+    } ]
+  }, {
+    "value" : "/models/truck-green.obj",
+    "halfWidth" : 53.12,
+    "halfDepth" : 105.18,
+    "height" : 128.76,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 47.81,
+      "halfDepth" : 94.66,
+      "height" : 19.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 46.53,
+      "halfDepth" : 92.14,
+      "height" : 19.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 19.96
+    }, {
+      "halfWidth" : 45.26,
+      "halfDepth" : 89.61,
+      "height" : 19.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 39.92
+    }, {
+      "halfWidth" : 43.98,
+      "halfDepth" : 87.09,
+      "height" : 19.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 59.87
+    }, {
+      "halfWidth" : 29.22,
+      "halfDepth" : 47.33,
+      "height" : 24.46,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 9.56,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 27.94
+    }, {
+      "halfWidth" : 24.83,
+      "halfDepth" : 40.23,
+      "height" : 24.46,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 9.56,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 52.4
+    } ]
+  }, {
+    "value" : "/models/wall-a-low-painted.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-a-garage.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-a-low.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-a.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/tree-large.obj",
+    "halfWidth" : 83.2,
+    "halfDepth" : 83.2,
+    "height" : 217.6,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 28.29,
+      "halfDepth" : 28.29,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 26.59,
+      "halfDepth" : 26.59,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 14.73
+    }, {
+      "halfWidth" : 24.89,
+      "halfDepth" : 24.89,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 29.46
+    }, {
+      "halfWidth" : 23.2,
+      "halfDepth" : 23.2,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 44.19
+    }, {
+      "halfWidth" : 21.5,
+      "halfDepth" : 21.5,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 58.92
+    }, {
+      "halfWidth" : 19.8,
+      "halfDepth" : 19.8,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 73.65
+    }, {
+      "halfWidth" : 18.1,
+      "halfDepth" : 18.1,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 88.38
+    }, {
+      "halfWidth" : 16.41,
+      "halfDepth" : 16.41,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 103.11
+    }, {
+      "halfWidth" : 14.71,
+      "halfDepth" : 14.71,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 117.84
+    }, {
+      "halfWidth" : 13.01,
+      "halfDepth" : 13.01,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 132.57
+    }, {
+      "halfWidth" : 11.32,
+      "halfDepth" : 11.32,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 147.3
+    }, {
+      "halfWidth" : 9.62,
+      "halfDepth" : 9.62,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 162.03
+    }, {
+      "halfWidth" : 7.92,
+      "halfDepth" : 7.92,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 176.76
+    } ]
+  }, {
+    "value" : "/models/tree-pine-large.obj",
+    "halfWidth" : 83.2,
+    "halfDepth" : 83.2,
+    "height" : 217.6,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 28.29,
+      "halfDepth" : 28.29,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 26.59,
+      "halfDepth" : 26.59,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 14.73
+    }, {
+      "halfWidth" : 24.89,
+      "halfDepth" : 24.89,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 29.46
+    }, {
+      "halfWidth" : 23.2,
+      "halfDepth" : 23.2,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 44.19
+    }, {
+      "halfWidth" : 21.5,
+      "halfDepth" : 21.5,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 58.92
+    }, {
+      "halfWidth" : 19.8,
+      "halfDepth" : 19.8,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 73.65
+    }, {
+      "halfWidth" : 18.1,
+      "halfDepth" : 18.1,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 88.38
+    }, {
+      "halfWidth" : 16.41,
+      "halfDepth" : 16.41,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 103.11
+    }, {
+      "halfWidth" : 14.71,
+      "halfDepth" : 14.71,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 117.84
+    }, {
+      "halfWidth" : 13.01,
+      "halfDepth" : 13.01,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 132.57
+    }, {
+      "halfWidth" : 11.32,
+      "halfDepth" : 11.32,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 147.3
+    }, {
+      "halfWidth" : 9.62,
+      "halfDepth" : 9.62,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 162.03
+    }, {
+      "halfWidth" : 7.92,
+      "halfDepth" : 7.92,
+      "height" : 14.73,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 176.76
+    } ]
+  }, {
+    "value" : "/models/tree-small.obj",
+    "halfWidth" : 49.92,
+    "halfDepth" : 49.92,
+    "height" : 38.4,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 16.97,
+      "halfDepth" : 16.97,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 14.94,
+      "halfDepth" : 14.94,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 4.83
+    }, {
+      "halfWidth" : 12.9,
+      "halfDepth" : 12.9,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 9.65
+    }, {
+      "halfWidth" : 10.86,
+      "halfDepth" : 10.86,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 14.48
+    }, {
+      "halfWidth" : 8.83,
+      "halfDepth" : 8.83,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 19.31
+    }, {
+      "halfWidth" : 6.79,
+      "halfDepth" : 6.79,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 24.14
+    }, {
+      "halfWidth" : 4.75,
+      "halfDepth" : 4.75,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 28.96
+    } ]
+  }, {
+    "value" : "/models/tree-shrub.obj",
+    "halfWidth" : 49.92,
+    "halfDepth" : 49.92,
+    "height" : 38.4,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 16.97,
+      "halfDepth" : 16.97,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 14.94,
+      "halfDepth" : 14.94,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 4.83
+    }, {
+      "halfWidth" : 12.9,
+      "halfDepth" : 12.9,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 9.65
+    }, {
+      "halfWidth" : 10.86,
+      "halfDepth" : 10.86,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 14.48
+    }, {
+      "halfWidth" : 8.83,
+      "halfDepth" : 8.83,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 19.31
+    }, {
+      "halfWidth" : 6.79,
+      "halfDepth" : 6.79,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 24.14
+    }, {
+      "halfWidth" : 4.75,
+      "halfDepth" : 4.75,
+      "height" : 4.83,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 28.96
+    } ]
+  }, {
+    "value" : "/models/tree-pine-small.obj",
+    "halfWidth" : 44.8,
+    "halfDepth" : 44.8,
+    "height" : 51.2,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 15.23,
+      "halfDepth" : 15.23,
+      "height" : 6.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 13.4,
+      "halfDepth" : 13.4,
+      "height" : 6.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 6.44
+    }, {
+      "halfWidth" : 11.58,
+      "halfDepth" : 11.58,
+      "height" : 6.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 12.87
+    }, {
+      "halfWidth" : 9.75,
+      "halfDepth" : 9.75,
+      "height" : 6.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 19.31
+    }, {
+      "halfWidth" : 7.92,
+      "halfDepth" : 7.92,
+      "height" : 6.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 25.75
+    }, {
+      "halfWidth" : 6.09,
+      "halfDepth" : 6.09,
+      "height" : 6.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 32.18
+    }, {
+      "halfWidth" : 4.26,
+      "halfDepth" : 4.26,
+      "height" : 6.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 38.62
+    } ]
+  }, {
+    "value" : "/models/truck-green-cargo.obj",
+    "halfWidth" : 53.12,
+    "halfDepth" : 74.77,
+    "height" : 94.51,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 47.81,
+      "halfDepth" : 67.29,
+      "height" : 14.65,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 46.53,
+      "halfDepth" : 65.49,
+      "height" : 14.65,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 14.65
+    }, {
+      "halfWidth" : 45.26,
+      "halfDepth" : 63.7,
+      "height" : 14.65,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 29.3
+    }, {
+      "halfWidth" : 43.98,
+      "halfDepth" : 61.91,
+      "height" : 14.65,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 43.95
+    }, {
+      "halfWidth" : 29.22,
+      "halfDepth" : 33.64,
+      "height" : 17.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 9.56,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 20.51
+    }, {
+      "halfWidth" : 24.83,
+      "halfDepth" : 28.6,
+      "height" : 17.96,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 9.56,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 38.47
+    } ]
+  }, {
+    "value" : "/models/road-dirt-tile.obj",
+    "halfWidth" : 32.0,
+    "halfDepth" : 32.0,
+    "height" : 6.4,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 32.0,
+      "halfDepth" : 32.0,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 29.12,
+      "halfDepth" : 29.12,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 2.13
+    }, {
+      "halfWidth" : 26.24,
+      "halfDepth" : 26.24,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 4.27
+    } ]
+  }, {
+    "value" : "/models/wall-a-window.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-b-door.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-b-garage.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-b-open.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-b.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-steps-type-a.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 4.48,
+    "height" : 51.2,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 4.3,
+      "height" : 50.18,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/window-small-type-b.obj",
+    "halfWidth" : 22.26,
+    "halfDepth" : 3.2,
+    "height" : 76.52,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 21.37,
+      "halfDepth" : 3.07,
+      "height" : 74.99,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/balcony-ladder-bottom.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 18.16,
+    "height" : 92.06,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 53.76,
+      "halfDepth" : 15.25,
+      "height" : 31.3,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 51.55
+    } ]
+  }, {
+    "value" : "/models/window-wide-type-d.obj",
+    "halfWidth" : 38.26,
+    "halfDepth" : 3.2,
+    "height" : 76.52,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 36.73,
+      "halfDepth" : 3.07,
+      "height" : 74.99,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/roof-metal-type-a.obj",
+    "halfWidth" : 72.78,
+    "halfDepth" : 64.0,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 72.78,
+      "halfDepth" : 64.0,
+      "height" : 21.33,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 66.23,
+      "halfDepth" : 58.24,
+      "height" : 21.33,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 21.33
+    }, {
+      "halfWidth" : 59.68,
+      "halfDepth" : 52.48,
+      "height" : 21.33,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 42.67
+    } ]
+  }, {
+    "value" : "/models/scaffolding-floor.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 8.96,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 53.76,
+      "halfDepth" : 53.76,
+      "height" : 6.0,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 5.02
+    } ]
+  }, {
+    "value" : "/models/road-asphalt-pavement.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 0.1,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.5
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 1.0
+    } ]
+  }, {
+    "value" : "/models/wall-a-painted.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-b-column.obj",
+    "halfWidth" : 16.0,
+    "halfDepth" : 16.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 15.36,
+      "halfDepth" : 15.36,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-b-low.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/detail-barrier-strong-type-a.obj",
+    "halfWidth" : 42.5,
+    "halfDepth" : 15.94,
+    "height" : 42.5,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 38.25,
+      "halfDepth" : 14.34,
+      "height" : 40.37,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/road-dirt-corner-inner.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 6.4,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 2.13
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 4.27
+    } ]
+  }, {
+    "value" : "/models/road-asphalt-damaged.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 6.4,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 2.13
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 2.13,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 4.27
+    } ]
+  }, {
+    "value" : "/models/road-dirt-center.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 0.1,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.5
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 1.0
+    } ]
+  }, {
+    "value" : "/models/wall-a-roof-slant.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/wall-b-roof-slant.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 61.44,
+      "halfDepth" : 61.44,
+      "height" : 62.72,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  }, {
+    "value" : "/models/grass.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 0.1,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.5
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 1.0
+    } ]
+  }, {
+    "value" : "/models/grass-hill.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 64.0,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 21.33,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 21.33,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 21.33
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 21.33,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 42.67
+    } ]
+  }, {
+    "value" : "/models/grass-corner.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 64.0,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 21.33,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 21.33,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 21.33
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 21.33,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 42.67
+    } ]
+  }, {
+    "value" : "/models/roof-metal-type-b.obj",
+    "halfWidth" : 72.78,
+    "halfDepth" : 64.0,
+    "height" : 64.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 72.78,
+      "halfDepth" : 64.0,
+      "height" : 21.33,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 66.23,
+      "halfDepth" : 58.24,
+      "height" : 21.33,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 21.33
+    }, {
+      "halfWidth" : 59.68,
+      "halfDepth" : 52.48,
+      "height" : 21.33,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 42.67
+    } ]
+  }, {
+    "value" : "/models/road-asphalt-center.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 0.1,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 64.0,
+      "halfDepth" : 64.0,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    }, {
+      "halfWidth" : 58.24,
+      "halfDepth" : 58.24,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.5
+    }, {
+      "halfWidth" : 52.48,
+      "halfDepth" : 52.48,
+      "height" : 0.5,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 1.0
+    } ]
+  }, {
+    "value" : "/models/detail-light-single.obj",
+    "halfWidth" : 5.52,
+    "halfDepth" : 16.91,
+    "height" : 122.88,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 4.63,
+      "halfDepth" : 14.2,
+      "height" : 41.78,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 68.81
+    } ]
+  }, {
+    "value" : "/models/scaffolding-poles.obj",
+    "halfWidth" : 64.0,
+    "halfDepth" : 64.0,
+    "height" : 128.0,
+    "solid" : false,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 53.76,
+      "halfDepth" : 53.76,
+      "height" : 43.52,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 71.68
+    } ]
+  }, {
+    "value" : "/models/wall-a-column.obj",
+    "halfWidth" : 16.0,
+    "halfDepth" : 16.0,
+    "height" : 128.0,
+    "solid" : true,
+    "walkable" : true,
+    "yawOffsetDeg" : 0.0,
+    "offsetLocalX" : 0.0,
+    "offsetLocalY" : 0.0,
+    "offsetLocalZ" : 0.0,
+    "boxes" : [ {
+      "halfWidth" : 15.36,
+      "halfDepth" : 15.36,
+      "height" : 125.44,
+      "yawOffsetDeg" : 0.0,
+      "offsetLocalX" : 0.0,
+      "offsetLocalY" : 0.0,
+      "offsetLocalZ" : 0.0
+    } ]
+  } ],
+  "prefix" : [ ]
 }

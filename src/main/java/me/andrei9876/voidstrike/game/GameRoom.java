@@ -28,8 +28,8 @@ public class GameRoom {
 
     private static final double MAP_WIDTH = 3800;
     private static final double MAP_HEIGHT = 3400;
-    private static final double PLAYER_MAX_SPEED = 410;
-    private static final double PLAYER_ACCELERATION = 2200;
+    private static final double PLAYER_MAX_SPEED = 460;
+    private static final double PLAYER_ACCELERATION = 2550;
     private static final double PLAYER_SPRINT_SPEED_MULTIPLIER = 1.45;
     private static final double PLAYER_CROUCH_SPEED_MULTIPLIER = 0.52;
     private static final double PLAYER_SPRINT_ACCELERATION_MULTIPLIER = 1.2;
@@ -38,8 +38,8 @@ public class GameRoom {
     private static final double GRAVITY = 1350;
     private static final double JUMP_VELOCITY = 520;
     private static final double BUNNYHOP_SPEED_BOOST = 1.09;
-    private static final double PLAYER_FRICTION = 9.5;
-    private static final double PLAYER_STOP_SPEED = 90;
+    private static final double PLAYER_FRICTION = 7.4;
+    private static final double PLAYER_STOP_SPEED = 82;
     private static final double PLAYER_RADIUS = 20;
     private static final double MAX_BULLET_Z = 700;
     private static final double PLAYER_BODY_MAX_Z = 64;
@@ -224,11 +224,34 @@ public class GameRoom {
             }
         }
 
-        return new SpawnPoint(baseX, baseY);
+        if (isSpawnPointGeometrySafe(baseX, baseY)) {
+            return new SpawnPoint(baseX, baseY);
+        }
+
+        for (int i = 0; i < SPAWN_TRIES * 2; i += 1) {
+            double angle = Math.random() * Math.PI * 2;
+            double ring = 1 + (i / 6.0);
+            double radius = ring * SPAWN_RING_STEP;
+            double x = baseX + Math.cos(angle) * radius;
+            double y = baseY + Math.sin(angle) * radius;
+            x = clamp(x, PLAYER_RADIUS + 8, MAP_WIDTH - PLAYER_RADIUS - 8);
+            y = clamp(y, SPAWN_Y_MIN, SPAWN_Y_MAX);
+            if (isSpawnPointGeometrySafe(x, y)) {
+                return new SpawnPoint(x, y);
+            }
+        }
+
+        for (double y = SPAWN_Y_MIN; y <= SPAWN_Y_MAX; y += PLAYER_RADIUS * 1.5) {
+            if (isSpawnPointGeometrySafe(baseX, y)) {
+                return new SpawnPoint(baseX, y);
+            }
+        }
+
+        return new SpawnPoint(baseX, clamp(baseY, SPAWN_Y_MIN, SPAWN_Y_MAX));
     }
 
     private boolean isSpawnPointSafe(double x, double y) {
-        if (collidesWithObstacle(x, y, 0, PLAYER_RADIUS, DEFAULT_PLAYER_COLLIDER_HEIGHT)) {
+        if (!isSpawnPointGeometrySafe(x, y)) {
             return false;
         }
         for (PlayerState other : players.values()) {
@@ -239,6 +262,10 @@ public class GameRoom {
             }
         }
         return true;
+    }
+
+    private boolean isSpawnPointGeometrySafe(double x, double y) {
+        return !collidesWithObstacle(x, y, 0, PLAYER_RADIUS, DEFAULT_PLAYER_COLLIDER_HEIGHT);
     }
 
     public synchronized void removePlayer(String playerId) {
@@ -279,7 +306,7 @@ public class GameRoom {
 
         String trimmed = rawCommand.trim();
         if (trimmed.isEmpty()) {
-            addSystemChat("Usage: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>");
+            addSystemChat("Usage: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>, respawn [playerName|all]");
             return;
         }
 
@@ -291,6 +318,7 @@ public class GameRoom {
             case "money" -> handleMoneyCommand(requester, parts);
             case "fly" -> handleFlyCommand(requester, parts);
             case "tp" -> handleTeleportCommand(requester, parts);
+            case "respawn" -> handleRespawnCommand(requester, parts);
             case "reloadcollision", "reloadcol", "reloadprofiles" -> handleReloadCollisionCommand();
             default -> addSystemChat("Unknown command: " + command);
         }
@@ -909,10 +937,37 @@ public class GameRoom {
     }
 
     private void respawnPlayer(PlayerState player) {
-        double spawnX = player.getTeam().equals("RED") ? 120 : MAP_WIDTH - 120;
-        double spawnY = 360 + Math.random() * 2680;
+        SpawnPoint spawn = findSafeSpawn(player.getTeam());
+        player.respawn(spawn.x, spawn.y);
+    }
 
-        player.respawn(spawnX, spawnY);
+    private void handleRespawnCommand(PlayerState requester, String[] parts) {
+        if (parts.length <= 1) {
+            respawnPlayer(requester);
+            addSystemChat(requester.getName() + " respawned");
+            return;
+        }
+
+        String targetToken = String.join(" ", java.util.Arrays.copyOfRange(parts, 1, parts.length)).trim();
+        if (targetToken.equalsIgnoreCase("all")) {
+            for (PlayerState player : players.values()) {
+                respawnPlayer(player);
+            }
+            addSystemChat(requester.getName() + " respawned all players");
+            return;
+        }
+
+        PlayerState target = players.values().stream()
+                .filter(player -> player.getName().equalsIgnoreCase(targetToken))
+                .findFirst()
+                .orElse(null);
+        if (target == null) {
+            addSystemChat("Player not found: " + targetToken);
+            return;
+        }
+
+        respawnPlayer(target);
+        addSystemChat(requester.getName() + " respawned " + target.getName());
     }
 
     private void movePlayerWithCollision(PlayerState player, double nextX, double nextY) {
@@ -1372,6 +1427,7 @@ public class GameRoom {
             double halfDepth,
             double cosYaw,
             double sinYaw,
+            double baseZ,
             double topZ,
             boolean solid,
             boolean walkable
@@ -1388,7 +1444,7 @@ public class GameRoom {
             LocalPoint p = toLocal(x, y);
             return Math.abs(p.x) <= halfWidth
                     && Math.abs(p.y) <= halfDepth
-                    && z >= 0
+                    && z >= baseZ
                     && z <= topZ;
         }
 
@@ -1405,7 +1461,7 @@ public class GameRoom {
             if (z >= topZ) {
                 return false;
             }
-            if (z + height <= 0) {
+            if (z + height <= baseZ) {
                 return false;
             }
 
@@ -1443,45 +1499,81 @@ public class GameRoom {
                 if (collider == null) {
                     continue;
                 }
-                double modelScale = readModelScale(model.path("scale"));
-                double yawDeg = readModelYawDeg(model) + collider.yawOffsetDeg;
-                double yawRad = Math.toRadians(yawDeg);
-
+                boolean effectiveSolid = collider.solid && isLikelySolidModel(path);
+                ModelScale modelScale = readModelScale(model.path("scale"));
                 double x = model.path("position").path("x").asDouble(0);
                 double y = model.path("position").path("z").asDouble(0);
-                double halfWidth = collider.halfWidth * modelScale;
-                double halfDepth = collider.halfDepth * modelScale;
-                double height = collider.height * modelScale;
-                double cosYaw = Math.cos(yawRad);
-                double sinYaw = Math.sin(yawRad);
-                double localOffsetX = collider.offsetLocalX * modelScale;
-                double localOffsetY = collider.offsetLocalY * modelScale;
-                double worldOffsetX = localOffsetX * cosYaw - localOffsetY * sinYaw;
-                double worldOffsetY = localOffsetX * sinYaw + localOffsetY * cosYaw;
-                boxes.add(new CollisionBox(x + worldOffsetX, y + worldOffsetY, halfWidth, halfDepth, cosYaw, sinYaw, height, collider.solid, collider.walkable));
+                List<ColliderPart> parts = collider.parts == null || collider.parts.isEmpty()
+                        ? List.of(new ColliderPart(
+                        collider.halfWidth,
+                        collider.halfDepth,
+                        collider.height,
+                        collider.yawOffsetDeg,
+                        collider.offsetLocalX,
+                        collider.offsetLocalY,
+                        collider.offsetLocalZ
+                ))
+                        : collider.parts;
+
+                for (ColliderPart part : parts) {
+                    double yawDeg = readModelYawDeg(model) + part.yawOffsetDeg;
+                    double yawRad = Math.toRadians(yawDeg);
+                    double halfWidth = part.halfWidth * modelScale.x();
+                    double halfDepth = part.halfDepth * modelScale.z();
+                    double height = part.height * modelScale.y();
+                    double cosYaw = Math.cos(yawRad);
+                    double sinYaw = Math.sin(yawRad);
+                    double localOffsetX = part.offsetLocalX * modelScale.x();
+                    double localOffsetY = part.offsetLocalY * modelScale.z();
+                    double localOffsetZ = part.offsetLocalZ * modelScale.y();
+                    double worldOffsetX = localOffsetX * cosYaw - localOffsetY * sinYaw;
+                    double worldOffsetY = localOffsetX * sinYaw + localOffsetY * cosYaw;
+                    double baseZ = Math.max(0, localOffsetZ);
+                    double topZ = Math.max(baseZ, baseZ + height);
+                    boxes.add(new CollisionBox(x + worldOffsetX, y + worldOffsetY, halfWidth, halfDepth, cosYaw, sinYaw, baseZ, topZ, effectiveSolid, collider.walkable));
+                }
             }
         } catch (Exception _ignored) {
         }
         return boxes;
     }
 
-    private double readModelScale(JsonNode scaleNode) {
+    private boolean isLikelySolidModel(String modelPath) {
+        if (modelPath == null || modelPath.isEmpty()) {
+            return false;
+        }
+        // Conservative whitelist: only known blocking geometry should be solid.
+        return modelPath.contains("/wall-")
+                || modelPath.contains("/cliff-")
+                || modelPath.contains("/truck-")
+                || modelPath.contains("/crate")
+                || modelPath.contains("/pallet")
+                || modelPath.contains("/dumpster")
+                || modelPath.contains("/detail-barrier")
+                || modelPath.contains("/detail-block")
+                || modelPath.contains("/door-")
+                || modelPath.contains("/roof-metal-type-")
+                || modelPath.contains("/planks");
+    }
+
+    private ModelScale readModelScale(JsonNode scaleNode) {
         if (scaleNode == null || scaleNode.isMissingNode() || scaleNode.isNull()) {
-            return 1.0;
+            return new ModelScale(1.0, 1.0, 1.0);
         }
         if (scaleNode.isNumber()) {
             double scale = scaleNode.asDouble(1.0);
-            return Double.isFinite(scale) && scale > 0 ? scale : 1.0;
+            double safeScale = Double.isFinite(scale) && scale > 0 ? scale : 1.0;
+            return new ModelScale(safeScale, safeScale, safeScale);
         }
         if (scaleNode.isObject()) {
             double sx = scaleNode.path("x").asDouble(1.0);
             double sy = scaleNode.path("y").asDouble(1.0);
             double sz = scaleNode.path("z").asDouble(1.0);
             if (Double.isFinite(sx) && sx > 0 && Double.isFinite(sy) && sy > 0 && Double.isFinite(sz) && sz > 0) {
-                return (sx + sy + sz) / 3.0;
+                return new ModelScale(sx, sy, sz);
             }
         }
-        return 1.0;
+        return new ModelScale(1.0, 1.0, 1.0);
     }
 
     private double readModelYawDeg(JsonNode modelNode) {
@@ -1519,15 +1611,15 @@ public class GameRoom {
     private CollisionProfileConfig loadCollisionProfileConfig() {
         CollisionProfileConfig config = new CollisionProfileConfig();
         // Reasonable fallback defaults if file is missing.
-        config.defaultProfile = new ColliderTemplate(48, 48, 64, true, true, 0, 0, 0);
-        config.prefix.add(new PrefixColliderProfile("/models/road-", new ColliderTemplate(64, 64, 8, false, true, 0, 0, 0)));
-        config.prefix.add(new PrefixColliderProfile("/models/grass", new ColliderTemplate(64, 64, 8, false, true, 0, 0, 0)));
-        config.prefix.add(new PrefixColliderProfile("/models/wall-", new ColliderTemplate(64, 64, 96, true, true, 0, 0, 0)));
-        config.prefix.add(new PrefixColliderProfile("/models/window-", new ColliderTemplate(48, 24, 96, true, true, 0, 0, 0)));
-        config.prefix.add(new PrefixColliderProfile("/models/door-", new ColliderTemplate(40, 20, 96, true, true, 0, 0, 0)));
-        config.prefix.add(new PrefixColliderProfile("/models/truck-", new ColliderTemplate(92, 56, 88, true, true, 0, 0, 0)));
-        config.prefix.add(new PrefixColliderProfile("/models/detail-block", new ColliderTemplate(56, 56, 72, true, true, 0, 0, 0)));
-        config.prefix.add(new PrefixColliderProfile("/models/detail-barrier", new ColliderTemplate(52, 36, 52, true, true, 0, 0, 0)));
+        config.defaultProfile = new ColliderTemplate(48, 48, 64, true, true, 0, 0, 0, 0, List.of());
+        config.prefix.add(new PrefixColliderProfile("/models/road-", new ColliderTemplate(64, 64, 8, false, true, 0, 0, 0, 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/grass", new ColliderTemplate(64, 64, 8, false, true, 0, 0, 0, 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/wall-", new ColliderTemplate(64, 64, 96, true, true, 0, 0, 0, 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/window-", new ColliderTemplate(48, 24, 96, true, true, 0, 0, 0, 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/door-", new ColliderTemplate(40, 20, 96, true, true, 0, 0, 0, 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/truck-", new ColliderTemplate(92, 56, 88, true, true, 0, 0, 0, 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/detail-block", new ColliderTemplate(56, 56, 72, true, true, 0, 0, 0, 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/detail-barrier", new ColliderTemplate(52, 36, 52, true, true, 0, 0, 0, 0, List.of())));
 
         try {
             if (!Files.exists(COLLISION_PROFILES_PATH)) {
@@ -1581,7 +1673,25 @@ public class GameRoom {
         double yawOffsetDeg = node.path("yawOffsetDeg").asDouble(fallback.yawOffsetDeg);
         double offsetLocalX = node.path("offsetLocalX").asDouble(fallback.offsetLocalX);
         double offsetLocalY = node.path("offsetLocalY").asDouble(fallback.offsetLocalY);
-        return new ColliderTemplate(halfWidth, halfDepth, height, solid, walkable, yawOffsetDeg, offsetLocalX, offsetLocalY);
+        double offsetLocalZ = node.path("offsetLocalZ").asDouble(fallback.offsetLocalZ);
+        List<ColliderPart> parts = new ArrayList<>();
+        JsonNode partsNode = node.path("boxes");
+        if (partsNode.isArray()) {
+            for (JsonNode partNode : partsNode) {
+                if (!partNode.isObject()) {
+                    continue;
+                }
+                double partHalfWidth = partNode.path("halfWidth").asDouble(halfWidth);
+                double partHalfDepth = partNode.path("halfDepth").asDouble(halfDepth);
+                double partHeight = partNode.path("height").asDouble(height);
+                double partYawOffsetDeg = partNode.path("yawOffsetDeg").asDouble(yawOffsetDeg);
+                double partOffsetLocalX = partNode.path("offsetLocalX").asDouble(offsetLocalX);
+                double partOffsetLocalY = partNode.path("offsetLocalY").asDouble(offsetLocalY);
+                double partOffsetLocalZ = partNode.path("offsetLocalZ").asDouble(offsetLocalZ);
+                parts.add(new ColliderPart(partHalfWidth, partHalfDepth, partHeight, partYawOffsetDeg, partOffsetLocalX, partOffsetLocalY, partOffsetLocalZ));
+            }
+        }
+        return new ColliderTemplate(halfWidth, halfDepth, height, solid, walkable, yawOffsetDeg, offsetLocalX, offsetLocalY, offsetLocalZ, parts);
     }
 
     private record ColliderTemplate(
@@ -1592,7 +1702,27 @@ public class GameRoom {
             boolean walkable,
             double yawOffsetDeg,
             double offsetLocalX,
-            double offsetLocalY
+            double offsetLocalY,
+            double offsetLocalZ,
+            List<ColliderPart> parts
+    ) {
+    }
+
+    private record ColliderPart(
+            double halfWidth,
+            double halfDepth,
+            double height,
+            double yawOffsetDeg,
+            double offsetLocalX,
+            double offsetLocalY,
+            double offsetLocalZ
+    ) {
+    }
+
+    private record ModelScale(
+            double x,
+            double y,
+            double z
     ) {
     }
 

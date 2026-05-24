@@ -32,6 +32,7 @@ import {
     editorHandleCanvasClick,
     editorHandleKeyDown,
     getCollisionProfileSuggestionAtCrosshair,
+    getCollisionProfileSuggestionsForScene,
     saveEditorScene,
     setAnisotropyLevel,
     setCollisionDebugVisible,
@@ -713,6 +714,192 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
+    if (command === "setcolbox" || command === "savecolbox" || command === "setcollisionbox") {
+        const suggestion = getCollisionProfileSuggestionAtCrosshair();
+        if (!suggestion) {
+            appendConsoleLine("setcolbox: no model under crosshair");
+            return;
+        }
+
+        void (async () => {
+            try {
+                const response = await fetch("/api/world/collision-profile", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(suggestion)
+                });
+                if (!response.ok) {
+                    appendConsoleLine("setcolbox: save failed");
+                    return;
+                }
+                appendConsoleLine(`setcolbox saved ${suggestion.value} hw=${suggestion.halfWidth} hd=${suggestion.halfDepth} h=${suggestion.height}`);
+                const sent = sendAdminCommand("reloadcollision");
+                appendConsoleLine(sent ? "reloadcollision ok" : "reloadcollision failed (socket not ready)");
+            } catch (_error) {
+                appendConsoleLine("setcolbox: save failed");
+            }
+        })();
+        return;
+    }
+
+    if (command === "setcolboxes" || command === "savecolboxes" || command === "setcollisionboxes") {
+        const suggestion = getCollisionProfileSuggestionAtCrosshair();
+        if (!suggestion) {
+            appendConsoleLine("setcolboxes: no model under crosshair");
+            return;
+        }
+
+        const numbers = parts.slice(1).map(Number);
+        let payload = null;
+
+        if (parts.length === 1) {
+            const baseHalfW = Math.max(4, Number((suggestion.halfWidth * 0.34).toFixed(2)));
+            const baseHalfD = Math.max(4, Number((suggestion.halfDepth * 0.34).toFixed(2)));
+            const baseH = Math.max(8, Number((suggestion.height * 0.28).toFixed(2)));
+            const midHalfW = Math.max(3, Number((suggestion.halfWidth * 0.2).toFixed(2)));
+            const midHalfD = Math.max(3, Number((suggestion.halfDepth * 0.2).toFixed(2)));
+            const midH = Math.max(8, Number((suggestion.height * 0.5).toFixed(2)));
+            payload = {
+                ...suggestion,
+                halfWidth: baseHalfW,
+                halfDepth: baseHalfD,
+                height: Math.max(baseH, midH),
+                boxes: [
+                    { halfWidth: baseHalfW, halfDepth: baseHalfD, height: baseH, offsetLocalX: 0, offsetLocalY: 0, offsetLocalZ: 0, yawOffsetDeg: 0 },
+                    { halfWidth: midHalfW, halfDepth: midHalfD, height: midH, offsetLocalX: 0, offsetLocalY: 0, offsetLocalZ: Number((baseH * 0.4).toFixed(2)), yawOffsetDeg: 0 }
+                ]
+            };
+        } else if (parts.length === 7) {
+            const [baseHalfW, baseHalfD, baseH, topHalfW, topHalfD, topH] = numbers;
+            if (![baseHalfW, baseHalfD, baseH, topHalfW, topHalfD, topH].every(Number.isFinite)) {
+                appendConsoleLine("setcolboxes: invalid numbers");
+                return;
+            }
+            payload = {
+                ...suggestion,
+                halfWidth: baseHalfW,
+                halfDepth: baseHalfD,
+                height: Math.max(baseH, topH),
+                boxes: [
+                    { halfWidth: baseHalfW, halfDepth: baseHalfD, height: baseH, offsetLocalX: 0, offsetLocalY: 0, offsetLocalZ: 0, yawOffsetDeg: 0 },
+                    { halfWidth: topHalfW, halfDepth: topHalfD, height: topH, offsetLocalX: 0, offsetLocalY: 0, offsetLocalZ: Number((baseH * 0.4).toFixed(2)), yawOffsetDeg: 0 }
+                ]
+            };
+        } else if (parts.length === 13) {
+            const [
+                baseHalfW, baseHalfD, baseH, baseOffX, baseOffY, baseYaw,
+                topHalfW, topHalfD, topH, topOffX, topOffY, topYaw
+            ] = numbers;
+            if (![baseHalfW, baseHalfD, baseH, baseOffX, baseOffY, baseYaw, topHalfW, topHalfD, topH, topOffX, topOffY, topYaw].every(Number.isFinite)) {
+                appendConsoleLine("setcolboxes: invalid numbers");
+                return;
+            }
+            payload = {
+                ...suggestion,
+                halfWidth: baseHalfW,
+                halfDepth: baseHalfD,
+                height: Math.max(baseH, topH),
+                boxes: [
+                    { halfWidth: baseHalfW, halfDepth: baseHalfD, height: baseH, offsetLocalX: baseOffX, offsetLocalY: baseOffY, offsetLocalZ: 0, yawOffsetDeg: baseYaw },
+                    { halfWidth: topHalfW, halfDepth: topHalfD, height: topH, offsetLocalX: topOffX, offsetLocalY: topOffY, offsetLocalZ: 0, yawOffsetDeg: topYaw }
+                ]
+            };
+        } else if (parts.length === 15) {
+            const [
+                baseHalfW, baseHalfD, baseH, baseOffX, baseOffY, baseOffZ, baseYaw,
+                topHalfW, topHalfD, topH, topOffX, topOffY, topOffZ, topYaw
+            ] = numbers;
+            if (![baseHalfW, baseHalfD, baseH, baseOffX, baseOffY, baseOffZ, baseYaw, topHalfW, topHalfD, topH, topOffX, topOffY, topOffZ, topYaw].every(Number.isFinite)) {
+                appendConsoleLine("setcolboxes: invalid numbers");
+                return;
+            }
+            payload = {
+                ...suggestion,
+                halfWidth: baseHalfW,
+                halfDepth: baseHalfD,
+                height: Math.max(baseH + Math.max(0, baseOffZ), topH + Math.max(0, topOffZ)),
+                boxes: [
+                    { halfWidth: baseHalfW, halfDepth: baseHalfD, height: baseH, offsetLocalX: baseOffX, offsetLocalY: baseOffY, offsetLocalZ: baseOffZ, yawOffsetDeg: baseYaw },
+                    { halfWidth: topHalfW, halfDepth: topHalfD, height: topH, offsetLocalX: topOffX, offsetLocalY: topOffY, offsetLocalZ: topOffZ, yawOffsetDeg: topYaw }
+                ]
+            };
+        } else {
+            appendConsoleLine("usage: setcolboxes");
+            appendConsoleLine("auto: setcolboxes");
+            appendConsoleLine("simple: setcolboxes <baseHalfW> <baseHalfD> <baseH> <topHalfW> <topHalfD> <topH>");
+            appendConsoleLine("advanced: setcolboxes <bHW> <bHD> <bH> <bOffX> <bOffY> <bYaw> <tHW> <tHD> <tH> <tOffX> <tOffY> <tYaw>");
+            appendConsoleLine("advancedZ: setcolboxes <bHW> <bHD> <bH> <bOffX> <bOffY> <bOffZ> <bYaw> <tHW> <tHD> <tH> <tOffX> <tOffY> <tOffZ> <tYaw>");
+            return;
+        }
+
+        void (async () => {
+            try {
+                const response = await fetch("/api/world/collision-profile", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    appendConsoleLine("setcolboxes: save failed");
+                    return;
+                }
+                appendConsoleLine(`setcolboxes saved ${suggestion.value}`);
+                const sent = sendAdminCommand("reloadcollision");
+                appendConsoleLine(sent ? "reloadcollision ok" : "reloadcollision failed (socket not ready)");
+            } catch (_error) {
+                appendConsoleLine("setcolboxes: save failed");
+            }
+        })();
+        return;
+    }
+
+    if (command === "autocolboxes" || command === "autohitbox" || command === "autocollision") {
+        const token1 = (parts[1] || "").toLowerCase();
+        const token2 = (parts[2] || "").toLowerCase();
+        let scope = "all";
+        let density = 0;
+        if (token1) {
+            const parsed = Number(token1);
+            if (Number.isFinite(parsed)) {
+                density = parsed;
+            } else {
+                scope = token1;
+            }
+        }
+        if (token2) {
+            const parsed = Number(token2);
+            if (Number.isFinite(parsed)) {
+                density = parsed;
+            }
+        }
+        density = Math.max(0, Math.min(96, Math.floor(density)));
+        const suggestions = getCollisionProfileSuggestionsForScene(scope, density);
+        if (!Array.isArray(suggestions) || suggestions.length === 0) {
+            appendConsoleLine("autocolboxes: no scene models found");
+            return;
+        }
+        void (async () => {
+            let saved = 0;
+            for (const suggestion of suggestions) {
+                try {
+                    const response = await fetch("/api/world/collision-profile", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(suggestion)
+                    });
+                    if (response.ok) {
+                        saved += 1;
+                    }
+                } catch (_error) {
+                }
+            }
+            appendConsoleLine(`autocolboxes(${scope}, ${density === 0 ? "adaptive" : density}) saved ${saved}/${suggestions.length} profiles`);
+            const sent = sendAdminCommand("reloadcollision");
+            appendConsoleLine(sent ? "reloadcollision ok" : "reloadcollision failed (socket not ready)");
+        })();
+        return;
+    }
+
     if (command === "perfhud" || command === "debugfps") {
         let enabled = state.perfHudVisible;
         if (arg === "on" || arg === "1" || arg === "true") {
@@ -769,12 +956,12 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
-    if (command === "freeze" || command === "money" || command === "fly" || command === "tp"
+    if (command === "freeze" || command === "money" || command === "fly" || command === "tp" || command === "respawn"
         || command === "reloadcollision" || command === "reloadcol" || command === "reloadprofiles") {
         const sent = sendAdminCommand(normalized);
         appendConsoleLine(sent ? "ok" : "socket not ready");
         return;
     }
 
-    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>, reloadcollision, hitbox on|off|toggle, colprofile, backmount <x> <y> <z> <rxDeg> <ryDeg> <rzDeg>, handoffset <x> <y> <z> [weapon], wallhack on|off|toggle, performancemode on|off|toggle, perfhud on|off|toggle, editor on|off|save|clear");
+    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>, respawn [playerName|all], reloadcollision, hitbox on|off|toggle, colprofile, setcolbox, setcolboxes (auto if no args), autocolboxes [scope] [density|0=adaptive], backmount <x> <y> <z> <rxDeg> <ryDeg> <rzDeg>, handoffset <x> <y> <z> [weapon], wallhack on|off|toggle, performancemode on|off|toggle, perfhud on|off|toggle, editor on|off|save|clear");
 }

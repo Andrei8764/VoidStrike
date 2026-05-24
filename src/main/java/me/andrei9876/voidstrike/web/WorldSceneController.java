@@ -24,6 +24,8 @@ import java.util.List;
 public class WorldSceneController {
 
     private static final Path SCENE_PATH = Path.of("src/main/resources/static/world/scene.json");
+    private static final Path COLLISION_PROFILES_PATH = Path.of("src/main/resources/static/world/collision-profiles.json");
+    private static final Path TARGET_COLLISION_PROFILES_PATH = Path.of("target/classes/static/world/collision-profiles.json");
     private static final Path MODELS_PATH = Path.of("src/main/resources/static/models");
 
     private final ObjectMapper objectMapper;
@@ -106,5 +108,111 @@ public class WorldSceneController {
         modelPaths.forEach(result::add);
         return ResponseEntity.ok(result);
     }
-}
 
+    @PostMapping(value = "/collision-profile", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<JsonNode> saveCollisionProfile(@RequestBody JsonNode payload) throws IOException {
+        if (!payload.isObject()) {
+            return ResponseEntity.badRequest().body(objectMapper.createObjectNode().put("error", "Payload must be an object"));
+        }
+
+        String value = payload.path("value").asText("").toLowerCase();
+        if (!value.startsWith("/models/")) {
+            return ResponseEntity.badRequest().body(objectMapper.createObjectNode().put("error", "value must start with /models/"));
+        }
+
+        double halfWidth = Math.max(0.1, payload.path("halfWidth").asDouble(1));
+        double halfDepth = Math.max(0.1, payload.path("halfDepth").asDouble(1));
+        double height = Math.max(0.1, payload.path("height").asDouble(1));
+        boolean solid = payload.path("solid").asBoolean(true);
+        boolean walkable = payload.path("walkable").asBoolean(true);
+        double yawOffsetDeg = payload.path("yawOffsetDeg").asDouble(0);
+        double offsetLocalX = payload.path("offsetLocalX").asDouble(0);
+        double offsetLocalY = payload.path("offsetLocalY").asDouble(0);
+        double offsetLocalZ = payload.path("offsetLocalZ").asDouble(0);
+        ArrayNode boxes = objectMapper.createArrayNode();
+        JsonNode boxesNode = payload.path("boxes");
+        if (boxesNode.isArray()) {
+            for (JsonNode part : boxesNode) {
+                if (!part.isObject()) {
+                    continue;
+                }
+                ObjectNode cleanPart = objectMapper.createObjectNode();
+                cleanPart.put("halfWidth", Math.max(0.1, part.path("halfWidth").asDouble(halfWidth)));
+                cleanPart.put("halfDepth", Math.max(0.1, part.path("halfDepth").asDouble(halfDepth)));
+                cleanPart.put("height", Math.max(0.1, part.path("height").asDouble(height)));
+                cleanPart.put("yawOffsetDeg", part.path("yawOffsetDeg").asDouble(yawOffsetDeg));
+                cleanPart.put("offsetLocalX", part.path("offsetLocalX").asDouble(offsetLocalX));
+                cleanPart.put("offsetLocalY", part.path("offsetLocalY").asDouble(offsetLocalY));
+                cleanPart.put("offsetLocalZ", part.path("offsetLocalZ").asDouble(offsetLocalZ));
+                boxes.add(cleanPart);
+            }
+        }
+
+        ObjectNode root;
+        if (Files.exists(COLLISION_PROFILES_PATH)) {
+            JsonNode parsed = objectMapper.readTree(Files.readString(COLLISION_PROFILES_PATH));
+            root = parsed != null && parsed.isObject() ? (ObjectNode) parsed : objectMapper.createObjectNode();
+        } else {
+            root = objectMapper.createObjectNode();
+        }
+
+        ArrayNode exact;
+        JsonNode exactNode = root.path("exact");
+        if (exactNode.isArray()) {
+            exact = (ArrayNode) exactNode;
+        } else {
+            exact = objectMapper.createArrayNode();
+            root.set("exact", exact);
+        }
+
+        ObjectNode entry = objectMapper.createObjectNode();
+        entry.put("value", value);
+        entry.put("halfWidth", halfWidth);
+        entry.put("halfDepth", halfDepth);
+        entry.put("height", height);
+        entry.put("solid", solid);
+        entry.put("walkable", walkable);
+        entry.put("yawOffsetDeg", yawOffsetDeg);
+        entry.put("offsetLocalX", offsetLocalX);
+        entry.put("offsetLocalY", offsetLocalY);
+        entry.put("offsetLocalZ", offsetLocalZ);
+        if (!boxes.isEmpty()) {
+            entry.set("boxes", boxes);
+        }
+
+        boolean updated = false;
+        for (int i = 0; i < exact.size(); i++) {
+            JsonNode node = exact.get(i);
+            String currentValue = node.path("value").asText("").toLowerCase();
+            if (value.equals(currentValue)) {
+                exact.set(i, entry);
+                updated = true;
+                break;
+            }
+        }
+        if (!updated) {
+            exact.add(entry);
+        }
+
+        String serialized = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
+        writeCollisionProfiles(serialized);
+
+        return ResponseEntity.ok(objectMapper.createObjectNode()
+                .put("ok", true)
+                .put("value", value)
+                .put("updated", updated));
+    }
+
+    private void writeCollisionProfiles(String serialized) throws IOException {
+        Path srcParent = COLLISION_PROFILES_PATH.getParent();
+        if (srcParent != null) {
+            Files.createDirectories(srcParent);
+        }
+        Files.writeString(COLLISION_PROFILES_PATH, serialized);
+
+        Path targetParent = TARGET_COLLISION_PROFILES_PATH.getParent();
+        if (targetParent != null && Files.exists(targetParent)) {
+            Files.writeString(TARGET_COLLISION_PROFILES_PATH, serialized);
+        }
+    }
+}

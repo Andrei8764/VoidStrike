@@ -619,6 +619,10 @@ export function getCollisionProfileSuggestionAtCrosshair() {
     return collisionDebugController.getCollisionProfileSuggestionAtCrosshair();
 }
 
+export function getCollisionProfileSuggestionsForScene(filter = "all", density = 16) {
+    return collisionDebugController.getCollisionProfileSuggestionsForScene(filter, density);
+}
+
 export async function setCollisionDebugVisible(visible) {
     await collisionDebugController.setCollisionDebugVisible(visible);
 }
