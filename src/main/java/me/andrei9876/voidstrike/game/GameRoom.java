@@ -7,13 +7,15 @@ import me.andrei9876.voidstrike.game.model.ClientInputMessage;
 import me.andrei9876.voidstrike.game.model.GameSnapshot;
 import me.andrei9876.voidstrike.game.model.PlayerState;
 import me.andrei9876.voidstrike.game.model.WeaponType;
+import me.andrei9876.voidstrike.world.WorldStorageService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -22,6 +24,8 @@ import java.util.Locale;
 import java.util.Map;
 
 public class GameRoom {
+
+    private static final Logger log = LoggerFactory.getLogger(GameRoom.class);
 
     public static final int MAX_PLAYERS = 32;
 
@@ -136,11 +140,10 @@ public class GameRoom {
 
     private static final List<LadderZone> LADDER_ZONES = List.of();
     private static final List<Obstacle> COLLISION_OBSTACLES = List.of();
-    private static final Path SCENE_PATH = Path.of("src/main/resources/static/world/scene.json");
-    private static final Path COLLISION_PROFILES_PATH = Path.of("src/main/resources/static/world/collision-profiles.json");
     private static final double DEFAULT_PLAYER_COLLIDER_HEIGHT = 72;
     private static final double PLAYER_GROUND_SNAP_EPSILON = 1.5;
     private static final double PLAYER_STEP_UP_HEIGHT = 20;
+    private static final int PENETRATION_RESOLVE_PASSES = 4;
     private static final int SPAWN_TRIES = 48;
     private static final double SPAWN_Y_MIN = 200;
     private static final double SPAWN_Y_MAX = MAP_HEIGHT - 200;
@@ -151,6 +154,7 @@ public class GameRoom {
 
     private final String id;
     private final ObjectMapper objectMapper;
+    private final WorldStorageService worldStorageService;
 
     private final Map<String, WebSocketSession> sessions;
     private final Map<String, PlayerState> players;
@@ -159,6 +163,7 @@ public class GameRoom {
     private final List<ChatEvent> chatMessages = new ArrayList<>();
     private final List<CollisionBox> sceneCollisionBoxes = new ArrayList<>();
     private final CollisionProfileConfig collisionProfileConfig;
+    private volatile boolean collisionDebugLogging = false;
 
     private int roundNumber = 1;
     private int redScore = 0;
@@ -176,6 +181,7 @@ public class GameRoom {
     public GameRoom(
             String id,
             ObjectMapper objectMapper,
+            WorldStorageService worldStorageService,
             Map<String, WebSocketSession> sessions,
             Map<String, PlayerState> players,
             int websocketSendTimeLimitMs,
@@ -183,12 +189,16 @@ public class GameRoom {
     ) {
         this.id = id;
         this.objectMapper = objectMapper;
+        this.worldStorageService = worldStorageService;
         this.sessions = sessions;
         this.players = players;
         this.websocketSendTimeLimitMs = websocketSendTimeLimitMs;
         this.websocketSendBufferSizeBytes = websocketSendBufferSizeBytes;
         this.collisionProfileConfig = loadCollisionProfileConfig();
         this.sceneCollisionBoxes.addAll(loadSceneCollisionBoxes());
+        long solidBoxes = this.sceneCollisionBoxes.stream().filter(box -> box.solid).count();
+        log.info("[collision] room {} loaded {} collision boxes ({} solid)",
+                id, this.sceneCollisionBoxes.size(), solidBoxes);
     }
 
     public synchronized boolean hasFreeSlot() {
@@ -320,7 +330,7 @@ public class GameRoom {
 
         String trimmed = rawCommand.trim();
         if (trimmed.isEmpty()) {
-            addSystemChat("Usage: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>, respawn [playerName|all]");
+            addSystemChat("Usage: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>, respawn [playerName|all], reloadcollision, coldebug on|off");
             return;
         }
 
@@ -334,8 +344,23 @@ public class GameRoom {
             case "tp" -> handleTeleportCommand(requester, parts);
             case "respawn" -> handleRespawnCommand(requester, parts);
             case "reloadcollision", "reloadcol", "reloadprofiles" -> handleReloadCollisionCommand();
+            case "coldebug", "collisiondebug" -> handleCollisionDebugCommand(parts);
             default -> addSystemChat("Unknown command: " + command);
         }
+    }
+
+    private void handleCollisionDebugCommand(String[] parts) {
+        String arg = parts.length > 1 ? parts[1].toLowerCase(Locale.ROOT) : "toggle";
+        boolean enabled = switch (arg) {
+            case "on", "1", "true" -> true;
+            case "off", "0", "false" -> false;
+            default -> !collisionDebugLogging;
+        };
+        collisionDebugLogging = enabled;
+        log.info("[collision] debug logging {} ({} solid/walkable boxes loaded)",
+                enabled ? "ON" : "OFF", sceneCollisionBoxes.size());
+        addSystemChat("Collision debug logging " + (enabled ? "ON" : "OFF")
+                + " (" + sceneCollisionBoxes.size() + " boxes)");
     }
 
     private void handleReloadCollisionCommand() {
@@ -462,8 +487,11 @@ public class GameRoom {
 
             tryUseLadder(player, now);
 
+            double preMoveX = player.getX();
+            double preMoveY = player.getY();
             updatePlayerMovement(player, deltaSeconds);
             updatePlayerVerticalMovement(player, deltaSeconds);
+            resolvePlayerPenetration(player, preMoveX, preMoveY);
 
             if (canShoot(player, now)) {
                 spawnBullet(player);
@@ -1083,6 +1111,68 @@ public class GameRoom {
         return top;
     }
 
+    /**
+     * Safety-net depenetration: if a player ends a tick overlapping solid geometry (after a
+     * spawn, teleport, profile reload, or a sliding edge-case), push them back out along the
+     * minimum-translation axis. This is the authoritative anti-noclip guarantee — sliding
+     * prevents entering geometry, this guarantees we never stay inside it.
+     */
+    private boolean resolvePlayerPenetration(PlayerState player, double fromX, double fromY) {
+        boolean resolvedAny = false;
+
+        for (int pass = 0; pass < PENETRATION_RESOLVE_PASSES; pass++) {
+            boolean resolvedThisPass = false;
+            double playerZ = player.getZ();
+
+            for (CollisionBox box : sceneCollisionBoxes) {
+                if (!box.solid) {
+                    continue;
+                }
+                if (playerZ >= box.topZ || playerZ + DEFAULT_PLAYER_COLLIDER_HEIGHT <= box.baseZ) {
+                    continue;
+                }
+
+                double[] push = box.computePushOut(player.getX(), player.getY(), PLAYER_RADIUS, fromX, fromY);
+                if (push == null) {
+                    continue;
+                }
+
+                double newX = clamp(player.getX() + push[0], PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS);
+                double newY = clamp(player.getY() + push[1], PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS);
+                player.setX(newX);
+                player.setY(newY);
+
+                double pushLength = Math.sqrt(push[0] * push[0] + push[1] * push[1]);
+                if (pushLength > 1e-6) {
+                    double nx = push[0] / pushLength;
+                    double ny = push[1] / pushLength;
+                    double velocityIntoBox = player.getVelocityX() * nx + player.getVelocityY() * ny;
+                    if (velocityIntoBox < 0) {
+                        player.setVelocityX(player.getVelocityX() - velocityIntoBox * nx);
+                        player.setVelocityY(player.getVelocityY() - velocityIntoBox * ny);
+                    }
+                }
+
+                resolvedThisPass = true;
+                resolvedAny = true;
+            }
+
+            if (!resolvedThisPass) {
+                break;
+            }
+        }
+
+        if (resolvedAny && collisionDebugLogging) {
+            log.warn("[collision] depenetrated player {} -> ({}, {}, {})",
+                    player.getName(),
+                    String.format(Locale.ROOT, "%.1f", player.getX()),
+                    String.format(Locale.ROOT, "%.1f", player.getY()),
+                    String.format(Locale.ROOT, "%.1f", player.getZ()));
+        }
+
+        return resolvedAny;
+    }
+
     private void addKillFeedEvent(PlayerState attacker, PlayerState victim, boolean headshot) {
         String weaponName = attacker.getWeapon().getDisplayName();
 
@@ -1284,7 +1374,8 @@ public class GameRoom {
                                 player.getUnlockedWeapons()
                                         .stream()
                                         .map(WeaponType::getDisplayName)
-                                        .toList()
+                                        .toList(),
+                                player.isFlyEnabled()
                         ))
                         .toList(),
 
@@ -1491,6 +1582,74 @@ public class GameRoom {
             double dy = p.y - closestY;
             return dx * dx + dy * dy <= radius * radius;
         }
+
+        /**
+         * Minimum-translation push-out for a circle of {@code radius} centred at (x,y) that
+         * overlaps this box footprint. Returns the world-space {dx,dy} that moves the circle
+         * just outside the box, or {@code null} when there is no overlap. Z-overlap must be
+         * checked by the caller; this is the 2D (top-down) resolution axis.
+         */
+        double[] computePushOut(double x, double y, double radius, double fromX, double fromY) {
+            LocalPoint p = toLocal(x, y);
+            double lx = p.x;
+            double ly = p.y;
+            double localPushX;
+            double localPushY;
+
+            if (Math.abs(lx) <= halfWidth && Math.abs(ly) <= halfDepth) {
+                // Centre is inside the footprint. Resolving along the minimum-translation axis
+                // can shove the player out the OPPOSITE face once the centre crosses the
+                // midline -> that is the "teleport through the object" bug. Instead we always
+                // exit toward the side the player came from (their pre-move position), which
+                // guarantees we never pass through to the far side.
+                LocalPoint from = toLocal(fromX, fromY);
+                double fromDirX = from.x >= 0 ? 1 : -1;
+                double fromDirY = from.y >= 0 ? 1 : -1;
+                double exitX = fromDirX * (halfWidth + radius) - lx;
+                double exitY = fromDirY * (halfDepth + radius) - ly;
+                boolean fromOutsideX = Math.abs(from.x) > halfWidth;
+                boolean fromOutsideY = Math.abs(from.y) > halfDepth;
+
+                boolean useX;
+                if (fromOutsideX && !fromOutsideY) {
+                    useX = true;
+                } else if (!fromOutsideX && fromOutsideY) {
+                    useX = false;
+                } else {
+                    useX = Math.abs(exitX) <= Math.abs(exitY);
+                }
+
+                if (useX) {
+                    localPushX = exitX;
+                    localPushY = 0;
+                } else {
+                    localPushX = 0;
+                    localPushY = exitY;
+                }
+            } else {
+                double closestX = Math.max(-halfWidth, Math.min(lx, halfWidth));
+                double closestY = Math.max(-halfDepth, Math.min(ly, halfDepth));
+                double dx = lx - closestX;
+                double dy = ly - closestY;
+                double distSq = dx * dx + dy * dy;
+                if (distSq >= radius * radius) {
+                    return null;
+                }
+                double dist = Math.sqrt(distSq);
+                if (dist < 1e-6) {
+                    localPushX = (lx >= 0 ? 1 : -1) * radius;
+                    localPushY = 0;
+                } else {
+                    double overlap = radius - dist;
+                    localPushX = dx / dist * overlap;
+                    localPushY = dy / dist * overlap;
+                }
+            }
+
+            double worldX = localPushX * cosYaw - localPushY * sinYaw;
+            double worldY = localPushX * sinYaw + localPushY * cosYaw;
+            return new double[]{worldX, worldY};
+        }
     }
 
     private record LocalPoint(double x, double y) {
@@ -1499,11 +1658,11 @@ public class GameRoom {
     private List<CollisionBox> loadSceneCollisionBoxes() {
         List<CollisionBox> boxes = new ArrayList<>();
         try {
-            if (!Files.exists(SCENE_PATH)) {
+            if (!Files.exists(worldStorageService.scenePath())) {
                 return boxes;
             }
 
-            var root = objectMapper.readTree(Files.readString(SCENE_PATH));
+            var root = objectMapper.readTree(Files.readString(worldStorageService.scenePath()));
             var models = root.path("models");
             if (!models.isArray()) {
                 return boxes;
@@ -1518,7 +1677,11 @@ public class GameRoom {
                 if (collider == null) {
                     continue;
                 }
-                boolean effectiveSolid = collider.solid && isLikelySolidModel(path);
+                // Collision profiles are authored per-model via the editor tooling, so the
+                // `solid` flag is the single source of truth. The previous substring whitelist
+                // silently overrode authored profiles and let players noclip through objects
+                // whose path did not match (benches, beams, bricks, dumpsters, ...).
+                boolean effectiveSolid = collider.solid;
                 ModelScale modelScale = readModelScale(model.path("scale"));
                 double x = model.path("position").path("x").asDouble(0);
                 double y = model.path("position").path("z").asDouble(0);
@@ -1555,24 +1718,6 @@ public class GameRoom {
         } catch (Exception _ignored) {
         }
         return boxes;
-    }
-
-    private boolean isLikelySolidModel(String modelPath) {
-        if (modelPath == null || modelPath.isEmpty()) {
-            return false;
-        }
-        // Conservative whitelist: only known blocking geometry should be solid.
-        return modelPath.contains("/wall-")
-                || modelPath.contains("/cliff-")
-                || modelPath.contains("/truck-")
-                || modelPath.contains("/crate")
-                || modelPath.contains("/pallet")
-                || modelPath.contains("/dumpster")
-                || modelPath.contains("/detail-barrier")
-                || modelPath.contains("/detail-block")
-                || modelPath.contains("/door-")
-                || modelPath.contains("/roof-metal-type-")
-                || modelPath.contains("/planks");
     }
 
     private ModelScale readModelScale(JsonNode scaleNode) {
@@ -1641,10 +1786,10 @@ public class GameRoom {
         config.prefix.add(new PrefixColliderProfile("/models/detail-barrier", new ColliderTemplate(52, 36, 52, true, true, 0, 0, 0, 0, List.of())));
 
         try {
-            if (!Files.exists(COLLISION_PROFILES_PATH)) {
+            if (!Files.exists(worldStorageService.collisionProfilesPath())) {
                 return config;
             }
-            var root = objectMapper.readTree(Files.readString(COLLISION_PROFILES_PATH));
+            var root = objectMapper.readTree(Files.readString(worldStorageService.collisionProfilesPath()));
 
             var defaults = root.path("default");
             if (defaults.isObject()) {

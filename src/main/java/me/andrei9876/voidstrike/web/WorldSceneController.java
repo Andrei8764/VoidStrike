@@ -4,6 +4,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
+import me.andrei9876.voidstrike.world.WorldStorageService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,20 +24,19 @@ import java.util.List;
 @RequestMapping("/api/world")
 public class WorldSceneController {
 
-    private static final Path SCENE_PATH = Path.of("src/main/resources/static/world/scene.json");
-    private static final Path COLLISION_PROFILES_PATH = Path.of("src/main/resources/static/world/collision-profiles.json");
-    private static final Path TARGET_COLLISION_PROFILES_PATH = Path.of("target/classes/static/world/collision-profiles.json");
     private static final Path MODELS_PATH = Path.of("src/main/resources/static/models");
 
     private final ObjectMapper objectMapper;
+    private final WorldStorageService worldStorageService;
 
-    public WorldSceneController(ObjectMapper objectMapper) {
+    public WorldSceneController(ObjectMapper objectMapper, WorldStorageService worldStorageService) {
         this.objectMapper = objectMapper;
+        this.worldStorageService = worldStorageService;
     }
 
     @GetMapping(value = "/scene", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<JsonNode> getScene() throws IOException {
-        JsonNode node = objectMapper.readTree(Files.readString(SCENE_PATH));
+        JsonNode node = objectMapper.readTree(Files.readString(worldStorageService.scenePath()));
         return ResponseEntity.ok(node);
     }
 
@@ -85,7 +85,7 @@ public class WorldSceneController {
         sanitized.set("models", models);
         sanitized.set("primitives", objectMapper.createArrayNode());
 
-        Files.writeString(SCENE_PATH, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(sanitized));
+        Files.writeString(worldStorageService.scenePath(), objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(sanitized));
 
         return ResponseEntity.ok(objectMapper.createObjectNode()
                 .put("ok", true)
@@ -149,8 +149,8 @@ public class WorldSceneController {
         }
 
         ObjectNode root;
-        if (Files.exists(COLLISION_PROFILES_PATH)) {
-            JsonNode parsed = objectMapper.readTree(Files.readString(COLLISION_PROFILES_PATH));
+        if (Files.exists(worldStorageService.collisionProfilesPath())) {
+            JsonNode parsed = objectMapper.readTree(Files.readString(worldStorageService.collisionProfilesPath()));
             root = parsed != null && parsed.isObject() ? (ObjectNode) parsed : objectMapper.createObjectNode();
         } else {
             root = objectMapper.createObjectNode();
@@ -204,15 +204,10 @@ public class WorldSceneController {
     }
 
     private void writeCollisionProfiles(String serialized) throws IOException {
-        Path srcParent = COLLISION_PROFILES_PATH.getParent();
+        Path srcParent = worldStorageService.collisionProfilesPath().getParent();
         if (srcParent != null) {
             Files.createDirectories(srcParent);
         }
-        Files.writeString(COLLISION_PROFILES_PATH, serialized);
-
-        Path targetParent = TARGET_COLLISION_PROFILES_PATH.getParent();
-        if (targetParent != null && Files.exists(targetParent)) {
-            Files.writeString(TARGET_COLLISION_PROFILES_PATH, serialized);
-        }
+        Files.writeString(worldStorageService.collisionProfilesPath(), serialized);
     }
 }

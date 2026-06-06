@@ -88,7 +88,8 @@ public class GameSnapshot {
             boolean ads,
             boolean shooting,
             boolean reloading,
-            List<String> unlockedWeapons
+            List<String> unlockedWeapons,
+            boolean flyEnabled
     ) {
     }
 

@@ -36,3 +36,8 @@ export const PLAYER_GRAVITY = 1350;
 export const PLAYER_BUNNYHOP_SPEED_BOOST = 1.09;
 export const PLAYER_FRICTION = 7.4;
 export const PLAYER_STOP_SPEED = 82;
+
+export const PLAYER_COLLIDER_HEIGHT = 72;
+export const PLAYER_GROUND_SNAP_EPSILON = 1.5;
+export const PLAYER_STEP_UP_HEIGHT = 20;
+export const FLY_VERTICAL_SPEED = 520;

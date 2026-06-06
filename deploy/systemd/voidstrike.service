@@ -19,6 +19,7 @@ SuccessExitStatus=143
 NoNewPrivileges=true
 
 Environment=JAVA_TOOL_OPTIONS=-XX:+UseZGC -XX:+AlwaysPreTouch
+Environment=APP_WORLD_DATA_DIR=data/world
 
 [Install]
 WantedBy=multi-user.target

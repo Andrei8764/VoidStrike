@@ -32,6 +32,7 @@ import {
 } from "./hud.js";
 import { updateAimAngle } from "./renderer3d.js";
 import { buildCurrentInput, reconcileLocalPlayer } from "./prediction.js";
+import { ensureSceneCollisionLoaded } from "./sceneCollision.js";
 import { addBulletInterpolationSnapshot, addRemoteInterpolationSnapshot } from "./interpolation.js";
 import {
     configureServerTickRate,
@@ -84,6 +85,7 @@ export function connectWebSocket() {
             playerNameElement.textContent = state.playerName;
             nameOverlay.classList.add("hidden");
 
+            ensureSceneCollisionLoaded();
             startSendingInput();
             return;
         }

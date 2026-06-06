@@ -2,20 +2,19 @@ import {
     CLIENT_DELTA_SECONDS,
     PLAYER_ACCELERATION,
     PLAYER_AIR_ACCELERATION_MULTIPLIER,
-    PLAYER_BUNNYHOP_SPEED_BOOST,
     PLAYER_FRICTION,
-    PLAYER_GRAVITY,
-    PLAYER_JUMP_VELOCITY,
     PLAYER_MAX_SPEED,
     PLAYER_SPRINT_ACCELERATION_MULTIPLIER,
     PLAYER_SPRINT_SPEED_MULTIPLIER,
-    PLAYER_RADIUS,
     PLAYER_STOP_SPEED,
-    PREDICTION_ERROR_THRESHOLD,
-    WORLD_HEIGHT,
-    WORLD_WIDTH
+    PREDICTION_ERROR_THRESHOLD
 } from "./config.js";
 import { keys, mouse, state } from "./state.js";
+import {
+    movePlayerWithCollision,
+    resolvePlayerPenetration,
+    updatePlayerVerticalMovement
+} from "./sceneCollision.js";
 import { clamp } from "./utils.js";
 
 function syncPredictedSelfToPlayersArray() {
@@ -188,6 +187,8 @@ export function predictLocalPlayer(input, deltaSeconds) {
 }
 
 function simulatePredictedMovement(player, input, deltaSeconds) {
+    const fromX = player.x;
+    const fromY = player.y;
     let forward = 0;
     let strafe = 0;
 
@@ -222,7 +223,7 @@ function simulatePredictedMovement(player, input, deltaSeconds) {
         const wishDirectionY = sin * forward + cos * strafe;
         const sprinting = input.sprint && forward > 0;
         const crouching = Boolean(input.crouch);
-        const airborne = (player.z || 0) > 0.001;
+        const airborne = (player.z || 0) > 0.001 && !player.flyEnabled;
         let maxSpeed = sprinting
             ? PLAYER_MAX_SPEED * PLAYER_SPRINT_SPEED_MULTIPLIER
             : PLAYER_MAX_SPEED;
@@ -250,36 +251,10 @@ function simulatePredictedMovement(player, input, deltaSeconds) {
     const nextX = player.x + player.velocityX * deltaSeconds;
     const nextY = player.y + player.velocityY * deltaSeconds;
 
-    movePredictedPlayerWithCollision(player, nextX, nextY);
-    simulatePredictedVerticalMovement(player, input, deltaSeconds);
+    movePlayerWithCollision(player, nextX, nextY);
+    updatePlayerVerticalMovement(player, input, deltaSeconds);
+    resolvePlayerPenetration(player, fromX, fromY);
     player.crouching = Boolean(input.crouch);
-}
-
-function simulatePredictedVerticalMovement(player, input, deltaSeconds) {
-    const z = player.z || 0;
-    let velocityZ = player.velocityZ || 0;
-    const onGround = z <= 0.001;
-
-    // Client-side stabilization: if server already has us standing on a raised surface
-    // and we're not jumping, don't apply fake gravity locally (prevents camera jitter).
-    if (!onGround && Math.abs(velocityZ) < 0.001 && !input.jump) {
-        player.velocityZ = 0;
-        return;
-    }
-
-    if (input.jump && onGround) {
-        velocityZ = PLAYER_JUMP_VELOCITY;
-        player.velocityX = (player.velocityX || 0) * PLAYER_BUNNYHOP_SPEED_BOOST;
-        player.velocityY = (player.velocityY || 0) * PLAYER_BUNNYHOP_SPEED_BOOST;
-    }
-
-    if (z > 0.001 || velocityZ > 0) {
-        velocityZ -= PLAYER_GRAVITY * deltaSeconds;
-    }
-
-    const nextZ = z + velocityZ * deltaSeconds;
-    player.z = Math.max(0, nextZ);
-    player.velocityZ = player.z <= 0 ? 0 : velocityZ;
 }
 
 function applyPredictedFriction(player, deltaSeconds) {
@@ -323,43 +298,3 @@ function acceleratePredictedPlayer(player, wishDirectionX, wishDirectionY, maxSp
     player.velocityY = velocityY + accelerationSpeed * wishDirectionY;
 }
 
-function movePredictedPlayerWithCollision(player, nextX, nextY) {
-    const startX = player.x;
-    const startY = player.y;
-    const deltaX = nextX - startX;
-    const deltaY = nextY - startY;
-    const travelDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    const steps = Math.max(1, Math.ceil(travelDistance / 6));
-
-    for (let i = 1; i <= steps; i += 1) {
-        const t = i / steps;
-        const stepX = startX + deltaX * t;
-        const stepY = startY + deltaY * t;
-
-        const clampedX = clamp(stepX, PLAYER_RADIUS, WORLD_WIDTH - PLAYER_RADIUS);
-        const clampedY = clamp(stepY, PLAYER_RADIUS, WORLD_HEIGHT - PLAYER_RADIUS);
-
-        if (!predictedCircleCollidesWithObstacle(clampedX, player.y, PLAYER_RADIUS)) {
-            player.x = clampedX;
-        } else {
-            player.velocityX = 0;
-        }
-
-        if (!predictedCircleCollidesWithObstacle(player.x, clampedY, PLAYER_RADIUS)) {
-            player.y = clampedY;
-        } else {
-            player.velocityY = 0;
-        }
-    }
-}
-
-function predictedCircleCollidesWithObstacle(circleX, circleY, radius) {
-    return state.obstacles.some(obstacle => {
-        const closestX = clamp(circleX, obstacle.x, obstacle.x + obstacle.width);
-        const closestY = clamp(circleY, obstacle.y, obstacle.y + obstacle.height);
-        const dx = circleX - closestX;
-        const dy = circleY - closestY;
-
-        return dx * dx + dy * dy <= radius * radius;
-    });
-}

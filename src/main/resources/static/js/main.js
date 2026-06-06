@@ -13,6 +13,7 @@ import {
 } from "./renderer3d.js";
 import { keys, state } from "./state.js";
 import { tickLocalPrediction } from "./prediction.js";
+import { ensureSceneCollisionLoaded } from "./sceneCollision.js";
 
 let fpsFrameCount = 0;
 let lastFrameTime = performance.now();
@@ -25,6 +26,7 @@ let lastPerfHudUpdate = 0;
 resizeCanvas();
 registerInputHandlers();
 initCharacterPreview();
+ensureSceneCollisionLoaded();
 connectWebSocket();
 requestAnimationFrame(gameLoop);
 

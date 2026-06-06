@@ -48,6 +48,7 @@ import {
 } from "./renderer3d.js";
 import { initWeaponShopPreview, previewWeaponModel } from "./weaponShopPreview.js";
 import { MOUSE_SENSITIVITY } from "./config.js";
+import { reloadSceneCollision } from "./sceneCollision.js";
 import { clamp, normalizeAngle } from "./utils.js";
 
 export function registerInputHandlers() {
@@ -610,6 +611,22 @@ function appendConsoleLine(text) {
     devConsoleOutputElement.scrollTop = devConsoleOutputElement.scrollHeight;
 }
 
+function reloadCollisionOnServerAndClient() {
+    const sent = sendAdminCommand("reloadcollision");
+    if (!sent) {
+        appendConsoleLine("reloadcollision failed (socket not ready)");
+        return;
+    }
+
+    reloadSceneCollision()
+        .then(boxCount => {
+            appendConsoleLine(`reloadcollision ok (${boxCount} boxes)`);
+        })
+        .catch(() => {
+            appendConsoleLine("reloadcollision server ok, client reload failed");
+        });
+}
+
 function runConsoleCommand(rawCommand) {
     const normalized = rawCommand.trim();
     appendConsoleLine(`> ${normalized}`);
@@ -733,8 +750,7 @@ function runConsoleCommand(rawCommand) {
                     return;
                 }
                 appendConsoleLine(`setcolbox saved ${suggestion.value} hw=${suggestion.halfWidth} hd=${suggestion.halfDepth} h=${suggestion.height}`);
-                const sent = sendAdminCommand("reloadcollision");
-                appendConsoleLine(sent ? "reloadcollision ok" : "reloadcollision failed (socket not ready)");
+                reloadCollisionOnServerAndClient();
             } catch (_error) {
                 appendConsoleLine("setcolbox: save failed");
             }
@@ -844,8 +860,7 @@ function runConsoleCommand(rawCommand) {
                     return;
                 }
                 appendConsoleLine(`setcolboxes saved ${suggestion.value}`);
-                const sent = sendAdminCommand("reloadcollision");
-                appendConsoleLine(sent ? "reloadcollision ok" : "reloadcollision failed (socket not ready)");
+                reloadCollisionOnServerAndClient();
             } catch (_error) {
                 appendConsoleLine("setcolboxes: save failed");
             }
@@ -894,8 +909,7 @@ function runConsoleCommand(rawCommand) {
                 }
             }
             appendConsoleLine(`autocolboxes(${scope}, ${density === 0 ? "adaptive" : density}) saved ${saved}/${suggestions.length} profiles`);
-            const sent = sendAdminCommand("reloadcollision");
-            appendConsoleLine(sent ? "reloadcollision ok" : "reloadcollision failed (socket not ready)");
+            reloadCollisionOnServerAndClient();
         })();
         return;
     }
@@ -957,11 +971,16 @@ function runConsoleCommand(rawCommand) {
     }
 
     if (command === "freeze" || command === "money" || command === "fly" || command === "tp" || command === "respawn"
-        || command === "reloadcollision" || command === "reloadcol" || command === "reloadprofiles") {
+        || command === "coldebug" || command === "collisiondebug") {
         const sent = sendAdminCommand(normalized);
         appendConsoleLine(sent ? "ok" : "socket not ready");
         return;
     }
 
-    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>, respawn [playerName|all], reloadcollision, hitbox on|off|toggle, colprofile, setcolbox, setcolboxes (auto if no args), autocolboxes [scope] [density|0=adaptive], backmount <x> <y> <z> <rxDeg> <ryDeg> <rzDeg>, handoffset <x> <y> <z> [weapon], wallhack on|off|toggle, performancemode on|off|toggle, perfhud on|off|toggle, editor on|off|save|clear");
+    if (command === "reloadcollision" || command === "reloadcol" || command === "reloadprofiles") {
+        reloadCollisionOnServerAndClient();
+        return;
+    }
+
+    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>, respawn [playerName|all], reloadcollision, coldebug on|off, hitbox on|off|toggle, colprofile, setcolbox, setcolboxes (auto if no args), autocolboxes [scope] [density|0=adaptive], backmount <x> <y> <z> <rxDeg> <ryDeg> <rzDeg>, handoffset <x> <y> <z> [weapon], wallhack on|off|toggle, performancemode on|off|toggle, perfhud on|off|toggle, editor on|off|save|clear");
 }

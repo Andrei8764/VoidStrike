@@ -1,6 +1,7 @@
 package me.andrei9876.voidstrike.game;
 
 import me.andrei9876.voidstrike.config.GameProperties;
+import me.andrei9876.voidstrike.world.WorldStorageService;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.ObjectMapper;
@@ -13,14 +14,20 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GameRoomManager {
 
     private final ObjectMapper objectMapper;
+    private final WorldStorageService worldStorageService;
     private final int websocketSendTimeLimitMs;
     private final int websocketSendBufferSizeBytes;
 
     private final Map<String, GameRoom> rooms = new ConcurrentHashMap<>();
     private final Map<String, String> playerRoomIds = new ConcurrentHashMap<>();
 
-    public GameRoomManager(ObjectMapper objectMapper, GameProperties gameProperties) {
+    public GameRoomManager(
+            ObjectMapper objectMapper,
+            GameProperties gameProperties,
+            WorldStorageService worldStorageService
+    ) {
         this.objectMapper = objectMapper;
+        this.worldStorageService = worldStorageService;
         this.websocketSendTimeLimitMs = gameProperties.getWebsocketSendTimeLimitMs();
         this.websocketSendBufferSizeBytes = gameProperties.getWebsocketSendBufferSizeBytes();
     }
@@ -79,6 +86,7 @@ public class GameRoomManager {
         GameRoom room = new GameRoom(
                 roomId,
                 objectMapper,
+                worldStorageService,
                 new ConcurrentHashMap<>(),
                 new ConcurrentHashMap<>(),
                 websocketSendTimeLimitMs,
