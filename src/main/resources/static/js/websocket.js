@@ -8,7 +8,6 @@ import {
 } from "./dom.js";
 import { getSelfPlayer, keys, mouse, state } from "./state.js";
 import {
-    CLIENT_DELTA_SECONDS,
     CLIENT_TICK_RATE,
     MAX_NAME_LENGTH,
     MIN_NAME_LENGTH,
@@ -32,8 +31,13 @@ import {
     updateScoreboard
 } from "./hud.js";
 import { updateAimAngle } from "./renderer3d.js";
-import { predictLocalPlayer, reconcileLocalPlayer } from "./prediction.js";
+import { buildCurrentInput, reconcileLocalPlayer } from "./prediction.js";
 import { addBulletInterpolationSnapshot, addRemoteInterpolationSnapshot } from "./interpolation.js";
+import {
+    configureServerTickRate,
+    resetNetworkClock,
+    updateNetworkClock
+} from "./networkClock.js";
 
 const ENEMY_SHOT_HEAR_DISTANCE = 520;
 
@@ -42,6 +46,7 @@ export function connectWebSocket() {
     const url = `${protocol}//${window.location.host}/ws/game`;
 
     state.joined = false;
+    resetNetworkClock();
     setConnectionStatus("connecting");
     state.socket = new WebSocket(url);
 
@@ -74,6 +79,7 @@ export function connectWebSocket() {
             state.playerId = message.playerId;
             state.playerName = message.name;
             state.selectedCharacterModel = message.characterModel || state.selectedCharacterModel;
+            configureServerTickRate(message.tickRate);
 
             playerNameElement.textContent = state.playerName;
             nameOverlay.classList.add("hidden");
@@ -83,6 +89,10 @@ export function connectWebSocket() {
         }
 
         if (message.type === "snapshot") {
+            if (typeof message.serverTime === "number") {
+                updateNetworkClock(message.serverTime);
+            }
+
             state.players = message.players;
             state.bullets = message.bullets;
             state.obstacles = message.obstacles || state.obstacles;
@@ -90,8 +100,12 @@ export function connectWebSocket() {
             state.chatMessages = message.chatMessages || [];
             state.round = message.round;
 
-            addRemoteInterpolationSnapshot(message.players);
-            addBulletInterpolationSnapshot(message.bullets);
+            const snapshotServerTime = typeof message.serverTime === "number"
+                ? message.serverTime
+                : performance.now();
+
+            addRemoteInterpolationSnapshot(message.players, snapshotServerTime);
+            addBulletInterpolationSnapshot(message.bullets, snapshotServerTime);
             detectWeaponPurchase();
             detectLocalKillSounds();
             detectMvpSound();
@@ -191,26 +205,8 @@ function startSendingInput() {
 
         updateAimAngle();
 
-        const input = {
-            type: "input",
-            sequence: ++state.inputSequence,
-            up: keys.up,
-            down: keys.down,
-            left: keys.left,
-            right: keys.right,
-            sprint: keys.sprint,
-            crouch: keys.crouch,
-            jump: keys.jump,
-            descend: keys.descend,
-            shoot: mouse.down,
-            ads: state.ads,
-            reload: state.reloadRequested,
-            climb: state.climbRequested,
-            weaponSlot: state.selectedWeaponSlot,
-            buyWeaponSlot: state.buyWeaponSlot,
-            angle: mouse.angle,
-            pitch: mouse.pitch
-        };
+        state.inputSequence += 1;
+        const input = buildCurrentInput(state.inputSequence);
 
         if (input.climb) {
             state.climbDebugUntil = Date.now() + 2500;
@@ -225,7 +221,6 @@ function startSendingInput() {
             });
         }
 
-        predictLocalPlayer(input, CLIENT_DELTA_SECONDS);
         state.pendingInputs.push(input);
 
         state.socket.send(JSON.stringify(input));

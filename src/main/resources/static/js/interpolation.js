@@ -1,18 +1,16 @@
 import {
     BULLET_FADE_MS,
-    BULLET_INTERPOLATION_DELAY_MS,
     BULLET_MAX_EXTRAPOLATION_MS,
     PLAYER_RADIUS,
-    REMOTE_INTERPOLATION_DELAY_MS,
     REMOTE_SNAP_DISTANCE,
     WORLD_HEIGHT,
     WORLD_WIDTH
 } from "./config.js";
+import { getBulletRenderTime, getRemoteRenderTime } from "./networkClock.js";
 import { state } from "./state.js";
 import { clamp, getDistance, lerp, lerpAngle } from "./utils.js";
 
-export function addRemoteInterpolationSnapshot(snapshotPlayers) {
-    const receivedAt = performance.now();
+export function addRemoteInterpolationSnapshot(snapshotPlayers, serverTime) {
     const remoteIdsInSnapshot = new Set();
 
     for (const player of snapshotPlayers) {
@@ -29,7 +27,7 @@ export function addRemoteInterpolationSnapshot(snapshotPlayers) {
         const buffer = state.remotePlayerStates.get(player.id);
 
         buffer.push({
-            timestamp: receivedAt,
+            serverTime,
             player: {
                 ...player
             }
@@ -49,7 +47,7 @@ export function addRemoteInterpolationSnapshot(snapshotPlayers) {
 }
 
 export function updateRemoteInterpolation() {
-    const renderTime = performance.now() - REMOTE_INTERPOLATION_DELAY_MS;
+    const renderTime = getRemoteRenderTime();
 
     for (const [remotePlayerId, buffer] of state.remotePlayerStates.entries()) {
         if (buffer.length === 0) {
@@ -63,7 +61,7 @@ export function updateRemoteInterpolation() {
             continue;
         }
 
-        while (buffer.length >= 2 && buffer[1].timestamp <= renderTime) {
+        while (buffer.length >= 2 && buffer[1].serverTime <= renderTime) {
             buffer.shift();
         }
 
@@ -71,13 +69,13 @@ export function updateRemoteInterpolation() {
         const newer = buffer[1];
 
         if (!newer) {
-            const extrapolated = extrapolateRemotePlayer(older.player, renderTime - older.timestamp);
+            const extrapolated = extrapolateRemotePlayer(older.player, renderTime - older.serverTime);
             state.interpolatedRemotePlayers.set(remotePlayerId, extrapolated);
             continue;
         }
 
-        const duration = newer.timestamp - older.timestamp;
-        const progress = duration <= 0 ? 1 : clamp((renderTime - older.timestamp) / duration, 0, 1);
+        const duration = newer.serverTime - older.serverTime;
+        const progress = duration <= 0 ? 1 : clamp((renderTime - older.serverTime) / duration, 0, 1);
         const distance = getDistance(older.player.x, older.player.y, newer.player.x, newer.player.y);
 
         if (distance > REMOTE_SNAP_DISTANCE) {
@@ -114,7 +112,7 @@ function extrapolateRemotePlayer(player, millisecondsSinceSnapshot) {
     };
 }
 
-export function addBulletInterpolationSnapshot(snapshotBullets) {
+export function addBulletInterpolationSnapshot(snapshotBullets, serverTime) {
     const receivedAt = performance.now();
     const bulletIdsInSnapshot = new Set();
 
@@ -128,7 +126,7 @@ export function addBulletInterpolationSnapshot(snapshotBullets) {
         const buffer = state.bulletStates.get(bullet.id);
 
         buffer.push({
-            timestamp: receivedAt,
+            serverTime,
             bullet: {
                 ...bullet
             }
@@ -159,7 +157,7 @@ export function addBulletInterpolationSnapshot(snapshotBullets) {
 
 export function updateBulletInterpolation() {
     const now = performance.now();
-    const renderTime = now - BULLET_INTERPOLATION_DELAY_MS;
+    const renderTime = getBulletRenderTime();
 
     for (const [bulletId, buffer] of state.bulletStates.entries()) {
         if (buffer.length === 0) {
@@ -167,12 +165,12 @@ export function updateBulletInterpolation() {
         }
 
         if (buffer.length === 1) {
-            const extrapolated = extrapolateBullet(buffer[0].bullet, renderTime - buffer[0].timestamp);
+            const extrapolated = extrapolateBullet(buffer[0].bullet, renderTime - buffer[0].serverTime);
             state.interpolatedBullets.set(bulletId, extrapolated);
             continue;
         }
 
-        while (buffer.length >= 2 && buffer[1].timestamp <= renderTime) {
+        while (buffer.length >= 2 && buffer[1].serverTime <= renderTime) {
             buffer.shift();
         }
 
@@ -180,13 +178,13 @@ export function updateBulletInterpolation() {
         const newer = buffer[1];
 
         if (!newer) {
-            const extrapolated = extrapolateBullet(older.bullet, renderTime - older.timestamp);
+            const extrapolated = extrapolateBullet(older.bullet, renderTime - older.serverTime);
             state.interpolatedBullets.set(bulletId, extrapolated);
             continue;
         }
 
-        const duration = newer.timestamp - older.timestamp;
-        const progress = duration <= 0 ? 1 : clamp((renderTime - older.timestamp) / duration, 0, 1);
+        const duration = newer.serverTime - older.serverTime;
+        const progress = duration <= 0 ? 1 : clamp((renderTime - older.serverTime) / duration, 0, 1);
 
         state.interpolatedBullets.set(bulletId, {
             ...newer.bullet,

@@ -9,6 +9,7 @@ import me.andrei9876.voidstrike.game.model.PlayerState;
 import me.andrei9876.voidstrike.game.model.WeaponType;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -169,16 +170,23 @@ public class GameRoom {
     private long roundTimerPausedAt = 0;
     private boolean adminRoundFrozen = false;
 
+    private final int websocketSendTimeLimitMs;
+    private final int websocketSendBufferSizeBytes;
+
     public GameRoom(
             String id,
             ObjectMapper objectMapper,
             Map<String, WebSocketSession> sessions,
-            Map<String, PlayerState> players
+            Map<String, PlayerState> players,
+            int websocketSendTimeLimitMs,
+            int websocketSendBufferSizeBytes
     ) {
         this.id = id;
         this.objectMapper = objectMapper;
         this.sessions = sessions;
         this.players = players;
+        this.websocketSendTimeLimitMs = websocketSendTimeLimitMs;
+        this.websocketSendBufferSizeBytes = websocketSendBufferSizeBytes;
         this.collisionProfileConfig = loadCollisionProfileConfig();
         this.sceneCollisionBoxes.addAll(loadSceneCollisionBoxes());
     }
@@ -199,7 +207,13 @@ public class GameRoom {
 
         SpawnPoint spawn = findSafeSpawn(team);
 
-        sessions.put(playerId, session);
+        WebSocketSession outboundSession = new ConcurrentWebSocketSessionDecorator(
+                session,
+                websocketSendTimeLimitMs,
+                websocketSendBufferSizeBytes
+        );
+
+        sessions.put(playerId, outboundSession);
         players.put(playerId, new PlayerState(playerId, playerName, team, characterModel, spawn.x, spawn.y));
     }
 
@@ -1225,6 +1239,10 @@ public class GameRoom {
     }
 
     private void broadcastSnapshot() {
+        if (sessions.isEmpty()) {
+            return;
+        }
+
         long now = System.currentTimeMillis();
         long countdownReferenceTime = roundTimerPaused ? roundTimerPausedAt : now;
         long timeLeftSeconds = roundEnding
@@ -1235,6 +1253,7 @@ public class GameRoom {
         pruneChat(now);
 
         GameSnapshot snapshot = new GameSnapshot(
+                now,
                 players.values()
                         .stream()
                         .map(player -> new GameSnapshot.PlayerView(

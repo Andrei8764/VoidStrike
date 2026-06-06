@@ -15,8 +15,76 @@ import {
     WORLD_HEIGHT,
     WORLD_WIDTH
 } from "./config.js";
-import { state } from "./state.js";
+import { keys, mouse, state } from "./state.js";
 import { clamp } from "./utils.js";
+
+function syncPredictedSelfToPlayersArray() {
+    const selfIndex = state.players.findIndex(player => player.id === state.playerId);
+
+    if (selfIndex < 0 || !state.predictedSelf) {
+        return;
+    }
+
+    state.players[selfIndex] = {
+        ...state.players[selfIndex],
+        x: state.predictedSelf.x,
+        y: state.predictedSelf.y,
+        z: state.predictedSelf.z,
+        velocityX: state.predictedSelf.velocityX,
+        velocityY: state.predictedSelf.velocityY,
+        velocityZ: state.predictedSelf.velocityZ,
+        angle: state.predictedSelf.angle,
+        pitch: state.predictedSelf.pitch,
+        crouching: state.predictedSelf.crouching
+    };
+}
+
+export function buildCurrentInput(sequence = null) {
+    return {
+        type: "input",
+        sequence: sequence ?? state.inputSequence + 1,
+        up: keys.up,
+        down: keys.down,
+        left: keys.left,
+        right: keys.right,
+        sprint: keys.sprint,
+        crouch: keys.crouch,
+        jump: keys.jump,
+        descend: keys.descend,
+        shoot: mouse.down,
+        ads: state.ads,
+        reload: state.reloadRequested,
+        climb: state.climbRequested,
+        weaponSlot: state.selectedWeaponSlot,
+        buyWeaponSlot: state.buyWeaponSlot,
+        angle: mouse.angle,
+        pitch: mouse.pitch
+    };
+}
+
+export function tickLocalPrediction(deltaSeconds) {
+    if (!state.joined || !state.playerId) {
+        return;
+    }
+
+    if (!state.predictedSelf) {
+        const serverSelf = state.players.find(player => player.id === state.playerId);
+
+        if (!serverSelf) {
+            return;
+        }
+
+        state.predictedSelf = {
+            ...serverSelf
+        };
+    }
+
+    const input = buildCurrentInput();
+    state.predictedSelf.angle = input.angle;
+    state.predictedSelf.pitch = input.pitch;
+    simulatePredictedMovement(state.predictedSelf, input, deltaSeconds);
+    syncPredictedSelfToPlayersArray();
+}
 
 export function reconcileLocalPlayer() {
     const serverSelf = state.players.find(player => player.id === state.playerId);
@@ -40,6 +108,7 @@ export function reconcileLocalPlayer() {
 
     const errorX = serverSelf.x - state.predictedSelf.x;
     const errorY = serverSelf.y - state.predictedSelf.y;
+    const errorZ = (serverSelf.z || 0) - (state.predictedSelf.z || 0);
     const errorDistance = Math.sqrt(errorX * errorX + errorY * errorY);
     const now = Date.now();
     const climbDebugActive = now <= (state.climbDebugUntil || 0);
@@ -70,8 +139,9 @@ export function reconcileLocalPlayer() {
     }
 
     if (errorDistance > PREDICTION_ERROR_THRESHOLD) {
-        state.predictedSelf.x = state.predictedSelf.x * 0.85 + serverSelf.x * 0.15;
-        state.predictedSelf.y = state.predictedSelf.y * 0.85 + serverSelf.y * 0.15;
+        const correctionStrength = clamp(errorDistance / 50, 0.12, 0.4);
+        state.predictedSelf.x += errorX * correctionStrength;
+        state.predictedSelf.y += errorY * correctionStrength;
 
         if (climbDebugActive) {
             console.log("[CLIMB_DEBUG] correction_applied", {
@@ -90,6 +160,12 @@ export function reconcileLocalPlayer() {
             threshold: PREDICTION_ERROR_THRESHOLD
         });
     }
+
+    if (Math.abs(errorZ) > 0.35) {
+        state.predictedSelf.z = (state.predictedSelf.z || 0) + errorZ * 0.28;
+    }
+
+    syncPredictedSelfToPlayersArray();
 }
 
 export function predictLocalPlayer(input, deltaSeconds) {
@@ -108,21 +184,7 @@ export function predictLocalPlayer(input, deltaSeconds) {
     state.predictedSelf.angle = input.angle;
     state.predictedSelf.pitch = input.pitch;
     simulatePredictedMovement(state.predictedSelf, input, deltaSeconds);
-
-    const selfIndex = state.players.findIndex(player => player.id === state.playerId);
-
-    if (selfIndex >= 0) {
-        state.players[selfIndex] = {
-            ...state.players[selfIndex],
-            x: state.predictedSelf.x,
-            y: state.predictedSelf.y,
-            z: state.predictedSelf.z,
-            velocityX: state.predictedSelf.velocityX,
-            velocityY: state.predictedSelf.velocityY,
-            velocityZ: state.predictedSelf.velocityZ,
-            angle: state.predictedSelf.angle
-        };
-    }
+    syncPredictedSelfToPlayersArray();
 }
 
 function simulatePredictedMovement(player, input, deltaSeconds) {

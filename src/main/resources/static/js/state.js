@@ -60,8 +60,14 @@ export const state = {
     interpolatedBullets: new Map(),
     fadingBulletTrails: [],
 
-    inputIntervalId: null
-    ,
+    inputIntervalId: null,
+
+    lastServerTime: null,
+    lastSnapshotReceivedAt: 0,
+    clockOffsetMs: 0,
+    networkLatencyMs: 0,
+    serverTickIntervalMs: 1000 / 30,
+
     climbDebugUntil: 0,
     climbDebugLastSequence: 0
 };

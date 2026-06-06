@@ -43,6 +43,13 @@ const CAMERA_EYE_HEIGHT = 54;
 const CAMERA_CROUCH_EYE_HEIGHT = 40;
 const CAMERA_BACK_OFFSET = 6;
 const CAMERA_LOOK_DISTANCE = 120;
+const CAMERA_POSITION_SMOOTHING = 0.42;
+const smoothedCameraPosition = {
+    x: 0,
+    y: 0,
+    z: 0,
+    initialized: false
+};
 const BULLET_RADIUS = 0.85;
 const BULLET_LENGTH = 10;
 const BULLET_TRAIL_LENGTH = 16;
@@ -1844,6 +1851,7 @@ function updateCameraFromSelf() {
     const self = getSelfPlayer();
 
     if (!self) {
+        smoothedCameraPosition.initialized = false;
         camera3d.position.set(WORLD_WIDTH / 2, 180, WORLD_HEIGHT / 2 + 220);
         camera3d.lookAt(WORLD_WIDTH / 2, 0, WORLD_HEIGHT / 2);
         camera3d.fov += (CAMERA_FOV_HIP - camera3d.fov) * CAMERA_FOV_BLEND;
@@ -1861,16 +1869,28 @@ function updateCameraFromSelf() {
         sinYaw * horizontalPitchFactor
     ).normalize();
 
-    const eyeX = self.x - cosYaw * CAMERA_BACK_OFFSET;
-    const eyeY = (self.crouching ? CAMERA_CROUCH_EYE_HEIGHT : CAMERA_EYE_HEIGHT) + (self.z || 0);
-    const eyeZ = self.y - sinYaw * CAMERA_BACK_OFFSET;
+    if (!smoothedCameraPosition.initialized) {
+        smoothedCameraPosition.x = self.x;
+        smoothedCameraPosition.y = self.y;
+        smoothedCameraPosition.z = self.z || 0;
+        smoothedCameraPosition.initialized = true;
+    } else {
+        const blend = CAMERA_POSITION_SMOOTHING;
+        smoothedCameraPosition.x += (self.x - smoothedCameraPosition.x) * blend;
+        smoothedCameraPosition.y += (self.y - smoothedCameraPosition.y) * blend;
+        smoothedCameraPosition.z += ((self.z || 0) - smoothedCameraPosition.z) * blend;
+    }
+
+    const eyeX = smoothedCameraPosition.x - cosYaw * CAMERA_BACK_OFFSET;
+    const eyeY = (self.crouching ? CAMERA_CROUCH_EYE_HEIGHT : CAMERA_EYE_HEIGHT) + smoothedCameraPosition.z;
+    const eyeZ = smoothedCameraPosition.y - sinYaw * CAMERA_BACK_OFFSET;
 
     camera3d.position.set(eyeX, eyeY, eyeZ);
 
     const lookTarget = new THREE.Vector3(
-        self.x + lookDirection.x * CAMERA_LOOK_DISTANCE,
+        smoothedCameraPosition.x + lookDirection.x * CAMERA_LOOK_DISTANCE,
         eyeY + lookDirection.y * CAMERA_LOOK_DISTANCE,
-        self.y + lookDirection.z * CAMERA_LOOK_DISTANCE
+        smoothedCameraPosition.y + lookDirection.z * CAMERA_LOOK_DISTANCE
     );
 
     camera3d.lookAt(lookTarget);
@@ -2050,7 +2070,6 @@ export function render() {
     updateLocalViewModel(self);
     localViewModelPivot.visible = !state.editorMode;
     localBodyPivot.visible = !state.editorMode && !state.ads;
-    updateCameraFromSelf();
     updateCollisionDebugLabels();
     renderer.render(scene, camera3d);
 }

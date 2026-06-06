@@ -1,5 +1,6 @@
 package me.andrei9876.voidstrike.game;
 
+import me.andrei9876.voidstrike.config.GameProperties;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
@@ -11,24 +12,35 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class GameLoop {
 
-    private static final int TICKS_PER_SECOND = 30;
-    private static final double DELTA_SECONDS = 1.0 / TICKS_PER_SECOND;
-
     private final GameRoomManager gameRoomManager;
+    private final int ticksPerSecond;
+    private final double deltaSeconds;
     private ScheduledExecutorService executorService;
 
-    public GameLoop(GameRoomManager gameRoomManager) {
+    public GameLoop(GameRoomManager gameRoomManager, GameProperties gameProperties) {
         this.gameRoomManager = gameRoomManager;
+        this.ticksPerSecond = Math.max(10, gameProperties.getTicksPerSecond());
+        this.deltaSeconds = 1.0 / ticksPerSecond;
+    }
+
+    public int getTicksPerSecond() {
+        return ticksPerSecond;
     }
 
     @PostConstruct
     public void start() {
-        executorService = Executors.newSingleThreadScheduledExecutor();
+        executorService = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "voidstrike-game-loop");
+            thread.setDaemon(true);
+            return thread;
+        });
+
+        long tickIntervalMs = Math.max(1, 1000 / ticksPerSecond);
 
         executorService.scheduleAtFixedRate(
                 this::tick,
                 0,
-                1000 / TICKS_PER_SECOND,
+                tickIntervalMs,
                 TimeUnit.MILLISECONDS
         );
     }
@@ -42,7 +54,7 @@ public class GameLoop {
 
     private void tick() {
         for (GameRoom room : gameRoomManager.getRooms()) {
-            room.tick(DELTA_SECONDS);
+            room.tick(deltaSeconds);
         }
     }
 }

@@ -1,5 +1,6 @@
 package me.andrei9876.voidstrike.websocket;
 
+import me.andrei9876.voidstrike.game.GameLoop;
 import me.andrei9876.voidstrike.game.GameRoom;
 import me.andrei9876.voidstrike.game.GameRoomManager;
 import me.andrei9876.voidstrike.game.model.ClientInputMessage;
@@ -23,10 +24,16 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
     private final GameRoomManager gameRoomManager;
+    private final GameLoop gameLoop;
 
-    public GameWebSocketHandler(ObjectMapper objectMapper, GameRoomManager gameRoomManager) {
+    public GameWebSocketHandler(
+            ObjectMapper objectMapper,
+            GameRoomManager gameRoomManager,
+            GameLoop gameLoop
+    ) {
         this.objectMapper = objectMapper;
         this.gameRoomManager = gameRoomManager;
+        this.gameLoop = gameLoop;
     }
 
     @Override
@@ -119,13 +126,15 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                   "playerId": "%s",
                   "roomId": "%s",
                   "name": "%s",
-                  "characterModel": "%s"
+                  "characterModel": "%s",
+                  "tickRate": %d
                 }
                 """.formatted(
                 escapeJson(session.getId()),
                 escapeJson(room.getId()),
                 escapeJson(playerName),
-                escapeJson(characterModel)
+                escapeJson(characterModel),
+                gameLoop.getTicksPerSecond()
         )));
     }
 

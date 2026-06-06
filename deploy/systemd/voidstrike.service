@@ -1,0 +1,24 @@
+[Unit]
+Description=VoidStrike game server
+After=network.target
+
+[Service]
+Type=simple
+User=voidstrike
+Group=voidstrike
+WorkingDirectory=/opt/voidstrike
+
+# 8 GB VPS example. For 4 GB VPS use -Xms512m -Xmx2g.
+ExecStart=/usr/bin/java -Xms1g -Xmx4g -jar /opt/voidstrike/VoidStrike.jar
+
+Restart=on-failure
+RestartSec=3
+SuccessExitStatus=143
+
+# Allow binding to 127.0.0.1:8080 without root.
+NoNewPrivileges=true
+
+Environment=JAVA_TOOL_OPTIONS=-XX:+UseZGC -XX:+AlwaysPreTouch
+
+[Install]
+WantedBy=multi-user.target

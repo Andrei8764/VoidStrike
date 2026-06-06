@@ -5,6 +5,7 @@ import java.util.List;
 public class GameSnapshot {
 
     private final String type = "snapshot";
+    private final long serverTime;
     private final List<PlayerView> players;
     private final List<BulletView> bullets;
     private final List<ObstacleView> obstacles;
@@ -13,6 +14,7 @@ public class GameSnapshot {
     private final RoundView round;
 
     public GameSnapshot(
+            long serverTime,
             List<PlayerView> players,
             List<BulletView> bullets,
             List<ObstacleView> obstacles,
@@ -20,6 +22,7 @@ public class GameSnapshot {
             List<ChatMessageView> chatMessages,
             RoundView round
     ) {
+        this.serverTime = serverTime;
         this.players = players;
         this.bullets = bullets;
         this.obstacles = obstacles;
@@ -30,6 +33,10 @@ public class GameSnapshot {
 
     public String getType() {
         return type;
+    }
+
+    public long getServerTime() {
+        return serverTime;
     }
 
     public List<PlayerView> getPlayers() {

@@ -14,9 +14,12 @@ export const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 export const CLIENT_TICK_RATE = 60;
 export const CLIENT_DELTA_SECONDS = 1 / CLIENT_TICK_RATE;
 
+export const SERVER_TICK_RATE = 30;
+export const SERVER_TICK_INTERVAL_MS = 1000 / SERVER_TICK_RATE;
+
 export const PREDICTION_ERROR_THRESHOLD = 2.5;
 
-export const REMOTE_INTERPOLATION_DELAY_MS = 100;
+export const REMOTE_INTERPOLATION_DELAY_MS = 80;
 export const REMOTE_SNAP_DISTANCE = 220;
 
 export const BULLET_INTERPOLATION_DELAY_MS = 55;

@@ -12,8 +12,10 @@ import {
     updateMouseWorldPosition
 } from "./renderer3d.js";
 import { keys, state } from "./state.js";
+import { tickLocalPrediction } from "./prediction.js";
 
 let fpsFrameCount = 0;
+let lastFrameTime = performance.now();
 let fpsLastTime = performance.now();
 let fpsCurrent = 0;
 let frameTimeSum = 0;
@@ -30,7 +32,11 @@ window.addEventListener("resize", resizeCanvas);
 
 function gameLoop() {
     const frameStart = performance.now();
+    const deltaSeconds = Math.min((frameStart - lastFrameTime) / 1000, 0.05);
+    lastFrameTime = frameStart;
     const now = frameStart;
+
+    tickLocalPrediction(deltaSeconds);
     fpsFrameCount += 1;
     const elapsed = now - fpsLastTime;
     if (elapsed >= 500) {
