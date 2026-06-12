@@ -207,12 +207,22 @@ function boxComputePushOut(box, x, y, radius, fromX, fromY) {
     let localPushY;
 
     if (Math.abs(lx) <= box.halfWidth && Math.abs(ly) <= box.halfDepth) {
-        // The circle centre is inside the footprint. Resolving along the minimum-translation
-        // axis (old behaviour) can shove the player out the OPPOSITE face once the centre
-        // crosses the midline -> that is exactly the "teleport through the object" bug.
-        // Instead we always exit toward the side the player came from (their pre-move
-        // position), which guarantees we never pass through to the far side.
         const fromLocal = toLocal(box, fromX, fromY);
+        const fromDeltaX = fromLocal.x - lx;
+        const fromDeltaY = fromLocal.y - ly;
+        const spawnLikeOverlap = fromDeltaX * fromDeltaX + fromDeltaY * fromDeltaY < 1;
+
+        if (spawnLikeOverlap) {
+            const overlapX = box.halfWidth + radius - Math.abs(lx);
+            const overlapY = box.halfDepth + radius - Math.abs(ly);
+            if (overlapX <= overlapY) {
+                localPushX = (lx >= 0 ? 1 : -1) * overlapX;
+                localPushY = 0;
+            } else {
+                localPushX = 0;
+                localPushY = (ly >= 0 ? 1 : -1) * overlapY;
+            }
+        } else {
         const fromDirX = fromLocal.x >= 0 ? 1 : -1;
         const fromDirY = fromLocal.y >= 0 ? 1 : -1;
         const exitX = fromDirX * (box.halfWidth + radius) - lx;
@@ -235,6 +245,7 @@ function boxComputePushOut(box, x, y, radius, fromX, fromY) {
         } else {
             localPushX = 0;
             localPushY = exitY;
+        }
         }
     } else {
         const closestX = clamp(lx, -box.halfWidth, box.halfWidth);
@@ -390,13 +401,16 @@ export function findSupportTopAt(x, y, currentZ) {
     return top;
 }
 
+const PENETRATION_RESOLVE_PASSES = 4;
+const MOVEMENT_COLLISION_STEP = 4;
+
 export function movePlayerWithCollision(player, nextX, nextY) {
     const startX = player.x;
     const startY = player.y;
     const deltaX = nextX - startX;
     const deltaY = nextY - startY;
     const travelDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    const steps = Math.max(1, Math.ceil(travelDistance / 6));
+    const steps = Math.max(1, Math.ceil(travelDistance / MOVEMENT_COLLISION_STEP));
     const playerZ = player.z || 0;
 
     for (let i = 1; i <= steps; i += 1) {
@@ -436,9 +450,9 @@ export function movePlayerWithCollision(player, nextX, nextY) {
             }
         }
     }
-}
 
-const PENETRATION_RESOLVE_PASSES = 4;
+    resolvePlayerPenetration(player, startX, startY);
+}
 
 export function resolvePlayerPenetration(player, fromX = player.x, fromY = player.y) {
     let resolvedAny = false;

@@ -160,6 +160,10 @@ export function reconcileLocalPlayer() {
         });
     }
 
+    if (errorDistance > PREDICTION_ERROR_THRESHOLD * 1.5) {
+        resolvePlayerPenetration(state.predictedSelf, serverSelf.x, serverSelf.y);
+    }
+
     if (Math.abs(errorZ) > 0.35) {
         state.predictedSelf.z = (state.predictedSelf.z || 0) + errorZ * 0.28;
     }

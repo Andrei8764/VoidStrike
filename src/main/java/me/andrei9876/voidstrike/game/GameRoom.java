@@ -150,7 +150,10 @@ public class GameRoom {
     private static final double SPAWN_X_RED = 120;
     private static final double SPAWN_X_BLUE = MAP_WIDTH - 120;
     private static final double SPAWN_RING_STEP = 26;
+    private static final double SPAWN_GRID_MAX_RADIUS = 720;
+    private static final double SPAWN_GEOMETRY_MARGIN = 10;
     private static final double SPAWN_PLAYER_CLEARANCE = PLAYER_RADIUS * 2.4;
+    private static final double MOVEMENT_COLLISION_STEP = 4;
 
     private final String id;
     private final ObjectMapper objectMapper;
@@ -215,7 +218,7 @@ public class GameRoom {
         String playerId = session.getId();
         String team = chooseTeam();
 
-        SpawnPoint spawn = findSafeSpawn(team);
+        SpawnPoint spawn = findSafeSpawn(team, null);
 
         WebSocketSession outboundSession = new ConcurrentWebSocketSessionDecorator(
                 session,
@@ -224,14 +227,20 @@ public class GameRoom {
         );
 
         sessions.put(playerId, outboundSession);
-        players.put(playerId, new PlayerState(playerId, playerName, team, characterModel, spawn.x, spawn.y));
+        PlayerState player = new PlayerState(playerId, playerName, team, characterModel, spawn.x, spawn.y);
+        finalizeSpawnGeometry(player);
+        players.put(playerId, player);
     }
 
     private SpawnPoint findSafeSpawn(String team) {
+        return findSafeSpawn(team, null);
+    }
+
+    private SpawnPoint findSafeSpawn(String team, PlayerState excludePlayer) {
         double baseX = "RED".equals(team) ? SPAWN_X_RED : SPAWN_X_BLUE;
         double baseY = SPAWN_Y_MIN + Math.random() * (SPAWN_Y_MAX - SPAWN_Y_MIN);
 
-        if (isSpawnPointSafe(baseX, baseY)) {
+        if (isSpawnPointSafe(baseX, baseY, excludePlayer)) {
             return new SpawnPoint(baseX, baseY);
         }
 
@@ -243,42 +252,70 @@ public class GameRoom {
             double y = baseY + Math.sin(angle) * radius;
             x = clamp(x, PLAYER_RADIUS + 8, MAP_WIDTH - PLAYER_RADIUS - 8);
             y = clamp(y, SPAWN_Y_MIN, SPAWN_Y_MAX);
-            if (isSpawnPointSafe(x, y)) {
+            if (isSpawnPointSafe(x, y, excludePlayer)) {
                 return new SpawnPoint(x, y);
             }
         }
 
-        if (isSpawnPointGeometrySafe(baseX, baseY)) {
-            return new SpawnPoint(baseX, baseY);
+        SpawnPoint gridSpawn = findSafeSpawnByGridSearch(team, excludePlayer);
+        if (gridSpawn != null) {
+            return gridSpawn;
         }
 
-        for (int i = 0; i < SPAWN_TRIES * 2; i += 1) {
-            double angle = Math.random() * Math.PI * 2;
-            double ring = 1 + (i / 6.0);
-            double radius = ring * SPAWN_RING_STEP;
-            double x = baseX + Math.cos(angle) * radius;
-            double y = baseY + Math.sin(angle) * radius;
-            x = clamp(x, PLAYER_RADIUS + 8, MAP_WIDTH - PLAYER_RADIUS - 8);
-            y = clamp(y, SPAWN_Y_MIN, SPAWN_Y_MAX);
-            if (isSpawnPointGeometrySafe(x, y)) {
-                return new SpawnPoint(x, y);
+        double centerX = MAP_WIDTH / 2.0;
+        for (double y = SPAWN_Y_MIN; y <= SPAWN_Y_MAX; y += SPAWN_RING_STEP) {
+            if (isSpawnPointSafe(centerX, y, excludePlayer)) {
+                return new SpawnPoint(centerX, y);
             }
         }
 
-        for (double y = SPAWN_Y_MIN; y <= SPAWN_Y_MAX; y += PLAYER_RADIUS * 1.5) {
-            if (isSpawnPointGeometrySafe(baseX, y)) {
-                return new SpawnPoint(baseX, y);
-            }
-        }
-
-        return new SpawnPoint(baseX, clamp(baseY, SPAWN_Y_MIN, SPAWN_Y_MAX));
+        log.warn("[spawn] no safe spawn found for team {}, using map center fallback", team);
+        return new SpawnPoint(centerX, (SPAWN_Y_MIN + SPAWN_Y_MAX) / 2.0);
     }
 
-    private boolean isSpawnPointSafe(double x, double y) {
+    private SpawnPoint findSafeSpawnByGridSearch(String team, PlayerState excludePlayer) {
+        double baseX = "RED".equals(team) ? SPAWN_X_RED : SPAWN_X_BLUE;
+        int xDirection = "RED".equals(team) ? 1 : -1;
+        double midY = (SPAWN_Y_MIN + SPAWN_Y_MAX) / 2.0;
+
+        for (double radius = 0; radius <= SPAWN_GRID_MAX_RADIUS; radius += SPAWN_RING_STEP) {
+            for (double y = SPAWN_Y_MIN; y <= SPAWN_Y_MAX; y += SPAWN_RING_STEP) {
+                double x = clamp(
+                        baseX + xDirection * radius,
+                        PLAYER_RADIUS + 8,
+                        MAP_WIDTH - PLAYER_RADIUS - 8
+                );
+                if (isSpawnPointSafe(x, y, excludePlayer)) {
+                    return new SpawnPoint(x, y);
+                }
+            }
+
+            for (int side = -1; side <= 1; side += 2) {
+                double y = clamp(midY + side * radius, SPAWN_Y_MIN, SPAWN_Y_MAX);
+                for (double xOffset = 0; xOffset <= radius; xOffset += SPAWN_RING_STEP) {
+                    double x = clamp(
+                            baseX + xDirection * xOffset,
+                            PLAYER_RADIUS + 8,
+                            MAP_WIDTH - PLAYER_RADIUS - 8
+                    );
+                    if (isSpawnPointSafe(x, y, excludePlayer)) {
+                        return new SpawnPoint(x, y);
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private boolean isSpawnPointSafe(double x, double y, PlayerState excludePlayer) {
         if (!isSpawnPointGeometrySafe(x, y)) {
             return false;
         }
         for (PlayerState other : players.values()) {
+            if (other == excludePlayer) {
+                continue;
+            }
             double dx = other.getX() - x;
             double dy = other.getY() - y;
             if (dx * dx + dy * dy < SPAWN_PLAYER_CLEARANCE * SPAWN_PLAYER_CLEARANCE) {
@@ -288,8 +325,53 @@ public class GameRoom {
         return true;
     }
 
+    private double spawnGroundZAt(double x, double y) {
+        return findSupportTopAt(x, y, PLAYER_GROUND_SNAP_EPSILON);
+    }
+
     private boolean isSpawnPointGeometrySafe(double x, double y) {
-        return !collidesWithObstacle(x, y, 0, PLAYER_RADIUS, DEFAULT_PLAYER_COLLIDER_HEIGHT);
+        double spawnZ = spawnGroundZAt(x, y);
+        double spawnRadius = PLAYER_RADIUS + SPAWN_GEOMETRY_MARGIN;
+        return !collidesWithObstacle(x, y, spawnZ, spawnRadius, DEFAULT_PLAYER_COLLIDER_HEIGHT);
+    }
+
+    private double[] teamSpawnIngressPoint(String team, double y) {
+        double ingressX = "RED".equals(team)
+                ? PLAYER_RADIUS + 8
+                : MAP_WIDTH - PLAYER_RADIUS - 8;
+        return new double[]{ingressX, clamp(y, SPAWN_Y_MIN, SPAWN_Y_MAX)};
+    }
+
+    private boolean isPlayerOverlappingSolid(PlayerState player) {
+        return collidesWithObstacle(
+                player.getX(),
+                player.getY(),
+                player.getZ(),
+                PLAYER_RADIUS,
+                DEFAULT_PLAYER_COLLIDER_HEIGHT
+        );
+    }
+
+    private void finalizeSpawnGeometry(PlayerState player) {
+        finalizeSpawnGeometry(player, false);
+    }
+
+    private void finalizeSpawnGeometry(PlayerState player, boolean preserveVerticalPosition) {
+        if (!preserveVerticalPosition) {
+            player.setZ(spawnGroundZAt(player.getX(), player.getY()));
+        }
+        double[] ingress = teamSpawnIngressPoint(player.getTeam(), player.getY());
+
+        for (int pass = 0; pass < PENETRATION_RESOLVE_PASSES * 2; pass++) {
+            resolvePlayerPenetration(player, ingress[0], ingress[1]);
+            if (!isPlayerOverlappingSolid(player)) {
+                break;
+            }
+        }
+
+        if (!preserveVerticalPosition) {
+            player.setZ(spawnGroundZAt(player.getX(), player.getY()));
+        }
     }
 
     public synchronized void removePlayer(String playerId) {
@@ -979,8 +1061,9 @@ public class GameRoom {
     }
 
     private void respawnPlayer(PlayerState player) {
-        SpawnPoint spawn = findSafeSpawn(player.getTeam());
+        SpawnPoint spawn = findSafeSpawn(player.getTeam(), player);
         player.respawn(spawn.x, spawn.y);
+        finalizeSpawnGeometry(player);
     }
 
     private void handleRespawnCommand(PlayerState requester, String[] parts) {
@@ -1018,7 +1101,7 @@ public class GameRoom {
         double deltaX = nextX - startX;
         double deltaY = nextY - startY;
         double travelDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-        int steps = Math.max(1, (int) Math.ceil(travelDistance / 6.0));
+        int steps = Math.max(1, (int) Math.ceil(travelDistance / MOVEMENT_COLLISION_STEP));
 
         for (int i = 1; i <= steps; i++) {
             double t = (double) i / steps;
@@ -1058,6 +1141,8 @@ public class GameRoom {
                 }
             }
         }
+
+        resolvePlayerPenetration(player, startX, startY);
     }
 
     private boolean collidesWithObstacle(double x, double y) {
@@ -1263,6 +1348,7 @@ public class GameRoom {
                 requester.setVelocityX(0);
                 requester.setVelocityY(0);
                 requester.setVelocityZ(0);
+                finalizeSpawnGeometry(requester, parts.length >= 4);
                 addSystemChat(requester.getName() + " teleported to (" +
                         Math.round(requester.getX()) + ", " +
                         Math.round(requester.getY()) + ", " +
@@ -1295,6 +1381,7 @@ public class GameRoom {
         requester.setVelocityX(0);
         requester.setVelocityY(0);
         requester.setVelocityZ(0);
+        finalizeSpawnGeometry(requester);
         addSystemChat(requester.getName() + " teleported to " + target.getName());
     }
 
@@ -1603,6 +1690,21 @@ public class GameRoom {
                 // exit toward the side the player came from (their pre-move position), which
                 // guarantees we never pass through to the far side.
                 LocalPoint from = toLocal(fromX, fromY);
+                double fromDeltaX = from.x - lx;
+                double fromDeltaY = from.y - ly;
+                boolean spawnLikeOverlap = fromDeltaX * fromDeltaX + fromDeltaY * fromDeltaY < 1.0;
+
+                if (spawnLikeOverlap) {
+                    double overlapX = halfWidth + radius - Math.abs(lx);
+                    double overlapY = halfDepth + radius - Math.abs(ly);
+                    if (overlapX <= overlapY) {
+                        localPushX = (lx >= 0 ? 1 : -1) * overlapX;
+                        localPushY = 0;
+                    } else {
+                        localPushX = 0;
+                        localPushY = (ly >= 0 ? 1 : -1) * overlapY;
+                    }
+                } else {
                 double fromDirX = from.x >= 0 ? 1 : -1;
                 double fromDirY = from.y >= 0 ? 1 : -1;
                 double exitX = fromDirX * (halfWidth + radius) - lx;
@@ -1625,6 +1727,7 @@ public class GameRoom {
                 } else {
                     localPushX = 0;
                     localPushY = exitY;
+                }
                 }
             } else {
                 double closestX = Math.max(-halfWidth, Math.min(lx, halfWidth));
