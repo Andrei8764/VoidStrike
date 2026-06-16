@@ -7,8 +7,6 @@ import {
     killFeedElement,
     chatMessagesElement,
     magazineElement,
-    minimapCanvas,
-    minimapContext,
     nextRoundCountdownElement,
     purchaseNotificationElement,
     redScoreElement,
@@ -22,7 +20,6 @@ import {
     weaponElement
 } from "./dom.js";
 import { state } from "./state.js";
-import { WORLD_HEIGHT, WORLD_WIDTH } from "./config.js";
 import { escapeHtml, formatTime } from "./utils.js";
 import { getSelfPlayer } from "./state.js";
 
@@ -53,7 +50,6 @@ export function updateHud() {
         updateRoundEndOverlay();
     }
 
-    updateMinimap();
     updateChat();
 }
 
@@ -150,37 +146,4 @@ function updateChat() {
     `).join("");
 
     chatMessagesElement.scrollTop = chatMessagesElement.scrollHeight;
-}
-
-function updateMinimap() {
-    if (!minimapCanvas || !minimapContext) {
-        return;
-    }
-
-    const self = getSelfPlayer();
-    minimapContext.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
-
-    minimapContext.fillStyle = "rgba(5, 8, 16, 0.75)";
-    minimapContext.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
-
-    minimapContext.strokeStyle = "rgba(125, 211, 252, 0.45)";
-    minimapContext.strokeRect(0.5, 0.5, minimapCanvas.width - 1, minimapCanvas.height - 1);
-
-    if (!self) {
-        return;
-    }
-
-    const visiblePlayers = state.players.filter(player => (
-        player.id === self.id || player.team === self.team
-    ));
-
-    for (const player of visiblePlayers) {
-        const px = player.x / WORLD_WIDTH * minimapCanvas.width;
-        const py = player.y / WORLD_HEIGHT * minimapCanvas.height;
-
-        minimapContext.fillStyle = player.id === self.id ? "#22c55e" : "#e2e8f0";
-        minimapContext.beginPath();
-        minimapContext.arc(px, py, player.id === self.id ? 3.5 : 2.8, 0, Math.PI * 2);
-        minimapContext.fill();
-    }
 }

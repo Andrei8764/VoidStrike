@@ -177,6 +177,7 @@ public class GameRoom {
     private final List<DamageFeedEvent> damageFeed = new ArrayList<>();
     private final List<ChatEvent> chatMessages = new ArrayList<>();
     private final List<CollisionBox> sceneCollisionBoxes = new ArrayList<>();
+    private final List<CollisionInstanceGroup> sceneCollisionGroups = new ArrayList<>();
     private final CollisionProfileConfig collisionProfileConfig;
     private final Map<String, List<StoredSpawnPoint>> customSpawnPoints = new HashMap<>();
     private final Map<String, Integer> customSpawnRoundRobin = new HashMap<>();
@@ -189,6 +190,7 @@ public class GameRoom {
     private static final double COLLISION_MAX_HALF = 4096.0;
     private static final double COLLISION_MAX_HEIGHT = 8192.0;
     private static final double COLLISION_MIN_DIM = 0.05;
+    private static final double COLLISION_CONTACT_PADDING = 6.0;
     private final java.util.Set<String> collisionWarningKeys = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private int roundNumber = 1;
@@ -221,7 +223,7 @@ public class GameRoom {
         this.websocketSendTimeLimitMs = websocketSendTimeLimitMs;
         this.websocketSendBufferSizeBytes = websocketSendBufferSizeBytes;
         this.collisionProfileConfig = loadCollisionProfileConfig();
-        this.sceneCollisionBoxes.addAll(loadSceneCollisionBoxes());
+        loadSceneCollisionData();
         recomputeCollisionHashes();
         loadCustomSpawnPoints();
         long solidBoxes = this.sceneCollisionBoxes.stream().filter(box -> box.solid).count();
@@ -533,12 +535,14 @@ public class GameRoom {
 
     private double findWalkableSurfaceTopAt(double x, double y) {
         double top = 0;
-        for (CollisionBox box : sceneCollisionBoxes) {
-            if (!box.walkable || !box.supportsPoint(x, y)) {
-                continue;
-            }
-            if (box.topZ > top) {
-                top = box.topZ;
+        for (CollisionInstanceGroup group : sceneCollisionGroups) {
+            for (CollisionBox box : group.positives()) {
+                if (!group.walkable() || !box.supportsPoint(x, y)) {
+                    continue;
+                }
+                if (box.topZ > top) {
+                    top = box.topZ;
+                }
             }
         }
         return top;
@@ -754,7 +758,8 @@ public class GameRoom {
             collisionProfileConfig.exactOnly = reloadedConfig.exactOnly;
 
             sceneCollisionBoxes.clear();
-            sceneCollisionBoxes.addAll(loadSceneCollisionBoxes());
+            sceneCollisionGroups.clear();
+            loadSceneCollisionData();
             recomputeCollisionHashes();
             log.info("[collision] reloaded {} boxes exactOnly={} scene#={} profiles#={}",
                     sceneCollisionBoxes.size(), collisionProfileConfig.exactOnly, sceneHash, profilesHash);
@@ -1285,15 +1290,33 @@ public class GameRoom {
     }
 
     private boolean bulletIntersectsSolid(BulletState bullet) {
-        for (CollisionBox box : sceneCollisionBoxes) {
-            if (box.solid && box.intersectsSegment3D(
-                    bullet.getPreviousX(),
-                    bullet.getPreviousY(),
-                    bullet.getPreviousZ(),
-                    bullet.getX(),
-                    bullet.getY(),
-                    bullet.getZ()
-            )) {
+        for (CollisionInstanceGroup group : sceneCollisionGroups) {
+            if (!group.solid()) {
+                continue;
+            }
+            for (CollisionBox box : group.positives()) {
+                if (box.intersectsSegment3D(
+                        bullet.getPreviousX(),
+                        bullet.getPreviousY(),
+                        bullet.getPreviousZ(),
+                        bullet.getX(),
+                        bullet.getY(),
+                        bullet.getZ()
+                )) {
+                    if (!segmentInAntiHollow(group, bullet.getPreviousX(), bullet.getPreviousY(), bullet.getPreviousZ(),
+                            bullet.getX(), bullet.getY(), bullet.getZ())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean segmentInAntiHollow(CollisionInstanceGroup group, double x0, double y0, double z0,
+                                        double x1, double y1, double z1) {
+        for (CollisionBox anti : group.antis()) {
+            if (anti.intersectsSegment3D(x0, y0, z0, x1, y1, z1)) {
                 return true;
             }
         }
@@ -1596,20 +1619,51 @@ public class GameRoom {
         }
     }
 
+    private boolean isInAntiHollow(CollisionInstanceGroup group, double x, double y, double z, double radius, double height) {
+        for (CollisionBox anti : group.antis()) {
+            if (anti.intersectsCylinder(x, y, z, radius, height)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isBlockedByGroup(CollisionInstanceGroup group, double x, double y, double z, double radius, double height) {
+        if (!group.solid()) {
+            return false;
+        }
+        boolean inPositive = false;
+        for (CollisionBox box : group.positives()) {
+            if (box.intersectsCylinder(x, y, z, radius, height)) {
+                inPositive = true;
+                break;
+            }
+        }
+        if (!inPositive) {
+            return false;
+        }
+        return !isInAntiHollow(group, x, y, z, radius, height);
+    }
+
     private double findWalkableStepTopAt(double x, double y, double currentZ, double maxStepHeight) {
         double best = currentZ;
-        for (CollisionBox box : sceneCollisionBoxes) {
-            if (!box.walkable || !box.supportsPoint(x, y)) {
-                continue;
-            }
-            if (box.topZ <= currentZ + PLAYER_GROUND_SNAP_EPSILON) {
-                continue;
-            }
-            if (box.topZ - currentZ > maxStepHeight) {
-                continue;
-            }
-            if (box.topZ > best) {
-                best = box.topZ;
+        for (CollisionInstanceGroup group : sceneCollisionGroups) {
+            for (CollisionBox box : group.positives()) {
+                if (!group.walkable() || !box.supportsPoint(x, y)) {
+                    continue;
+                }
+                if (box.topZ <= currentZ + PLAYER_GROUND_SNAP_EPSILON) {
+                    continue;
+                }
+                if (box.topZ - currentZ > maxStepHeight) {
+                    continue;
+                }
+                if (isInAntiHollow(group, x, y, box.topZ, PLAYER_RADIUS, DEFAULT_PLAYER_COLLIDER_HEIGHT)) {
+                    continue;
+                }
+                if (box.topZ > best) {
+                    best = box.topZ;
+                }
             }
         }
         return best;
@@ -1634,8 +1688,8 @@ public class GameRoom {
         if (COLLISION_OBSTACLES.stream().anyMatch(obstacle -> obstacle.intersectsCircle(x, y, radius))) {
             return true;
         }
-        for (CollisionBox box : sceneCollisionBoxes) {
-            if (box.solid && box.intersectsCylinder(x, y, z, radius, height)) {
+        for (CollisionInstanceGroup group : sceneCollisionGroups) {
+            if (isBlockedByGroup(group, x, y, z, radius, height)) {
                 return true;
             }
         }
@@ -1644,15 +1698,20 @@ public class GameRoom {
 
     private double findSupportTopAt(double x, double y, double currentZ) {
         double top = 0;
-        for (CollisionBox box : sceneCollisionBoxes) {
-            if (!box.walkable || !box.supportsPoint(x, y)) {
-                continue;
-            }
-            if (currentZ + PLAYER_GROUND_SNAP_EPSILON < box.topZ) {
-                continue;
-            }
-            if (box.topZ > top) {
-                top = box.topZ;
+        for (CollisionInstanceGroup group : sceneCollisionGroups) {
+            for (CollisionBox box : group.positives()) {
+                if (!group.walkable() || !box.supportsPoint(x, y)) {
+                    continue;
+                }
+                if (currentZ + PLAYER_GROUND_SNAP_EPSILON < box.topZ) {
+                    continue;
+                }
+                if (isInAntiHollow(group, x, y, currentZ, PLAYER_RADIUS, DEFAULT_PLAYER_COLLIDER_HEIGHT)) {
+                    continue;
+                }
+                if (box.topZ > top) {
+                    top = box.topZ;
+                }
             }
         }
         return top;
@@ -1671,10 +1730,15 @@ public class GameRoom {
             boolean resolvedThisPass = false;
             double playerZ = player.getZ();
 
-            for (CollisionBox box : sceneCollisionBoxes) {
-                if (!box.solid) {
+            for (CollisionInstanceGroup group : sceneCollisionGroups) {
+                if (!group.solid()) {
                     continue;
                 }
+                if (isInAntiHollow(group, player.getX(), player.getY(), playerZ, PLAYER_RADIUS, DEFAULT_PLAYER_COLLIDER_HEIGHT)) {
+                    continue;
+                }
+
+                for (CollisionBox box : group.positives()) {
                 if (playerZ >= box.topZ || playerZ + DEFAULT_PLAYER_COLLIDER_HEIGHT <= box.baseZ) {
                     continue;
                 }
@@ -1702,6 +1766,7 @@ public class GameRoom {
 
                 resolvedThisPass = true;
                 resolvedAny = true;
+                }
             }
 
             if (!resolvedThisPass) {
@@ -2507,6 +2572,9 @@ public class GameRoom {
         if (modelPath == null || modelPath.isBlank()) {
             return false;
         }
+        if (me.andrei9876.voidstrike.world.collision.ModelScanFilter.isRoofLike(modelPath)) {
+            return false;
+        }
         return modelPath.contains("/wall-")
                 || modelPath.contains("/door-")
                 || modelPath.contains("/window-")
@@ -2608,17 +2676,18 @@ public class GameRoom {
         return new double[]{hw, hd, h};
     }
 
-    private List<CollisionBox> loadSceneCollisionBoxes() {
-        List<CollisionBox> boxes = new ArrayList<>();
+    private void loadSceneCollisionData() {
+        sceneCollisionBoxes.clear();
+        sceneCollisionGroups.clear();
         try {
             if (!Files.exists(worldStorageService.scenePath())) {
-                return boxes;
+                return;
             }
 
             var root = objectMapper.readTree(Files.readString(worldStorageService.scenePath()));
             var models = root.path("models");
             if (!models.isArray()) {
-                return boxes;
+                return;
             }
 
             for (var model : models) {
@@ -2631,15 +2700,6 @@ public class GameRoom {
                     continue;
                 }
                 var collider = resolved.collider();
-                boolean isFallback = !"exact".equals(resolved.source());
-                if (isFallback) {
-                    warnCollisionOnce(path + ":fallback",
-                            path + ": no exact profile, using " + resolved.source() + " fallback");
-                }
-                // Collision profiles are authored per-model via the editor tooling, so the
-                // `solid` flag is the single source of truth. The previous substring whitelist
-                // silently overrode authored profiles and let players noclip through objects
-                // whose path did not match (benches, beams, bricks, dumpsters, ...).
                 boolean effectiveSolid = collider.solid;
                 ModelScale modelScale = readModelScale(model.path("scale"));
                 double x = model.path("position").path("x").asDouble(0);
@@ -2656,39 +2716,72 @@ public class GameRoom {
                         collider.offsetLocalZ
                 ))
                         : collider.parts;
+                List<ColliderPart> antiParts = collider.antiParts == null ? List.of() : collider.antiParts;
+
+                List<CollisionBox> positives = new ArrayList<>();
+                List<CollisionBox> antis = new ArrayList<>();
 
                 for (ColliderPart part : parts) {
-                    double yawDeg = readModelYawDeg(model) + part.yawOffsetDeg;
-                    double yawRad = Math.toRadians(yawDeg);
-                    double halfWidth = part.halfWidth * modelScale.x();
-                    double halfDepth = part.halfDepth * modelScale.z();
-                    if ("wall".equals(collider.kind) || isWallLikeModelPath(path)) {
-                        double[] tightened = tightenWallFootprint(halfWidth, halfDepth, path, collider, modelScale.x(), modelScale.z());
-                        halfWidth = tightened[0];
-                        halfDepth = tightened[1];
-                    }
-                    double height = part.height * modelScale.y();
-                    // Validate + clamp corrupt dimensions (NaN / <=0 / absurd). Mirrors client.
-                    double[] safeDims = sanitizeBoxDims(path, halfWidth, halfDepth, height);
-                    halfWidth = safeDims[0];
-                    halfDepth = safeDims[1];
-                    height = safeDims[2];
-                    // sinYaw negated so the OBB matches the Three.js renderer (RotationY(+yaw)).
-                    double cosYaw = Math.cos(yawRad);
-                    double sinYaw = -Math.sin(yawRad);
-                    double localOffsetX = part.offsetLocalX * modelScale.x();
-                    double localOffsetDepth = part.offsetLocalY * modelScale.z();
-                    double localOffsetUp = part.offsetLocalZ * modelScale.y();
-                    double worldOffsetX = localOffsetX * cosYaw - localOffsetDepth * sinYaw;
-                    double worldOffsetY = localOffsetX * sinYaw + localOffsetDepth * cosYaw;
-                    double baseZ = Math.max(0, modelElevation + localOffsetUp);
-                    double topZ = Math.max(baseZ, baseZ + height);
-                    boxes.add(new CollisionBox(x + worldOffsetX, y + worldOffsetY, halfWidth, halfDepth, cosYaw, sinYaw, baseZ, topZ, effectiveSolid, collider.walkable));
+                    positives.add(buildWorldCollisionBox(part, collider, path, model, modelScale, x, y, modelElevation, effectiveSolid, false));
                 }
+                for (ColliderPart part : antiParts) {
+                    antis.add(buildWorldCollisionBox(part, collider, path, model, modelScale, x, y, modelElevation, effectiveSolid, true));
+                }
+
+                sceneCollisionGroups.add(new CollisionInstanceGroup(positives, antis, effectiveSolid, collider.walkable, path));
+                sceneCollisionBoxes.addAll(positives);
             }
         } catch (Exception _ignored) {
         }
-        return boxes;
+    }
+
+    private CollisionBox buildWorldCollisionBox(
+            ColliderPart part,
+            ColliderTemplate collider,
+            String path,
+            JsonNode model,
+            ModelScale modelScale,
+            double x,
+            double y,
+            double modelElevation,
+            boolean effectiveSolid,
+            boolean isAnti
+    ) {
+        double yawDeg = readModelYawDeg(model) + part.yawOffsetDeg;
+        double yawRad = Math.toRadians(yawDeg);
+        double halfWidth = part.halfWidth * modelScale.x();
+        double halfDepth = part.halfDepth * modelScale.z();
+        if (!isAnti && !me.andrei9876.voidstrike.world.collision.ModelScanFilter.isRoofLike(path)
+                && ("wall".equals(collider.kind) || isWallLikeModelPath(path))) {
+            double[] tightened = tightenWallFootprint(halfWidth, halfDepth, path, collider, modelScale.x(), modelScale.z());
+            halfWidth = tightened[0];
+            halfDepth = tightened[1];
+        }
+        double height = part.height * modelScale.y();
+        double[] safeDims = sanitizeBoxDims(path, halfWidth, halfDepth, height);
+        halfWidth = safeDims[0];
+        halfDepth = safeDims[1];
+        height = safeDims[2];
+        if (!isAnti) {
+            halfWidth += COLLISION_CONTACT_PADDING;
+            halfDepth += COLLISION_CONTACT_PADDING;
+            height += COLLISION_CONTACT_PADDING;
+        }
+        double cosYaw = Math.cos(yawRad);
+        double sinYaw = -Math.sin(yawRad);
+        double localOffsetX = part.offsetLocalX * modelScale.x();
+        double localOffsetDepth = part.offsetLocalY * modelScale.z();
+        double localOffsetUp = part.offsetLocalZ * modelScale.y();
+        double worldOffsetX = localOffsetX * cosYaw - localOffsetDepth * sinYaw;
+        double worldOffsetY = localOffsetX * sinYaw + localOffsetDepth * cosYaw;
+        double baseZ = Math.max(0, modelElevation + localOffsetUp);
+        double topZ = Math.max(baseZ, baseZ + height);
+        return new CollisionBox(x + worldOffsetX, y + worldOffsetY, halfWidth, halfDepth, cosYaw, sinYaw, baseZ, topZ, effectiveSolid, collider.walkable);
+    }
+
+    private List<CollisionBox> loadSceneCollisionBoxes() {
+        loadSceneCollisionData();
+        return new ArrayList<>(sceneCollisionBoxes);
     }
 
     private ModelScale readModelScale(JsonNode scaleNode) {
@@ -2734,8 +2827,6 @@ public class GameRoom {
     private record ResolvedProfile(ColliderTemplate collider, String source) {
     }
 
-    // Mirrors client resolveCollisionProfileWithSource: source is exact|prefix|default,
-    // where prefix/default are treated as fallbacks for debug visibility.
     private ResolvedProfile resolveCollisionProfileWithSource(String modelPath) {
         if (modelPath == null || modelPath.isEmpty()) {
             return null;
@@ -2745,29 +2836,13 @@ public class GameRoom {
         if (exact != null) {
             return new ResolvedProfile(exact, "exact");
         }
-        if (collisionProfileConfig.exactOnly) {
-            return null;
-        }
-        for (PrefixColliderProfile prefixProfile : collisionProfileConfig.prefix) {
-            if (modelPath.startsWith(prefixProfile.prefix)) {
-                return new ResolvedProfile(prefixProfile.collider, "prefix");
-            }
-        }
-        return new ResolvedProfile(collisionProfileConfig.defaultProfile, "default");
+        return null;
     }
 
     private CollisionProfileConfig loadCollisionProfileConfig() {
         CollisionProfileConfig config = new CollisionProfileConfig();
-        // Reasonable fallback defaults if file is missing.
-        config.defaultProfile = new ColliderTemplate(48, 48, 64, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of());
-        config.prefix.add(new PrefixColliderProfile("/models/road-", new ColliderTemplate(64, 64, 8, false, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/grass", new ColliderTemplate(64, 64, 8, false, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/wall-", new ColliderTemplate(64, 64, 96, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/window-", new ColliderTemplate(48, 24, 96, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/door-", new ColliderTemplate(40, 20, 96, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/truck-", new ColliderTemplate(92, 56, 88, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/detail-block", new ColliderTemplate(56, 56, 72, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/detail-barrier", new ColliderTemplate(52, 36, 52, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
+        config.exactOnly = true;
+        config.defaultProfile = new ColliderTemplate(48, 48, 64, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of(), List.of());
 
         try {
             if (!Files.exists(worldStorageService.collisionProfilesPath())) {
@@ -2787,27 +2862,12 @@ public class GameRoom {
                     if (value.isEmpty()) {
                         continue;
                     }
-                    var collider = readColliderTemplate(item, config.defaultProfile);
-                    config.exact.put(value, collider);
-                }
-            }
-
-            var prefix = root.path("prefix");
-            if (prefix.isArray()) {
-                config.prefix.clear();
-                for (var item : prefix) {
-                    String value = item.path("value").asText("").toLowerCase(Locale.ROOT);
-                    if (value.isEmpty()) {
+                    if (!item.path("scanMeta").path("fallback").asText("").isBlank()) {
                         continue;
                     }
                     var collider = readColliderTemplate(item, config.defaultProfile);
-                    config.prefix.add(new PrefixColliderProfile(value, collider));
+                    config.exact.put(value, collider);
                 }
-            }
-
-            if (root.path("exactOnly").asBoolean(false)) {
-                config.exactOnly = true;
-                config.prefix.clear();
             }
         } catch (Exception _ignored) {
         }
@@ -2838,17 +2898,40 @@ public class GameRoom {
                 if (!partNode.isObject()) {
                     continue;
                 }
-                double partHalfWidth = partNode.path("halfWidth").asDouble(halfWidth);
-                double partHalfDepth = partNode.path("halfDepth").asDouble(halfDepth);
-                double partHeight = partNode.path("height").asDouble(height);
-                double partYawOffsetDeg = partNode.path("yawOffsetDeg").asDouble(yawOffsetDeg);
-                double partOffsetLocalX = partNode.path("offsetLocalX").asDouble(offsetLocalX);
-                double partOffsetLocalY = partNode.path("offsetLocalY").asDouble(offsetLocalY);
-                double partOffsetLocalZ = partNode.path("offsetLocalZ").asDouble(offsetLocalZ);
-                parts.add(new ColliderPart(partHalfWidth, partHalfDepth, partHeight, partYawOffsetDeg, partOffsetLocalX, partOffsetLocalY, partOffsetLocalZ));
+                parts.add(readColliderPart(partNode, halfWidth, halfDepth, height, yawOffsetDeg, offsetLocalX, offsetLocalY, offsetLocalZ));
             }
         }
-        return new ColliderTemplate(halfWidth, halfDepth, height, solid, walkable, yawOffsetDeg, offsetLocalX, offsetLocalY, offsetLocalZ, elevationLift, kind, wallAxis, thickness, parts);
+        List<ColliderPart> antiParts = new ArrayList<>();
+        JsonNode antiNode = node.path("antiBoxes");
+        if (antiNode.isArray()) {
+            for (JsonNode partNode : antiNode) {
+                if (!partNode.isObject()) {
+                    continue;
+                }
+                antiParts.add(readColliderPart(partNode, halfWidth, halfDepth, height, yawOffsetDeg, offsetLocalX, offsetLocalY, offsetLocalZ));
+            }
+        }
+        return new ColliderTemplate(halfWidth, halfDepth, height, solid, walkable, yawOffsetDeg, offsetLocalX, offsetLocalY, offsetLocalZ, elevationLift, kind, wallAxis, thickness, parts, antiParts);
+    }
+
+    private ColliderPart readColliderPart(
+            JsonNode partNode,
+            double halfWidth,
+            double halfDepth,
+            double height,
+            double yawOffsetDeg,
+            double offsetLocalX,
+            double offsetLocalY,
+            double offsetLocalZ
+    ) {
+        double partHalfWidth = partNode.path("halfWidth").asDouble(halfWidth);
+        double partHalfDepth = partNode.path("halfDepth").asDouble(halfDepth);
+        double partHeight = partNode.path("height").asDouble(height);
+        double partYawOffsetDeg = partNode.path("yawOffsetDeg").asDouble(yawOffsetDeg);
+        double partOffsetLocalX = partNode.path("offsetLocalX").asDouble(offsetLocalX);
+        double partOffsetLocalY = partNode.path("offsetLocalY").asDouble(offsetLocalY);
+        double partOffsetLocalZ = partNode.path("offsetLocalZ").asDouble(offsetLocalZ);
+        return new ColliderPart(partHalfWidth, partHalfDepth, partHeight, partYawOffsetDeg, partOffsetLocalX, partOffsetLocalY, partOffsetLocalZ);
     }
 
     private record ColliderTemplate(
@@ -2865,7 +2948,17 @@ public class GameRoom {
             String kind,
             String wallAxis,
             double thickness,
-            List<ColliderPart> parts
+            List<ColliderPart> parts,
+            List<ColliderPart> antiParts
+    ) {
+    }
+
+    private record CollisionInstanceGroup(
+            List<CollisionBox> positives,
+            List<CollisionBox> antis,
+            boolean solid,
+            boolean walkable,
+            String modelPath
     ) {
     }
 

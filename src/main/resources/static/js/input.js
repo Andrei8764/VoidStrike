@@ -26,6 +26,7 @@ import {
 import { getSelfPlayer, keys, mouse, state } from "./state.js";
 import { resumeAudio } from "./audio.js";
 import { appendConsoleLine } from "./devConsole.js";
+import { resolveScanOptions } from "./collisionScanner.js";
 import { joinGame, sendAdminCommand, sendChatMessage } from "./websocket.js";
 import {
     clearEditorSceneModels,
@@ -35,6 +36,10 @@ import {
     getCollisionProfileSuggestionAtCrosshair,
     getCollisionProfileSuggestionsForScene,
     getCollisionDiagnosticsAtCrosshair,
+    scanCollisionProfileAtCrosshair,
+    scanCollisionProfilesForScene,
+    resolveModelPathAtCrosshair,
+    showScanPreviewFromProfile,
     saveEditorScene,
     setEditorModelToNone,
     setAnisotropyLevel,
@@ -719,11 +724,168 @@ async function clearCollisionProfilesRequest() {
     return response;
 }
 
+function runScanCollisionAllCommand(flagParts) {
+    const flags = Array.isArray(flagParts) ? flagParts : [];
+    const save = flags.includes("--save") || flags.includes("save");
+    const onlyMissing = flags.includes("--only-missing") || flags.includes("only-missing");
+    const fast = flags.includes("--fast") || flags.includes("fast") || flags.includes("--balanced");
+    const aggressive = !fast || flags.includes("--aggressive") || flags.includes("aggressive");
+    const useClient = flags.includes("--client");
+    void (async () => {
+        if (useClient) {
+            const options = resolveScanOptions({ aggressive });
+            let existing = {};
+            if (onlyMissing) {
+                try {
+                    const response = await fetch("/world/collision-profiles.json", { cache: "no-store" });
+                    if (response.ok) {
+                        existing = await response.json();
+                    }
+                } catch (_error) {
+                }
+            }
+            const exact = Array.isArray(existing.exact) ? existing.exact : [];
+            const hasScanMeta = path => {
+                const entry = exact.find(item => String(item?.value || "").toLowerCase() === path);
+                return entry?.scanMeta?.version >= 1;
+            };
+
+            const profiles = scanCollisionProfilesForScene("all", options)
+                .filter(profile => !onlyMissing || !hasScanMeta(profile.value));
+
+            if (profiles.length === 0) {
+                appendConsoleLine("scanCollisionAll: no models to scan");
+                return;
+            }
+
+            appendConsoleLine(`scanCollisionAll(client): ${profiles.length} profile(s)${save ? " (saving)" : " (preview)"}`);
+            let saved = 0;
+            for (const profile of profiles) {
+                const coverage = ((profile.scanMeta?.coverage || 0) * 100).toFixed(1);
+                appendConsoleLine(`  ${profile.value}: +${profile.boxes?.length || 0} -${profile.antiBoxes?.length || 0} cov=${coverage}% cell=${profile.scanMeta?.cellSize}`);
+                if (!save) {
+                    continue;
+                }
+                try {
+                    const response = await fetch("/api/world/collision-profile", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(profile)
+                    });
+                    if (response.ok) {
+                        saved += 1;
+                    }
+                } catch (_error) {
+                }
+            }
+            if (save) {
+                appendConsoleLine(`scanCollisionAll saved ${saved}/${profiles.length}`);
+                reloadCollisionOnServerAndClient();
+            }
+            return;
+        }
+
+        const targetsResponse = await fetch(
+            `/api/world/collision-profiles/scan-targets?onlyMissing=${onlyMissing ? "true" : "false"}`,
+            { cache: "no-store" }
+        );
+        const targetsBody = targetsResponse.ok ? await targetsResponse.json() : null;
+        const paths = Array.isArray(targetsBody?.paths) ? targetsBody.paths : [];
+        if (paths.length === 0) {
+            appendConsoleLine("scanCollisionAll(server): no models to scan");
+            return;
+        }
+
+        appendConsoleLine(`scanCollisionAll(server${aggressive ? ", aggressive" : ", balanced"}): ${paths.length} model(s), cate unul...`);
+        const startedAt = performance.now();
+        let saved = 0;
+        let failed = 0;
+        for (let i = 0; i < paths.length; i += 1) {
+            const modelPath = paths[i];
+            appendConsoleLine(`  [${i + 1}/${paths.length}] ${modelPath}...`);
+            let profile = null;
+            let savedOk = false;
+            let scanWarnings = [];
+            for (const attempt of [{ fast, label: aggressive ? "aggressive" : "balanced" }, { fast: true, label: "fast-retry" }]) {
+                try {
+                    const response = await fetch("/api/world/collision-profiles/server-scan", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            modelPath,
+                            aggressive: !attempt.fast,
+                            fast: attempt.fast,
+                            save
+                        })
+                    });
+                    const body = response.ok ? await response.json() : null;
+                    if (response.status === 504 && !attempt.fast) {
+                        appendConsoleLine(`    timeout — retry fast...`);
+                        continue;
+                    }
+                    if (!response.ok || !body?.profile) {
+                        if (attempt.fast) {
+                            appendConsoleLine(`    FAIL ${response.status}${body?.error ? `: ${body.error}` : ""}`);
+                        }
+                        break;
+                    }
+                    profile = body.profile;
+                    savedOk = Boolean(save && body.saved);
+                    scanWarnings = Array.isArray(body.warnings) ? body.warnings : [];
+                    if (attempt.fast) {
+                        appendConsoleLine(`    ok (${attempt.label})`);
+                    }
+                    break;
+                } catch (error) {
+                    if (attempt.fast) {
+                        appendConsoleLine(`    FAIL ${error?.message || "network error"}`);
+                    }
+                }
+            }
+            if (!profile) {
+                failed += 1;
+                continue;
+            }
+            const coverage = ((profile.scanMeta?.coverage || 0) * 100).toFixed(1);
+            appendConsoleLine(`    +${profile.boxes?.length || 0} -${profile.antiBoxes?.length || 0} cov=${coverage}% cell=${profile.scanMeta?.cellSize}`);
+            if (scanWarnings.length > 0) {
+                appendConsoleLine(`    warn: ${scanWarnings.join(", ")}`);
+            }
+            if (savedOk) {
+                saved += 1;
+            }
+        }
+        const elapsed = ((performance.now() - startedAt) / 1000).toFixed(1);
+        appendConsoleLine(`scanCollisionAll(server): GATA in ${elapsed}s — ok ${paths.length - failed}/${paths.length}${save ? `, saved ${saved}` : ""}`);
+        if (save && saved > 0) {
+            appendConsoleLine("scanCollisionAll: ruleaza reloadcollision");
+            reloadCollisionOnServerAndClient();
+        }
+        try {
+            const missingResponse = await fetch("/api/world/collision-profiles/missing", { cache: "no-store" });
+            const missingBody = missingResponse.ok ? await missingResponse.json() : null;
+            const missingCount = Number(missingBody?.count) || 0;
+            if (missingCount > 0) {
+                appendConsoleLine(`colmissing: inca ${missingCount} model(e) fara hitbox — ruleaza 'colmissing' sau scancollisionall --save`);
+            }
+        } catch (_error) {
+        }
+    })();
+}
+
 function runConsoleCommand(rawCommand) {
     const normalized = rawCommand.trim();
     appendConsoleLine(`> ${normalized}`);
     const parts = normalized.split(/\s+/);
-    const command = parts[0]?.toLowerCase();
+    let command = parts[0]?.toLowerCase();
+    if (command === "autoscanall") {
+        parts[0] = "scancollisionall";
+        command = "scancollisionall";
+    } else if (command === "autoscan" && parts[1]?.toLowerCase() === "all") {
+        parts.splice(0, 2);
+        parts.unshift("scancollisionall");
+        command = "scancollisionall";
+    }
     const arg = parts[1]?.toLowerCase();
 
     if (command === "wallhack") {
@@ -820,8 +982,7 @@ function runConsoleCommand(rawCommand) {
                 appendConsoleLine("colinfo: no model under crosshair");
                 return;
             }
-            const tag = info.isFallback ? `FALLBACK(${info.source})` : "exact";
-            appendConsoleLine(`colinfo ${info.path} [${tag}]`);
+            appendConsoleLine(`colinfo ${info.path}`);
             appendConsoleLine(`  scale=(${info.sceneScale.x},${info.sceneScale.y},${info.sceneScale.z}) yaw=${info.yawDeg} solid=${info.solid} walk=${info.walkable} elevLift=${info.elevationLift}`);
             if (info.kind) {
                 appendConsoleLine(`  kind=${info.kind} wallAxis=${info.wallAxis || "-"}`);
@@ -844,6 +1005,26 @@ function runConsoleCommand(rawCommand) {
         if (!sent) {
             appendConsoleLine("colhash: socket not ready (cannot query server)");
         }
+        return;
+    }
+
+    if (command === "colmissing" || command === "missingcol") {
+        void (async () => {
+            try {
+                const response = await fetch("/api/world/collision-profiles/missing", { cache: "no-store" });
+                const body = response.ok ? await response.json() : null;
+                const paths = Array.isArray(body?.paths) ? body.paths : [];
+                if (paths.length === 0) {
+                    appendConsoleLine("colmissing: toate modelele solid din scena au profil exact");
+                    return;
+                }
+                appendConsoleLine(`colmissing: ${paths.length} model(e) fara profil exact valid:`);
+                paths.forEach(path => appendConsoleLine(`  ${path}`));
+                appendConsoleLine("ruleaza: scancollisionall --save (fara --only-missing)");
+            } catch (error) {
+                appendConsoleLine(`colmissing: failed ${error?.message || "network error"}`);
+            }
+        })();
         return;
     }
 
@@ -1066,6 +1247,94 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
+    if (command === "autoscan" || command === "scanprofile") {
+        if (parts[1]?.toLowerCase() === "all") {
+            appendConsoleLine("autoscan all: scan intreg harta (server)...");
+            runScanCollisionAllCommand(parts.slice(2));
+            return;
+        }
+        const save = parts.includes("save") || parts.includes("--save");
+        const fast = parts.includes("--fast") || parts.includes("fast") || parts.includes("--balanced");
+        const aggressive = !fast || parts.includes("--aggressive") || parts.includes("aggressive");
+        const useClient = parts.includes("--client");
+        void (async () => {
+            if (useClient) {
+                const options = resolveScanOptions({ aggressive });
+                const profile = scanCollisionProfileAtCrosshair(options);
+                if (!profile) {
+                    appendConsoleLine("autoscan: no model under crosshair or scan failed");
+                    return;
+                }
+                const cov = ((profile.scanMeta?.coverage || 0) * 100).toFixed(1);
+                const target = ((profile.scanMeta?.coverageTarget || 0.99) * 100).toFixed(0);
+                appendConsoleLine(`autoscan(client) ${profile.value}: +${profile.boxes?.length || 0} -${profile.antiBoxes?.length || 0} coverage=${cov}% (target ${target}%) cell=${profile.scanMeta?.cellSize}`);
+                if (!save) {
+                    appendConsoleLine("autoscan preview only (use 'autoscan save' to persist)");
+                    return;
+                }
+                const response = await fetch("/api/world/collision-profile", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(profile)
+                });
+                if (response.ok) {
+                    appendConsoleLine(`autoscan saved ${profile.value}`);
+                    reloadCollisionOnServerAndClient();
+                } else {
+                    appendConsoleLine("autoscan: save failed");
+                }
+                return;
+            }
+
+            const target = resolveModelPathAtCrosshair();
+            if (!target) {
+                appendConsoleLine("autoscan: no model under crosshair");
+                return;
+            }
+            appendConsoleLine(`autoscan(server): scanning ${target.modelPath}...`);
+            const startedAt = performance.now();
+            const response = await fetch("/api/world/collision-profiles/server-scan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    modelPath: target.modelPath,
+                    aggressive,
+                    fast,
+                    save
+                })
+            });
+            let body = null;
+            try {
+                body = await response.json();
+            } catch (_error) {
+            }
+            if (!response.ok || !body?.profile) {
+                appendConsoleLine(`autoscan(server): failed — ${body?.error || response.status}`);
+                return;
+            }
+            const profile = body.profile;
+            showScanPreviewFromProfile(profile, target.modelDef);
+            const cov = ((profile.scanMeta?.coverage || 0) * 100).toFixed(1);
+            const covTarget = ((profile.scanMeta?.coverageTarget || 0.99) * 100).toFixed(0);
+            appendConsoleLine(`autoscan(server) ${profile.value}: +${profile.boxes?.length || 0} -${profile.antiBoxes?.length || 0} coverage=${cov}% (target ${covTarget}%) cell=${profile.scanMeta?.cellSize} (${((performance.now() - startedAt) / 1000).toFixed(1)}s)`);
+            if (body.warnings?.length) {
+                appendConsoleLine(`autoscan warnings: ${body.warnings.join(", ")}`);
+            }
+            if (save) {
+                appendConsoleLine(`autoscan GATA — saved ${profile.value}`);
+                reloadCollisionOnServerAndClient();
+            } else {
+                appendConsoleLine("autoscan GATA — preview only (use 'autoscan save' to persist)");
+            }
+        })();
+        return;
+    }
+
+    if (command === "scancollisionall") {
+        runScanCollisionAllCommand(parts.slice(1));
+        return;
+    }
+
     if (command === "autocolboxes" || command === "autohitbox" || command === "autocollision") {
         const token1 = (parts[1] || "").toLowerCase();
         const token2 = (parts[2] || "").toLowerCase();
@@ -1121,7 +1390,7 @@ function runConsoleCommand(rawCommand) {
                     appendConsoleLine("clearcolboxes: delete failed (restart server?)");
                     return;
                 }
-                appendConsoleLine("clearcolboxes: all collision removed (0 boxes, no fallback)");
+                appendConsoleLine("clearcolboxes: all collision removed");
                 reloadCollisionOnServerAndClient();
             } catch (_error) {
                 appendConsoleLine("clearcolboxes: delete failed (restart server?)");
@@ -1237,5 +1506,5 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
-    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, noclip on|off|toggle, setspawn here|red|blue|list|clear, tp <x> <y> [z] | tp <playerName>, respawn [playerName|all], reloadcollision, coldebug on|off, aimdebug on|off|toggle, debughealth on|off|toggle, debugdamage on|off|toggle, hitbox on|off|toggle, colinfo, colhash, colprofile, setcolbox [height|scale], setcolboxes, autocolboxes [scope] [density|0=adaptive], clearcolboxes, backmount ..., handoffset ..., wallhack ..., performancemode ..., perfhud ..., editor ...");
+    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, noclip on|off|toggle, setspawn here|red|blue|list|clear, tp <x> <y> [z] | tp <playerName>, respawn [playerName|all], reloadcollision, coldebug on|off, aimdebug on|off|toggle, debughealth on|off|toggle, debugdamage on|off|toggle, hitbox on|off|toggle, colinfo, colhash, colmissing, colprofile, setcolbox [height|scale], setcolboxes, autoscan [save], autoscan all [save], scancollisionall [--save] [--only-missing] [--fast], autocolboxes [scope] [density|0=adaptive], clearcolboxes, backmount ..., handoffset ..., wallhack ..., performancemode ..., perfhud ..., editor ...");
 }

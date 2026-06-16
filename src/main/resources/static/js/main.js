@@ -14,6 +14,7 @@ import {
 import { keys, state } from "./state.js";
 import { tickLocalPrediction } from "./prediction.js";
 import { ensureSceneCollisionLoaded } from "./sceneCollision.js";
+import { updateMinimap } from "./minimap.js";
 
 let fpsFrameCount = 0;
 let lastFrameTime = performance.now();
@@ -22,6 +23,10 @@ let fpsCurrent = 0;
 let frameTimeSum = 0;
 let frameTimeSamples = 0;
 let lastPerfHudUpdate = 0;
+
+if (new URLSearchParams(window.location.search).get("moveDebug") === "1") {
+    state.movementDebug = true;
+}
 
 resizeCanvas();
 registerInputHandlers();
@@ -53,6 +58,7 @@ function gameLoop() {
 
     updateRemoteInterpolation();
     updateBulletInterpolation();
+    updateMinimap();
     updateCamera();
     updateMouseWorldPosition();
 

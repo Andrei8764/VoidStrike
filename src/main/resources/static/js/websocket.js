@@ -214,11 +214,9 @@ function startSendingInput() {
         state.inputSequence += 1;
         const input = buildCurrentInput(state.inputSequence);
 
-        if (input.climb) {
-            state.climbDebugUntil = Date.now() + 2500;
-            state.climbDebugLastSequence = input.sequence;
+        if (input.climb && state.movementDebug) {
             const self = getSelfPlayer();
-            console.log("[CLIMB_DEBUG] send_input", {
+            console.log("[MOVE_DEBUG] climb_input", {
                 sequence: input.sequence,
                 pos: self ? { x: self.x, y: self.y, z: self.z } : null,
                 vel: self ? { x: self.velocityX, y: self.velocityY, z: self.velocityZ } : null,

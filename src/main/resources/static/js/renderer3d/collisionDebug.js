@@ -1,3 +1,19 @@
+import {
+    isAlwaysNonSolidModel,
+    isRoadLikeModelPath,
+    isWallLikeModelPath,
+    measureModelLocalColliderBounds,
+    normalizeProfileMeasurements,
+    OBJ_WORLD_SCALE,
+    readScale,
+    readSceneScale
+} from "../collisionMeasure.js";
+import {
+    resolveScanOptions,
+    scanCollisionProfile,
+    scanCollisionProfileForRoots
+} from "../collisionScanner.js";
+
 export function createCollisionDebugController({
     THREE,
     camera3d,
@@ -9,24 +25,17 @@ export function createCollisionDebugController({
 }) {
     const collisionDebugGroup = new THREE.Group();
     collisionDebugGroup.visible = false;
+    const scanPreviewGroup = new THREE.Group();
+    scanPreviewGroup.visible = false;
+    collisionDebugGroup.add(scanPreviewGroup);
 
     let collisionDebugBuilt = false;
+    let collisionGridVisible = false;
     let collisionDebugEntries = [];
     let collisionDebugHoverLabel = null;
     const collisionDebugRaycaster = new THREE.Raycaster();
     const collisionDebugCenterNdc = new THREE.Vector2(0, 0);
     const collisionProfileRaycaster = new THREE.Raycaster();
-
-    function readScale(scale) {
-        if (typeof scale === "number") {
-            return { x: scale, y: scale, z: scale };
-        }
-        return {
-            x: scale?.x ?? 1,
-            y: scale?.y ?? 1,
-            z: scale?.z ?? 1
-        };
-    }
 
     function readModelYawDegrees(modelDef) {
         const yawDegValue = Number(modelDef?.rotationDegrees?.y);
@@ -38,43 +47,6 @@ export function createCollisionDebugController({
             return yawRadValue * (180 / Math.PI);
         }
         return 0;
-    }
-
-    const OBJ_WORLD_SCALE = 128;
-
-    function readEffectiveRootScale(root, modelDef, modelPath) {
-        const path = String(modelPath || modelDef?.path || "").toLowerCase();
-        const objMul = path.endsWith(".obj")
-            ? Number(modelDef?.objScaleMultiplier ?? OBJ_WORLD_SCALE)
-            : 1;
-        const sceneScale = readSceneScale(modelDef);
-        if (modelDef?.path) {
-            return {
-                x: sceneScale.x * objMul,
-                y: sceneScale.y * objMul,
-                z: sceneScale.z * objMul
-            };
-        }
-        return {
-            x: Math.abs(root.scale.x) || (sceneScale.x * objMul),
-            y: Math.abs(root.scale.y) || (sceneScale.y * objMul),
-            z: Math.abs(root.scale.z) || (sceneScale.z * objMul)
-        };
-    }
-
-    function scaleMeasuredExtents(extents, sx, sy, sz) {
-        return {
-            halfWidth: extents.halfWidth * sx,
-            halfDepth: extents.halfDepth * sz,
-            height: extents.height * sy,
-            offsetLocalX: extents.offsetLocalX * sx,
-            offsetLocalY: extents.offsetLocalY * sz,
-            offsetLocalZ: extents.offsetLocalZ * sy
-        };
-    }
-
-    function readSceneScale(modelDef) {
-        return readScale(modelDef?.scale);
     }
 
     function resolveSceneModelDef(root, modelDef) {
@@ -99,22 +71,6 @@ export function createCollisionDebugController({
         };
     }
 
-    function normalizeProfileMeasurements(measured, modelDef) {
-        const sceneScale = readSceneScale(modelDef);
-        const sx = Math.max(1e-6, sceneScale.x);
-        const sy = Math.max(1e-6, sceneScale.y);
-        const sz = Math.max(1e-6, sceneScale.z);
-        return {
-            halfWidth: measured.halfWidth / sx,
-            halfDepth: measured.halfDepth / sz,
-            height: measured.height / sy,
-            offsetLocalX: measured.offsetLocalX / sx,
-            offsetLocalY: measured.offsetLocalY / sz,
-            offsetLocalZ: measured.offsetLocalZ / sy,
-            elevationLift: measured.elevationLift
-        };
-    }
-
     function buildProfileSuggestionFromMeasurement(measured, modelPath, modelDef) {
         const normalized = normalizeProfileMeasurements(measured, modelDef);
         const suggestion = sanitizeSuggestion({
@@ -127,8 +83,18 @@ export function createCollisionDebugController({
             offsetLocalY: Number(normalized.offsetLocalY.toFixed(2)),
             offsetLocalZ: Number(normalized.offsetLocalZ.toFixed(2)),
             elevationLift: Number(normalized.elevationLift.toFixed(2)),
-            solid: !isAlwaysNonSolidModel(modelPath),
-            walkable: true
+            solid: isRoadLikeModelPath(modelPath) || !isAlwaysNonSolidModel(modelPath),
+            walkable: true,
+            boxes: [{
+                halfWidth: Number(normalized.halfWidth.toFixed(2)),
+                halfDepth: Number(normalized.halfDepth.toFixed(2)),
+                height: Number(normalized.height.toFixed(2)),
+                offsetLocalX: Number(normalized.offsetLocalX.toFixed(2)),
+                offsetLocalY: Number(normalized.offsetLocalY.toFixed(2)),
+                offsetLocalZ: Number(normalized.offsetLocalZ.toFixed(2)),
+                yawOffsetDeg: 0
+            }],
+            antiBoxes: []
         });
 
         // Persist wall slab metadata so reload does not re-expand to the full tile bbox.
@@ -140,14 +106,6 @@ export function createCollisionDebugController({
         }
 
         return suggestion;
-    }
-
-    function isWallLikeModelPath(modelPath) {
-        const path = String(modelPath || "").toLowerCase();
-        return path.includes("/wall-")
-            || path.includes("/door-")
-            || path.includes("/window-")
-            || path.includes("/planks.obj");
     }
 
     function tightenWallFootprint(halfWidth, halfDepth, modelPath, collider, scaleX = 1, scaleZ = 1) {
@@ -210,134 +168,6 @@ export function createCollisionDebugController({
         return { halfWidth: w, halfDepth: d };
     }
 
-    const _vertexMeasure = new THREE.Vector3();
-    const _invRootMatrix = new THREE.Matrix4();
-
-    function collectVerticesInRootSpace(root) {
-        const points = [];
-        _invRootMatrix.copy(root.matrixWorld).invert();
-        root.traverse(node => {
-            if (!node.isMesh || !node.geometry) {
-                return;
-            }
-            const position = node.geometry.getAttribute("position");
-            if (!position) {
-                return;
-            }
-            for (let i = 0; i < position.count; i += 1) {
-                _vertexMeasure.fromBufferAttribute(position, i);
-                node.localToWorld(_vertexMeasure);
-                _vertexMeasure.applyMatrix4(_invRootMatrix);
-                points.push(_vertexMeasure.x, _vertexMeasure.y, _vertexMeasure.z);
-            }
-        });
-        return points;
-    }
-
-    function percentileSorted(sorted, q) {
-        if (sorted.length === 0) {
-            return 0;
-        }
-        const idx = Math.floor((sorted.length - 1) * q);
-        return sorted[idx];
-    }
-
-    function measureExtentsFromVertices(root) {
-        const flat = collectVerticesInRootSpace(root);
-        if (flat.length < 24) {
-            return null;
-        }
-
-        const xs = [];
-        const ys = [];
-        const zs = [];
-        for (let i = 0; i < flat.length; i += 3) {
-            xs.push(flat[i]);
-            ys.push(flat[i + 1]);
-            zs.push(flat[i + 2]);
-        }
-        xs.sort((a, b) => a - b);
-        ys.sort((a, b) => a - b);
-        zs.sort((a, b) => a - b);
-
-        const xMin = percentileSorted(xs, 0.02);
-        const xMax = percentileSorted(xs, 0.98);
-        const yMin = percentileSorted(ys, 0.02);
-        const yMax = percentileSorted(ys, 0.98);
-        const zMin = percentileSorted(zs, 0.02);
-        const zMax = percentileSorted(zs, 0.98);
-
-        return {
-            halfWidth: Math.max(0.5, (xMax - xMin) / 2),
-            halfDepth: Math.max(0.5, (zMax - zMin) / 2),
-            height: Math.max(0.5, yMax - yMin),
-            offsetLocalX: (xMin + xMax) / 2,
-            offsetLocalY: (zMin + zMax) / 2,
-            offsetLocalZ: yMin
-        };
-    }
-
-    function measureModelLocalColliderBounds(root, modelDef) {
-        const originalY = root.rotation.y;
-        root.rotation.y = 0;
-        root.updateMatrixWorld(true);
-
-        const rootPos = new THREE.Vector3();
-        root.getWorldPosition(rootPos);
-
-        const modelPath = String(modelDef?.path || root.userData?.modelPath || "");
-        const rootScale = readEffectiveRootScale(root, modelDef, modelPath);
-        const fromVertices = measureExtentsFromVertices(root);
-        let halfWidth;
-        let halfDepth;
-        let height;
-        let offsetLocalX;
-        let offsetLocalY;
-        let offsetLocalZ;
-
-        if (fromVertices) {
-            const scaled = scaleMeasuredExtents(fromVertices, rootScale.x, rootScale.y, rootScale.z);
-            halfWidth = scaled.halfWidth;
-            halfDepth = scaled.halfDepth;
-            height = scaled.height;
-            offsetLocalX = scaled.offsetLocalX;
-            offsetLocalY = scaled.offsetLocalY;
-            offsetLocalZ = scaled.offsetLocalZ;
-        } else {
-            const bounds = new THREE.Box3().setFromObject(root);
-            const size = new THREE.Vector3();
-            bounds.getSize(size);
-            const centerX = (bounds.min.x + bounds.max.x) / 2;
-            const centerZ = (bounds.min.z + bounds.max.z) / 2;
-            halfWidth = Math.max(0.5, size.x / 2);
-            halfDepth = Math.max(0.5, size.z / 2);
-            height = Math.max(0.5, size.y);
-            offsetLocalX = centerX - rootPos.x;
-            offsetLocalY = centerZ - rootPos.z;
-            offsetLocalZ = bounds.min.y - rootPos.y;
-        }
-
-        const tightened = tightenWallFootprint(halfWidth, halfDepth, modelPath);
-        halfWidth = tightened.halfWidth;
-        halfDepth = tightened.halfDepth;
-
-        const sceneY = Number(modelDef?.position?.y ?? 0);
-        const elevationLift = rootPos.y - sceneY;
-
-        root.rotation.y = originalY;
-        root.updateMatrixWorld(true);
-
-        return {
-            halfWidth,
-            halfDepth,
-            height,
-            offsetLocalX,
-            offsetLocalY,
-            offsetLocalZ,
-            elevationLift
-        };
-    }
-
     function readCollisionTemplate(node, fallback) {
         const halfWidth = Number(node?.halfWidth ?? fallback.halfWidth);
         const halfDepth = Number(node?.halfDepth ?? fallback.halfDepth);
@@ -362,6 +192,18 @@ export function createCollisionDebugController({
                 offsetLocalY: Number(part.offsetLocalY ?? offsetLocalY),
                 offsetLocalZ: Number(part.offsetLocalZ ?? offsetLocalZ)
             }));
+        const antiRaw = Array.isArray(node?.antiBoxes) ? node.antiBoxes : [];
+        const antiBoxes = antiRaw
+            .filter(part => part && typeof part === "object")
+            .map(part => ({
+                halfWidth: Number(part.halfWidth ?? halfWidth),
+                halfDepth: Number(part.halfDepth ?? halfDepth),
+                height: Number(part.height ?? height),
+                yawOffsetDeg: Number(part.yawOffsetDeg ?? yawOffsetDeg),
+                offsetLocalX: Number(part.offsetLocalX ?? offsetLocalX),
+                offsetLocalY: Number(part.offsetLocalY ?? offsetLocalY),
+                offsetLocalZ: Number(part.offsetLocalZ ?? offsetLocalZ)
+            }));
         return {
             halfWidth,
             halfDepth,
@@ -376,11 +218,12 @@ export function createCollisionDebugController({
             kind,
             wallAxis,
             thickness,
-            boxes
+            boxes,
+            antiBoxes
         };
     }
 
-    // Returns { template, source } where source is exact|prefix|default.
+    // Returns { template, source } where source is always "exact" when present.
     function resolveCollisionTemplateForPath(modelPath, profiles) {
         const normalized = (modelPath || "").toLowerCase();
         const defaultTemplate = profiles.default || {
@@ -388,18 +231,10 @@ export function createCollisionDebugController({
         };
         const exact = Array.isArray(profiles.exact) ? profiles.exact : [];
         const exactMatch = exact.find(item => (item?.value || "").toLowerCase() === normalized);
-        if (exactMatch) {
+        if (exactMatch && !exactMatch?.scanMeta?.fallback) {
             return { template: readCollisionTemplate(exactMatch, defaultTemplate), source: "exact" };
         }
-        if (profiles.exactOnly === true) {
-            return null;
-        }
-        const prefix = Array.isArray(profiles.prefix) ? profiles.prefix : [];
-        const prefixMatch = prefix.find(item => normalized.startsWith((item?.value || "").toLowerCase()));
-        if (prefixMatch) {
-            return { template: readCollisionTemplate(prefixMatch, defaultTemplate), source: "prefix" };
-        }
-        return { template: readCollisionTemplate(defaultTemplate, defaultTemplate), source: "default" };
+        return null;
     }
 
     function isSuspectBoxDims(halfWidth, halfDepth, height) {
@@ -410,11 +245,90 @@ export function createCollisionDebugController({
         return halfWidth > 4096 || halfDepth > 4096 || height > 8192;
     }
 
+    function addDebugBoxMesh({
+        modelDef,
+        template,
+        part,
+        isAnti = false,
+        parentGroup = collisionDebugGroup
+    }) {
+        const scale = readScale(modelDef.scale);
+        const safeScaleX = Number.isFinite(Number(scale.x)) && Number(scale.x) > 0 ? Number(scale.x) : 1;
+        const safeScaleY = Number.isFinite(Number(scale.y)) && Number(scale.y) > 0 ? Number(scale.y) : 1;
+        const safeScaleZ = Number.isFinite(Number(scale.z)) && Number(scale.z) > 0 ? Number(scale.z) : 1;
+        const modelElevation = Number(modelDef.position?.y ?? 0) + Number(template.elevationLift ?? 0);
+
+        let halfWidth = Number(part.halfWidth || 0) * safeScaleX;
+        let halfDepth = Number(part.halfDepth || 0) * safeScaleZ;
+        if (!isAnti && (template.kind === "wall" || isWallLikeModelPath(modelDef.path))) {
+            const tightened = tightenWallFootprint(halfWidth, halfDepth, modelDef.path, template, safeScaleX, safeScaleZ);
+            halfWidth = tightened.halfWidth;
+            halfDepth = tightened.halfDepth;
+        }
+        const rawHeight = Number(part.height || 0) * safeScaleY;
+        const suspect = isSuspectBoxDims(halfWidth, halfDepth, rawHeight);
+        const width = Math.max(1, halfWidth * 2);
+        const depth = Math.max(1, halfDepth * 2);
+        const height = Math.max(1, rawHeight);
+        const offsetLocalUp = Number(part?.offsetLocalZ ?? 0) * safeScaleY;
+        const baseZ = modelElevation + offsetLocalUp;
+        const isSolid = Boolean(template.solid);
+        const isWalkable = Boolean(template.walkable);
+
+        let color;
+        if (isAnti) {
+            color = 0x22d3ee;
+        } else if (suspect) {
+            color = 0xff00ff;
+        } else {
+            color = !isSolid && isWalkable
+                ? 0x22d3ee
+                : (isSolid && isWalkable ? 0xf59e0b : 0xef4444);
+        }
+
+        const geometry = new THREE.BoxGeometry(width, height, depth);
+        const material = new THREE.MeshBasicMaterial({
+            color,
+            wireframe: true,
+            transparent: true,
+            opacity: isAnti ? 0.38 : (suspect ? 0.85 : (isSolid ? 0.52 : 0.34)),
+            depthWrite: false
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(
+            modelDef.position?.x ?? 0,
+            baseZ + (height / 2),
+            modelDef.position?.z ?? 0
+        );
+        const yawDeg = readModelYawDegrees(modelDef);
+        const yawOffsetDeg = Number(part?.yawOffsetDeg ?? 0);
+        const finalYawDeg = yawDeg + yawOffsetDeg;
+        const finalYawRad = (finalYawDeg * Math.PI) / 180;
+        mesh.rotation.y = finalYawRad;
+        const offsetLocalX = Number(part?.offsetLocalX ?? 0) * safeScaleX;
+        const offsetLocalDepth = Number(part?.offsetLocalY ?? 0) * safeScaleZ;
+        const cosYaw = Math.cos(finalYawRad);
+        const sinYaw = Math.sin(finalYawRad);
+        mesh.position.x += (offsetLocalX * cosYaw) + (offsetLocalDepth * sinYaw);
+        mesh.position.z += (-offsetLocalX * sinYaw) + (offsetLocalDepth * cosYaw);
+        mesh.userData.collisionModelName = String(modelDef.path || "").replace("/models/", "") + (isAnti ? " [ANTI]" : "");
+        mesh.userData.collisionYawDeg = Math.round(finalYawDeg);
+        mesh.userData.collisionSolid = isSolid;
+        mesh.userData.collisionWalkable = isWalkable;
+        mesh.userData.collisionSuspect = suspect;
+        mesh.userData.collisionAnti = isAnti;
+        parentGroup.add(mesh);
+        collisionDebugEntries.push({ mesh });
+        return mesh;
+    }
+
     async function buildCollisionDebugBoxes() {
         collisionDebugHoverLabel?.remove();
         collisionDebugHoverLabel = null;
         collisionDebugEntries = [];
         collisionDebugGroup.clear();
+        collisionDebugGroup.add(scanPreviewGroup);
+        scanPreviewGroup.clear();
         try {
             const [sceneResponse, profileResponse] = await Promise.all([
                 fetch("/world/scene.json", { cache: "no-store" }),
@@ -436,80 +350,15 @@ export function createCollisionDebugController({
                     continue;
                 }
                 const template = resolved.template;
-                const isFallback = resolved.source !== "exact";
-
-                const scale = readScale(modelDef.scale);
-                const safeScaleX = Number.isFinite(Number(scale.x)) && Number(scale.x) > 0 ? Number(scale.x) : 1;
-                const safeScaleY = Number.isFinite(Number(scale.y)) && Number(scale.y) > 0 ? Number(scale.y) : 1;
-                const safeScaleZ = Number.isFinite(Number(scale.z)) && Number(scale.z) > 0 ? Number(scale.z) : 1;
-                const modelElevation = Number(modelDef.position?.y ?? 0) + Number(template.elevationLift ?? 0);
                 const parts = Array.isArray(template.boxes) && template.boxes.length > 0
                     ? template.boxes
                     : [template];
+                const antiParts = Array.isArray(template.antiBoxes) ? template.antiBoxes : [];
                 for (const part of parts) {
-                    let halfWidth = Number(part.halfWidth || 0) * safeScaleX;
-                    let halfDepth = Number(part.halfDepth || 0) * safeScaleZ;
-                    if (template.kind === "wall" || isWallLikeModelPath(modelDef.path)) {
-                        const tightened = tightenWallFootprint(halfWidth, halfDepth, modelDef.path, template, safeScaleX, safeScaleZ);
-                        halfWidth = tightened.halfWidth;
-                        halfDepth = tightened.halfDepth;
-                    }
-                    const rawHeight = Number(part.height || 0) * safeScaleY;
-                    const suspect = isSuspectBoxDims(halfWidth, halfDepth, rawHeight);
-                    const width = Math.max(1, halfWidth * 2);
-                    const depth = Math.max(1, halfDepth * 2);
-                    const height = Math.max(1, rawHeight);
-                    const offsetLocalUp = Number(part?.offsetLocalZ ?? 0) * safeScaleY;
-                    const baseZ = modelElevation + offsetLocalUp;
-                    const isSolid = Boolean(template.solid);
-                    const isWalkable = Boolean(template.walkable);
-                    // Colour priority: suspect (magenta) > fallback (white) > normal palette.
-                    let color;
-                    if (suspect) {
-                        color = 0xff00ff;
-                    } else if (isFallback) {
-                        color = 0xffffff;
-                    } else {
-                        color = !isSolid && isWalkable
-                            ? 0x22d3ee
-                            : (isSolid && isWalkable ? 0xf59e0b : 0xef4444);
-                    }
-                    const geometry = new THREE.BoxGeometry(width, height, depth);
-                    const material = new THREE.MeshBasicMaterial({
-                        color,
-                        wireframe: true,
-                        transparent: true,
-                        opacity: suspect ? 0.85 : (isSolid ? 0.52 : 0.34),
-                        depthWrite: false
-                    });
-                    const mesh = new THREE.Mesh(geometry, material);
-                    mesh.position.set(
-                        modelDef.position?.x ?? 0,
-                        baseZ + (height / 2),
-                        modelDef.position?.z ?? 0
-                    );
-                    const yawDeg = readModelYawDegrees(modelDef);
-                    const yawOffsetDeg = Number(part?.yawOffsetDeg ?? 0);
-                    const finalYawDeg = yawDeg + yawOffsetDeg;
-                    const finalYawRad = (finalYawDeg * Math.PI) / 180;
-                    // The debug mesh is rotated by +yaw (Three.js RotationY), matching the model.
-                    mesh.rotation.y = finalYawRad;
-                    const offsetLocalX = Number(part?.offsetLocalX ?? 0) * safeScaleX;
-                    const offsetLocalDepth = Number(part?.offsetLocalY ?? 0) * safeScaleZ;
-                    const cosYaw = Math.cos(finalYawRad);
-                    const sinYaw = Math.sin(finalYawRad);
-                    // Three.js RotationY(+yaw): worldX = ox*cos + oz*sin, worldZ = -ox*sin + oz*cos.
-                    // This now matches the authoritative runtime build (sceneCollision.js / GameRoom).
-                    mesh.position.x += (offsetLocalX * cosYaw) + (offsetLocalDepth * sinYaw);
-                    mesh.position.z += (-offsetLocalX * sinYaw) + (offsetLocalDepth * cosYaw);
-                    mesh.userData.collisionModelName = String(modelDef.path || "").replace("/models/", "");
-                    mesh.userData.collisionYawDeg = Math.round(finalYawDeg);
-                    mesh.userData.collisionSolid = isSolid;
-                    mesh.userData.collisionWalkable = isWalkable;
-                    mesh.userData.collisionFallback = isFallback;
-                    mesh.userData.collisionSuspect = suspect;
-                    collisionDebugGroup.add(mesh);
-                    collisionDebugEntries.push({ mesh });
+                    addDebugBoxMesh({ modelDef, template, part, isAnti: false });
+                }
+                for (const part of antiParts) {
+                    addDebugBoxMesh({ modelDef, template, part, isAnti: true });
                 }
             }
             collisionDebugBuilt = true;
@@ -517,35 +366,123 @@ export function createCollisionDebugController({
         }
     }
 
-    function getCollisionProfileSuggestionAtCrosshair() {
+    function resolveRootAtCrosshair() {
         collisionProfileRaycaster.setFromCamera(collisionDebugCenterNdc, camera3d);
         const hits = collisionProfileRaycaster.intersectObjects(worldModelGroup.children, true);
         if (hits.length === 0) {
             return null;
         }
-
         const root = getEditorTopLevelRoot(hits[0].object);
         if (!root) {
             return null;
         }
-
         root.updateMatrixWorld(true);
-
         const index = root.userData?.editorModelIndex;
         const modelDef = resolveSceneModelDef(
             root,
             Number.isInteger(index) && index >= 0 ? getEditorModelByIndex(index) : null
         );
-        const measured = measureModelLocalColliderBounds(root, modelDef);
-        const modelPath = String(modelDef.path || root.userData?.modelPath || "").toLowerCase();
+        return { root, modelDef };
+    }
+
+    function showScanPreview(profile, modelDef) {
+        scanPreviewGroup.clear();
+        if (!profile || !modelDef) {
+            scanPreviewGroup.visible = false;
+            return;
+        }
+        const template = {
+            solid: profile.solid,
+            walkable: profile.walkable,
+            elevationLift: profile.elevationLift,
+            kind: profile.kind || "",
+            wallAxis: profile.wallAxis || "",
+            thickness: profile.thickness || 0
+        };
+        const parts = Array.isArray(profile.boxes) && profile.boxes.length > 0 ? profile.boxes : [profile];
+        const antiParts = Array.isArray(profile.antiBoxes) ? profile.antiBoxes : [];
+        for (const part of parts) {
+            addDebugBoxMesh({ modelDef, template, part, isAnti: false, parentGroup: scanPreviewGroup });
+        }
+        for (const part of antiParts) {
+            addDebugBoxMesh({ modelDef, template, part, isAnti: true, parentGroup: scanPreviewGroup });
+        }
+        scanPreviewGroup.visible = true;
+    }
+
+    function resolveModelPathAtCrosshair() {
+        const resolved = resolveRootAtCrosshair();
+        if (!resolved) {
+            return null;
+        }
+        const modelPath = String(resolved.modelDef.path || resolved.root.userData?.modelPath || "").toLowerCase();
         if (!modelPath) {
             return null;
         }
-
-        return buildProfileSuggestionFromMeasurement(measured, modelPath, modelDef);
+        return { modelPath, modelDef: resolved.modelDef };
     }
 
-    // Full diagnostics for the model under the crosshair: resolved profile source,
+    function showScanPreviewFromProfile(profile, modelDef) {
+        showScanPreview(profile, modelDef);
+    }
+
+    function scanCollisionProfileAtCrosshair(options = {}) {
+        const resolved = resolveRootAtCrosshair();
+        if (!resolved) {
+            return null;
+        }
+        const profile = scanCollisionProfile(resolved.root, resolved.modelDef, options);
+        if (profile) {
+            showScanPreview(profile, resolved.modelDef);
+        }
+        return profile;
+    }
+
+    function scanCollisionProfilesForScene(filter = "all", options = {}) {
+        const normalizedFilter = String(filter || "all").toLowerCase();
+        const roots = [];
+        const modelDefs = [];
+        for (const root of worldModelGroup.children) {
+            root.updateMatrixWorld(true);
+            const index = root.userData?.editorModelIndex;
+            const modelDef = resolveSceneModelDef(
+                root,
+                Number.isInteger(index) && index >= 0 ? getEditorModelByIndex(index) : null
+            );
+            const modelPath = String(modelDef.path || root.userData?.modelPath || "").toLowerCase();
+            if (!modelPath) {
+                continue;
+            }
+            if (normalizedFilter !== "all" && !modelPath.includes(normalizedFilter)) {
+                continue;
+            }
+            roots.push(root);
+            modelDefs.push(modelDef);
+        }
+        return scanCollisionProfileForRoots(roots, modelDefs, options);
+    }
+
+    function setCollisionGridVisible(visible) {
+        collisionGridVisible = Boolean(visible);
+    }
+
+    function getCollisionProfileSuggestionAtCrosshair() {
+        const resolved = resolveRootAtCrosshair();
+        if (!resolved) {
+            return null;
+        }
+        const measured = measureModelLocalColliderBounds(resolved.root, resolved.modelDef);
+        const modelPath = String(resolved.modelDef.path || resolved.root.userData?.modelPath || "").toLowerCase();
+        const tightened = tightenWallFootprint(measured.halfWidth, measured.halfDepth, modelPath);
+        measured.halfWidth = tightened.halfWidth;
+        measured.halfDepth = tightened.halfDepth;
+        if (!modelPath) {
+            return null;
+        }
+        return buildProfileSuggestionFromMeasurement(measured, modelPath, resolved.modelDef);
+    }
+
+    // Full diagnostics for the model under the crosshair:
     // scene scale, profile vs final world dimensions, local + world offsets, yaw,
     // solid/walkable and per-box list. Backs the `colinfo` console command.
     async function getCollisionDiagnosticsAtCrosshair() {
@@ -625,7 +562,6 @@ export function createCollisionDebugController({
         return {
             path: modelPath,
             source: resolved.source,
-            isFallback: resolved.source !== "exact",
             sceneScale: { x: sx, y: sy, z: sz },
             yawDeg: Number(yawDeg.toFixed(2)),
             solid: Boolean(template.solid),
@@ -669,31 +605,6 @@ export function createCollisionDebugController({
         return Math.max(minCount, Math.min(maxCount, raw));
     }
 
-    function isAlwaysNonSolidModel(modelPath) {
-        const path = String(modelPath || "").toLowerCase();
-        if (!path) {
-            return false;
-        }
-        const nonSolidTokens = [
-            "/road-",
-            "/grass",
-            "/cloud",
-            "/tree-",
-            "tree-park-",
-            "tree-pine-",
-            "tree-shrub",
-            "/detail-light-",
-            "/detail-cables-",
-            "/detail-awning-",
-            "/scaffolding-",
-            "/balcony-ladder-",
-            "/window-",
-            "/sign",
-            "/roof-metal-poles"
-        ];
-        return nonSolidTokens.some(token => path.includes(token));
-    }
-
     function buildAutoBoxesForModel(modelPath, halfWidth, halfDepth, height, density = 16, offsets = {}) {
         const path = (modelPath || "").toLowerCase();
         const safeDensity = Math.max(1, Math.min(96, Math.floor(Number(density) || 16)));
@@ -722,6 +633,12 @@ export function createCollisionDebugController({
         if (path.includes("/wall-") || path.includes("/door-") || path.includes("/window-")) {
             const tightened = tightenWallFootprint(halfWidth, halfDepth, path);
             return oneBox(tightened.halfWidth, tightened.halfDepth, Math.max(8, height * 0.98));
+        }
+
+        // Roads/asphalt: full-height slab so raised edges block movement and trigger step-up.
+        if (isRoadLikeModelPath(path)) {
+            const slabHeight = Math.max(2, height * 0.98);
+            return oneBox(halfWidth * 0.98, halfDepth * 0.98, slabHeight);
         }
 
         if (path.includes("/truck-") || path.includes("/car-")) {
@@ -809,6 +726,13 @@ export function createCollisionDebugController({
                 box.height = clampProfileDim(box.height, PROFILE_MAX_HEIGHT);
             });
         }
+        if (Array.isArray(suggestion.antiBoxes)) {
+            suggestion.antiBoxes.forEach(box => {
+                box.halfWidth = clampProfileDim(box.halfWidth, PROFILE_MAX_HALF);
+                box.halfDepth = clampProfileDim(box.halfDepth, PROFILE_MAX_HALF);
+                box.height = clampProfileDim(box.height, PROFILE_MAX_HEIGHT);
+            });
+        }
         ["offsetLocalX", "offsetLocalY", "offsetLocalZ", "elevationLift"].forEach(key => {
             if (!Number.isFinite(Number(suggestion[key]))) {
                 suggestion[key] = 0;
@@ -818,24 +742,28 @@ export function createCollisionDebugController({
     }
 
     function getCollisionProfileSuggestionsForScene(filter = "all", density = 16) {
+        const adaptiveMode = Number(density) <= 0;
+        const options = adaptiveMode
+            ? resolveScanOptions({ aggressive: true })
+            : resolveScanOptions({ aggressive: false, maxParts: Math.max(4, Math.min(12, Math.floor(Number(density) || 16))) });
+        const scanned = scanCollisionProfilesForScene(filter, options);
+        if (scanned.length > 0) {
+            return scanned.map(sanitizeSuggestion);
+        }
+
         const normalizedFilter = String(filter || "all").toLowerCase();
         const byPath = new Map();
         for (const root of worldModelGroup.children) {
             root.updateMatrixWorld(true);
-
             const index = root.userData?.editorModelIndex;
             const modelDef = resolveSceneModelDef(
                 root,
                 Number.isInteger(index) && index >= 0 ? getEditorModelByIndex(index) : null
             );
             const modelPath = String(modelDef.path || root.userData?.modelPath || "").toLowerCase();
-            if (!modelPath) {
+            if (!modelPath || (normalizedFilter !== "all" && !modelPath.includes(normalizedFilter))) {
                 continue;
             }
-            if (normalizedFilter !== "all" && !modelPath.includes(normalizedFilter)) {
-                continue;
-            }
-
             const measured = measureModelLocalColliderBounds(root, modelDef);
             const normalized = normalizeProfileMeasurements(measured, modelDef);
             if (!byPath.has(modelPath)) {
@@ -859,7 +787,6 @@ export function createCollisionDebugController({
             };
             const elevationLift = averageSamples(samples, "elevationLift");
             const boxes = buildAutoBoxesForModel(modelPath, avgHalfWidth, avgHalfDepth, avgHeight, density, offsets);
-            const solid = !isAlwaysNonSolidModel(modelPath);
             suggestions.push(sanitizeSuggestion({
                 value: modelPath,
                 halfWidth: Number(avgHalfWidth.toFixed(2)),
@@ -870,9 +797,10 @@ export function createCollisionDebugController({
                 offsetLocalY: Number(offsets.offsetLocalY.toFixed(2)),
                 offsetLocalZ: Number(offsets.offsetLocalZ.toFixed(2)),
                 elevationLift: Number(elevationLift.toFixed(2)),
-                solid,
+                solid: isRoadLikeModelPath(modelPath) || !isAlwaysNonSolidModel(modelPath),
                 walkable: true,
-                boxes
+                boxes,
+                antiBoxes: []
             }));
         }
         return suggestions;
@@ -932,9 +860,6 @@ export function createCollisionDebugController({
         const solid = hitMesh.userData?.collisionSolid ? "solid" : "nonsolid";
         const walkable = hitMesh.userData?.collisionWalkable ? "walk" : "nowalk";
         const flags = [];
-        if (hitMesh.userData?.collisionFallback) {
-            flags.push("FALLBACK");
-        }
         if (hitMesh.userData?.collisionSuspect) {
             flags.push("SUSPECT");
         }
@@ -950,6 +875,12 @@ export function createCollisionDebugController({
         getCollisionProfileSuggestionAtCrosshair,
         getCollisionProfileSuggestionsForScene,
         getCollisionDiagnosticsAtCrosshair,
+        scanCollisionProfileAtCrosshair,
+        scanCollisionProfilesForScene,
+        resolveModelPathAtCrosshair,
+        showScanPreviewFromProfile,
+        showScanPreview,
+        setCollisionGridVisible,
         setCollisionDebugVisible,
         rebuildCollisionDebugBoxes,
         updateCollisionDebugLabels

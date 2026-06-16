@@ -245,7 +245,7 @@
     "halfWidth" : 64.0,
     "halfDepth" : 64.0,
     "height" : 1.0,
-    "solid" : false,
+    "solid" : true,
     "walkable" : true,
     "yawOffsetDeg" : 0.0,
     "offsetLocalX" : 0.0,

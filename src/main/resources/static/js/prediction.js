@@ -7,7 +7,10 @@ import {
     PLAYER_SPRINT_ACCELERATION_MULTIPLIER,
     PLAYER_SPRINT_SPEED_MULTIPLIER,
     PLAYER_STOP_SPEED,
-    PREDICTION_ERROR_THRESHOLD
+    PREDICTION_ERROR_THRESHOLD,
+    PREDICTION_HARD_SNAP_THRESHOLD,
+    SERVER_DELTA_SECONDS,
+    SERVER_TICK_INTERVAL_MS
 } from "./config.js";
 import { keys, mouse, state } from "./state.js";
 import {
@@ -15,7 +18,21 @@ import {
     resolvePlayerPenetration,
     updatePlayerVerticalMovement
 } from "./sceneCollision.js";
-import { clamp } from "./utils.js";
+
+const MAX_PREDICTION_STEPS_PER_FRAME = 5;
+let predictionAccumulator = 0;
+
+function getPredictionDeltaSeconds() {
+    return CLIENT_DELTA_SECONDS;
+}
+
+function logMovementDebug(label, data) {
+    if (!state.movementDebug) {
+        return;
+    }
+
+    console.log(`[MOVE_DEBUG] ${label}`, data);
+}
 
 function syncPredictedSelfToPlayersArray() {
     const selfIndex = state.players.findIndex(player => player.id === state.playerId);
@@ -78,10 +95,20 @@ export function tickLocalPrediction(deltaSeconds) {
         };
     }
 
-    const input = buildCurrentInput();
-    state.predictedSelf.angle = input.angle;
-    state.predictedSelf.pitch = input.pitch;
-    simulatePredictedMovement(state.predictedSelf, input, deltaSeconds);
+    predictionAccumulator += deltaSeconds;
+    const predictionDt = getPredictionDeltaSeconds();
+    let steps = 0;
+
+    while (predictionAccumulator >= predictionDt && steps < MAX_PREDICTION_STEPS_PER_FRAME) {
+        const input = buildCurrentInput();
+        state.predictedSelf.angle = input.angle;
+        state.predictedSelf.pitch = input.pitch;
+        simulatePredictedMovement(state.predictedSelf, input, predictionDt);
+        predictionAccumulator -= predictionDt;
+        steps += 1;
+    }
+
+    state.predictionRemainder = predictionAccumulator;
     syncPredictedSelfToPlayersArray();
 }
 
@@ -91,6 +118,8 @@ export function reconcileLocalPlayer() {
     if (!serverSelf) {
         state.predictedSelf = null;
         state.pendingInputs = [];
+        predictionAccumulator = 0;
+        state.predictionRemainder = 0;
         return;
     }
 
@@ -98,6 +127,8 @@ export function reconcileLocalPlayer() {
         state.predictedSelf = {
             ...serverSelf
         };
+        predictionAccumulator = 0;
+        state.predictionRemainder = 0;
         return;
     }
 
@@ -108,13 +139,17 @@ export function reconcileLocalPlayer() {
     const errorX = serverSelf.x - state.predictedSelf.x;
     const errorY = serverSelf.y - state.predictedSelf.y;
     const errorZ = (serverSelf.z || 0) - (state.predictedSelf.z || 0);
-    const errorDistance = Math.sqrt(errorX * errorX + errorY * errorY);
-    const now = Date.now();
-    const climbDebugActive = now <= (state.climbDebugUntil || 0);
+    const preSnapErrorDistance = Math.sqrt(errorX * errorX + errorY * errorY);
 
-    if (climbDebugActive) {
-        console.log("[CLIMB_DEBUG] before_reconcile", {
-            sequence: state.climbDebugLastSequence,
+    if (state.movementDebug
+        && (preSnapErrorDistance > PREDICTION_ERROR_THRESHOLD || preSnapErrorDistance > 15)) {
+        logMovementDebug("before_reconcile", {
+            preSnapErrorDistance,
+            errorX,
+            errorY,
+            errorZ,
+            pendingInputs: state.pendingInputs.length,
+            lastProcessedInputSequence: serverSelf.lastProcessedInputSequence,
             predicted: {
                 x: state.predictedSelf.x,
                 y: state.predictedSelf.y,
@@ -124,48 +159,45 @@ export function reconcileLocalPlayer() {
                 x: serverSelf.x,
                 y: serverSelf.y,
                 z: serverSelf.z
-            },
-            errorDistance
+            }
         });
     }
 
     state.predictedSelf = {
         ...serverSelf
     };
+    predictionAccumulator = 0;
+    state.predictionRemainder = 0;
 
-    for (const input of state.pendingInputs) {
-        simulatePredictedMovement(state.predictedSelf, input, CLIENT_DELTA_SECONDS);
-    }
+    const serverDt = (state.serverTickIntervalMs || SERVER_TICK_INTERVAL_MS) / 1000 || SERVER_DELTA_SECONDS;
+    const pendingCount = state.pendingInputs.length;
 
-    if (errorDistance > PREDICTION_ERROR_THRESHOLD) {
-        const correctionStrength = clamp(errorDistance / 50, 0.12, 0.4);
-        state.predictedSelf.x += errorX * correctionStrength;
-        state.predictedSelf.y += errorY * correctionStrength;
-
-        if (climbDebugActive) {
-            console.log("[CLIMB_DEBUG] correction_applied", {
-                sequence: state.climbDebugLastSequence,
-                corrected: {
-                    x: state.predictedSelf.x,
-                    y: state.predictedSelf.y,
-                    z: state.predictedSelf.z
-                },
-                threshold: PREDICTION_ERROR_THRESHOLD
-            });
-        }
-    } else if (climbDebugActive) {
-        console.log("[CLIMB_DEBUG] no_correction", {
-            sequence: state.climbDebugLastSequence,
-            threshold: PREDICTION_ERROR_THRESHOLD
+    if (pendingCount > 0 && preSnapErrorDistance <= PREDICTION_HARD_SNAP_THRESHOLD) {
+        const forwardInput = state.pendingInputs.at(-1);
+        simulatePredictedMovement(state.predictedSelf, forwardInput, serverDt);
+    } else if (preSnapErrorDistance > PREDICTION_HARD_SNAP_THRESHOLD) {
+        logMovementDebug("hard_snap_skip_replay", {
+            preSnapErrorDistance,
+            threshold: PREDICTION_HARD_SNAP_THRESHOLD
         });
     }
 
-    if (errorDistance > PREDICTION_ERROR_THRESHOLD * 1.5 && !state.predictedSelf.noclipEnabled) {
-        resolvePlayerPenetration(state.predictedSelf, serverSelf.x, serverSelf.y);
-    }
+    if (state.movementDebug) {
+        const residualX = serverSelf.x - state.predictedSelf.x;
+        const residualY = serverSelf.y - state.predictedSelf.y;
+        const residualDistance = Math.sqrt(residualX * residualX + residualY * residualY);
 
-    if (Math.abs(errorZ) > 0.35) {
-        state.predictedSelf.z = (state.predictedSelf.z || 0) + errorZ * 0.28;
+        if (preSnapErrorDistance > PREDICTION_ERROR_THRESHOLD || preSnapErrorDistance > 15) {
+            logMovementDebug("after_reconcile", {
+                preSnapErrorDistance,
+                residualDistance,
+                final: {
+                    x: state.predictedSelf.x,
+                    y: state.predictedSelf.y,
+                    z: state.predictedSelf.z
+                }
+            });
+        }
     }
 
     syncPredictedSelfToPlayersArray();
@@ -301,4 +333,3 @@ function acceleratePredictedPlayer(player, wishDirectionX, wishDirectionY, maxSp
     player.velocityX = velocityX + accelerationSpeed * wishDirectionX;
     player.velocityY = velocityY + accelerationSpeed * wishDirectionY;
 }
-

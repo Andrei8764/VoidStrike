@@ -55,6 +55,7 @@ export const state = {
     inputSequence: 0,
     pendingInputs: [],
     predictedSelf: null,
+    predictionRemainder: 0,
 
     remotePlayerStates: new Map(),
     remoteWeaponAimStates: new Map(),
@@ -73,8 +74,7 @@ export const state = {
     networkLatencyMs: 0,
     serverTickIntervalMs: 1000 / 30,
 
-    climbDebugUntil: 0,
-    climbDebugLastSequence: 0
+    movementDebug: false
 };
 
 export const keys = {
@@ -104,6 +104,17 @@ export const camera = {
 
 export function getSelfPlayer() {
     if (state.predictedSelf) {
+        const remainder = state.predictionRemainder || 0;
+
+        if (remainder > 1e-4) {
+            return {
+                ...state.predictedSelf,
+                x: state.predictedSelf.x + (state.predictedSelf.velocityX || 0) * remainder,
+                y: state.predictedSelf.y + (state.predictedSelf.velocityY || 0) * remainder,
+                z: (state.predictedSelf.z || 0) + (state.predictedSelf.velocityZ || 0) * remainder
+            };
+        }
+
         return state.predictedSelf;
     }
 

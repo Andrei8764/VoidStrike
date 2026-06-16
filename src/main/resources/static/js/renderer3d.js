@@ -634,6 +634,22 @@ export function getCollisionProfileSuggestionsForScene(filter = "all", density =
     return collisionDebugController.getCollisionProfileSuggestionsForScene(filter, density);
 }
 
+export function scanCollisionProfileAtCrosshair(options = {}) {
+    return collisionDebugController.scanCollisionProfileAtCrosshair(options);
+}
+
+export function scanCollisionProfilesForScene(filter = "all", options = {}) {
+    return collisionDebugController.scanCollisionProfilesForScene(filter, options);
+}
+
+export function resolveModelPathAtCrosshair() {
+    return collisionDebugController.resolveModelPathAtCrosshair();
+}
+
+export function showScanPreviewFromProfile(profile, modelDef) {
+    collisionDebugController.showScanPreviewFromProfile(profile, modelDef);
+}
+
 export function getCollisionDiagnosticsAtCrosshair() {
     return collisionDebugController.getCollisionDiagnosticsAtCrosshair();
 }
