@@ -158,7 +158,7 @@
 
 <div id="chatPanel">
     <div id="chatMessages"></div>
-    <input id="chatInput" type="text" maxlength="180" placeholder="Chat..." autocomplete="off">
+    <input id="chatInput" type="text" maxlength="180" placeholder="T to chat..." autocomplete="off">
 </div>
 
 <div id="devConsole" class="hidden" aria-hidden="true">
@@ -210,14 +210,15 @@
 
 <div id="editorHud" class="hidden" aria-hidden="true">
     <div><strong>Constructor Mode</strong></div>
-    <div id="editorSelectedModel">Model: -</div>
-    <div>F6 toggle | [ ] / wheel model</div>
-    <div>Click select/place-draft | Shift+Click cycle</div>
-    <div>Enter confirm | Esc cancel draft</div>
-    <div>Del remove</div>
-    <div>Arrows move | Q/E rotate</div>
-    <div>R/F up/down | Z/X scale</div>
-    <div>Ctrl+S save | L duplicate</div>
+    <div id="editorSelectedModel">Place: -</div>
+    <div>F6 toggle | [ ] / wheel model (starts none)</div>
+    <div>Click object select | Shift+Click cycle stack</div>
+    <div>Click empty place | Ctrl+Click force place</div>
+    <div>Right-click select | click again deselect</div>
+    <div>Enter confirm draft | Esc cancel draft</div>
+    <div>Del / D delete selected</div>
+    <div>Arrows move | Q/E rotate | R/F up/down</div>
+    <div>Z/X scale | L duplicate | Ctrl+S save</div>
 </div>
 
 <canvas id="minimapCanvas" width="220" height="124"></canvas>

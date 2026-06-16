@@ -1,8 +1,11 @@
+const PLAYER_MAX_HP = 100;
+
 export function createRemotePlayersRuntime(deps) {
     const {
         THREE,
         performanceNow,
         getRenderableRemotePlayers,
+        isHealthDebugVisible = () => false,
         remotePlayerGroup,
         nameLabelsElement,
         camera3d,
@@ -132,11 +135,45 @@ export function createRemotePlayersRuntime(deps) {
         }
         const label = document.createElement("div");
         label.className = "nameLabel";
-        label.textContent = player.name;
+
+        const healthBar = document.createElement("div");
+        healthBar.className = "playerHealthBar hidden";
+
+        const healthFill = document.createElement("div");
+        healthFill.className = "playerHealthBarFill";
+        healthBar.appendChild(healthFill);
+
+        const nameText = document.createElement("span");
+        nameText.className = "nameLabelText";
+        nameText.textContent = player.name;
+
+        label.appendChild(healthBar);
+        label.appendChild(nameText);
         label.style.display = "none";
         nameLabelsElement.appendChild(label);
         remotePlayerLabels.set(player.id, label);
         return label;
+    }
+
+    function updateNameLabelHealthBar(label, player) {
+        const healthBar = label.querySelector(".playerHealthBar");
+        const healthFill = label.querySelector(".playerHealthBarFill");
+        if (!healthBar || !healthFill) {
+            return;
+        }
+
+        if (!isHealthDebugVisible()) {
+            healthBar.classList.add("hidden");
+            return;
+        }
+
+        const hp = Math.max(0, Math.min(PLAYER_MAX_HP, player.hp ?? PLAYER_MAX_HP));
+        const hpRatio = hp / PLAYER_MAX_HP;
+        healthBar.classList.remove("hidden");
+        healthFill.style.width = `${(hpRatio * 100).toFixed(1)}%`;
+        healthFill.classList.toggle("low", hpRatio <= 0.35);
+        healthFill.classList.remove("red", "blue");
+        healthFill.classList.add((player.team || "RED").toLowerCase());
     }
 
     function updateNameLabel(player, root) {
@@ -154,9 +191,10 @@ export function createRemotePlayersRuntime(deps) {
         const screenX = (projected.x * 0.5 + 0.5) * canvas.clientWidth;
         const screenY = (-projected.y * 0.5 + 0.5) * canvas.clientHeight;
         label.style.display = "block";
-        label.textContent = player.name;
+        label.querySelector(".nameLabelText").textContent = player.name;
         label.style.left = `${screenX}px`;
         label.style.top = `${screenY}px`;
+        updateNameLabelHealthBar(label, player);
     }
 
     function ensureWeaponAnchor(root, player) {
@@ -467,8 +505,7 @@ export function createRemotePlayersRuntime(deps) {
 
             syncPlayerWeapon(player, root);
             updateWeaponAim(player, root, runLean, pitchLean, gaitWeight, phase);
-            const crouchVisualOffset = player.crouching ? -14 : 0;
-            root.position.set(player.x, (player.z || 0) + bobAmount + crouchVisualOffset, player.y);
+            root.position.set(player.x, (player.z || 0) + bobAmount, player.y);
             const targetYaw = player.angle + CHARACTER_YAW_OFFSET;
             const previousYaw = remotePlayerBodyYaw.get(player.id) ?? targetYaw;
             const smoothYaw = lerpAngle(previousYaw, targetYaw, BODY_YAW_SMOOTHING);

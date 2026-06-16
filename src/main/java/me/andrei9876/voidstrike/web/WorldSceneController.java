@@ -7,6 +7,7 @@ import tools.jackson.databind.node.ObjectNode;
 import me.andrei9876.voidstrike.world.WorldStorageService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -129,6 +130,10 @@ public class WorldSceneController {
         double offsetLocalX = payload.path("offsetLocalX").asDouble(0);
         double offsetLocalY = payload.path("offsetLocalY").asDouble(0);
         double offsetLocalZ = payload.path("offsetLocalZ").asDouble(0);
+        double elevationLift = payload.path("elevationLift").asDouble(0);
+        String kind = payload.path("kind").asText("");
+        String wallAxis = payload.path("wallAxis").asText("");
+        double thickness = payload.path("thickness").asDouble(0);
         ArrayNode boxes = objectMapper.createArrayNode();
         JsonNode boxesNode = payload.path("boxes");
         if (boxesNode.isArray()) {
@@ -176,6 +181,16 @@ public class WorldSceneController {
         entry.put("offsetLocalX", offsetLocalX);
         entry.put("offsetLocalY", offsetLocalY);
         entry.put("offsetLocalZ", offsetLocalZ);
+        entry.put("elevationLift", elevationLift);
+        if (!kind.isBlank()) {
+            entry.put("kind", kind);
+        }
+        if (!wallAxis.isBlank()) {
+            entry.put("wallAxis", wallAxis);
+        }
+        if (thickness > 0) {
+            entry.put("thickness", thickness);
+        }
         if (!boxes.isEmpty()) {
             entry.set("boxes", boxes);
         }
@@ -201,6 +216,34 @@ public class WorldSceneController {
                 .put("ok", true)
                 .put("value", value)
                 .put("updated", updated));
+    }
+
+    /** Clears all profiles; exactOnly mode = zero collision boxes until profiles are saved again. */
+    @DeleteMapping(value = "/collision-profiles", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<JsonNode> clearCollisionProfilesDelete() throws IOException {
+        return clearCollisionProfiles();
+    }
+
+    @PostMapping(value = "/collision-profiles/clear", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<JsonNode> clearCollisionProfilesPost() throws IOException {
+        return clearCollisionProfiles();
+    }
+
+    private ResponseEntity<JsonNode> clearCollisionProfiles() throws IOException {
+        ObjectNode root = createEmptyCollisionProfilesRoot();
+        writeCollisionProfiles(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root));
+        return ResponseEntity.ok(objectMapper.createObjectNode()
+                .put("ok", true)
+                .put("exactOnly", true)
+                .put("boxes", 0));
+    }
+
+    private ObjectNode createEmptyCollisionProfilesRoot() {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("exactOnly", true);
+        root.set("exact", objectMapper.createArrayNode());
+        root.set("prefix", objectMapper.createArrayNode());
+        return root;
     }
 
     private void writeCollisionProfiles(String serialized) throws IOException {

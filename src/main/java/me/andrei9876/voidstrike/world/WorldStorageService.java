@@ -22,6 +22,7 @@ public class WorldStorageService {
 
     private static final String DEFAULT_SCENE_RESOURCE = "static/world/scene.json";
     private static final String DEFAULT_COLLISION_PROFILES_RESOURCE = "static/world/collision-profiles.json";
+    private static final String DEFAULT_SPAWN_POINTS_RESOURCE = "static/world/spawn-points.json";
 
     private final Path dataDir;
 
@@ -34,6 +35,7 @@ public class WorldStorageService {
         Files.createDirectories(dataDir);
         seedFileIfMissing(scenePath(), DEFAULT_SCENE_RESOURCE);
         seedFileIfMissing(collisionProfilesPath(), DEFAULT_COLLISION_PROFILES_RESOURCE);
+        seedFileIfMissing(spawnPointsPath(), DEFAULT_SPAWN_POINTS_RESOURCE);
         log.info("[world] using external world data directory {}", dataDir);
     }
 
@@ -43,6 +45,10 @@ public class WorldStorageService {
 
     public Path collisionProfilesPath() {
         return dataDir.resolve("collision-profiles.json");
+    }
+
+    public Path spawnPointsPath() {
+        return dataDir.resolve("spawn-points.json");
     }
 
     private void seedFileIfMissing(Path destination, String classpathResource) throws IOException {
@@ -70,6 +76,12 @@ public class WorldStorageService {
         Path safeDataDir = configuredDataDir == null ? Path.of("data/world") : configuredDataDir;
         if (safeDataDir.isAbsolute()) {
             return safeDataDir.normalize();
+        }
+
+        // Project source paths (e.g. src/main/resources/static/world) resolve from the
+        // working directory so IDE edits and runtime saves hit the same files.
+        if (safeDataDir.getNameCount() > 0 && "src".equals(safeDataDir.getName(0).toString())) {
+            return Path.of(System.getProperty("user.dir")).resolve(safeDataDir).normalize();
         }
 
         Path applicationDir = new ApplicationHome(VoidStrikeApplication.class)

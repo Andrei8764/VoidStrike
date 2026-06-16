@@ -6,6 +6,7 @@ import {
     nameOverlay,
     playerNameElement
 } from "./dom.js";
+import { appendConsoleLine } from "./devConsole.js";
 import { getSelfPlayer, keys, mouse, state } from "./state.js";
 import {
     CLIENT_TICK_RATE,
@@ -99,6 +100,7 @@ export function connectWebSocket() {
             state.bullets = message.bullets;
             state.obstacles = message.obstacles || state.obstacles;
             state.killFeed = message.killFeed || [];
+            state.damageFeed = message.damageFeed || [];
             state.chatMessages = message.chatMessages || [];
             state.round = message.round;
 
@@ -110,6 +112,7 @@ export function connectWebSocket() {
             addBulletInterpolationSnapshot(message.bullets, snapshotServerTime);
             detectWeaponPurchase();
             detectLocalKillSounds();
+            detectDamageDebug();
             detectMvpSound();
             detectRoundEndSound();
             reconcileLocalPlayer();
@@ -130,6 +133,7 @@ export function connectWebSocket() {
         state.inputSequence = 0;
         state.lastUnlockedWeapons = [];
         state.lastKillFeedEventIds.clear();
+        state.lastDamageEventIds.clear();
         state.lastLocalKillAt = 0;
         state.lastRoundNumber = null;
         state.lastRoundStatus = null;
@@ -331,6 +335,30 @@ function detectReloadSound() {
     }
 
     state.lastReloading = self.reloading;
+}
+
+function detectDamageDebug() {
+    if (!state.damageDebugVisible || !state.damageFeed.length) {
+        return;
+    }
+
+    const activeEventIds = new Set();
+
+    for (const event of state.damageFeed) {
+        const eventId = `${event.attacker}-${event.victim}-${event.hitType}-${event.damage}-${event.createdAt}`;
+        activeEventIds.add(eventId);
+
+        if (state.lastDamageEventIds.has(eventId)) {
+            continue;
+        }
+
+        const hitLabel = event.hitType === "HEAD" ? "HEADHIT" : "BODY";
+        appendConsoleLine(
+            `[DAMAGE] ${event.attacker} -> ${event.victim} ${hitLabel} -${event.damage} (${event.remainingHp} HP) [${event.weapon}]`
+        );
+    }
+
+    state.lastDamageEventIds = activeEventIds;
 }
 
 function detectLocalKillSounds() {

@@ -3,6 +3,7 @@ import { GLTFLoader } from "/vendor/three/examples/jsm/loaders/GLTFLoader.js";
 import { OBJLoader } from "/vendor/three/examples/jsm/loaders/OBJLoader.js";
 import { MTLLoader } from "/vendor/three/examples/jsm/loaders/MTLLoader.js";
 import { createCollisionDebugController } from "./renderer3d/collisionDebug.js";
+import { createAimDebugController } from "./renderer3d/aimDebug.js";
 import {
     applyEditorTransformByKey as applyEditorTransformByKeyController,
     ensureEditorModelCatalog as ensureEditorModelCatalogController,
@@ -41,15 +42,8 @@ import { PLAYER_MAX_SPEED, WORLD_HEIGHT, WORLD_WIDTH } from "./config.js";
 const PLAYER_HEIGHT = 72;
 const CAMERA_EYE_HEIGHT = 54;
 const CAMERA_CROUCH_EYE_HEIGHT = 40;
-const CAMERA_BACK_OFFSET = 6;
+const CAMERA_BACK_OFFSET = 0;
 const CAMERA_LOOK_DISTANCE = 120;
-const CAMERA_POSITION_SMOOTHING = 0.42;
-const smoothedCameraPosition = {
-    x: 0,
-    y: 0,
-    z: 0,
-    initialized: false
-};
 const BULLET_RADIUS = 0.85;
 const BULLET_LENGTH = 10;
 const BULLET_TRAIL_LENGTH = 16;
@@ -245,7 +239,7 @@ const editorRaycaster = new THREE.Raycaster();
 const editorGroundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const editorGroundHit = new THREE.Vector3();
 let editorModelCatalog = [];
-let editorModelCursor = 0;
+let editorModelCursor = -1;
 let editorSceneModels = [];
 let selectedEditorRoot = null;
 let selectedEditorModelIndex = -1;
@@ -289,6 +283,7 @@ let worldSceneSyncInFlight = false;
 let lastWorldSceneSyncAtMs = 0;
 const WORLD_SCENE_SYNC_INTERVAL_MS = 1500;
 let collisionDebugController = null;
+let aimDebugController = null;
 let viewmodelRuntime = null;
 let remotePlayersRuntime = null;
 let editorRuntime = null;
@@ -622,6 +617,15 @@ collisionDebugController = createCollisionDebugController({
 collisionDebugGroup = collisionDebugController.group;
 scene.add(collisionDebugGroup);
 
+aimDebugController = createAimDebugController({
+    THREE,
+    camera3d,
+    getSelfPlayer,
+    getRenderableRemotePlayers,
+    mouse
+});
+scene.add(aimDebugController.group);
+
 export function getCollisionProfileSuggestionAtCrosshair() {
     return collisionDebugController.getCollisionProfileSuggestionAtCrosshair();
 }
@@ -630,8 +634,21 @@ export function getCollisionProfileSuggestionsForScene(filter = "all", density =
     return collisionDebugController.getCollisionProfileSuggestionsForScene(filter, density);
 }
 
+export function getCollisionDiagnosticsAtCrosshair() {
+    return collisionDebugController.getCollisionDiagnosticsAtCrosshair();
+}
+
 export async function setCollisionDebugVisible(visible) {
     await collisionDebugController.setCollisionDebugVisible(visible);
+}
+
+export async function rebuildCollisionDebugBoxes() {
+    await collisionDebugController.rebuildCollisionDebugBoxes();
+}
+
+export function setAimDebugVisible(visible) {
+    state.aimDebugVisible = visible;
+    aimDebugController?.setVisible(visible);
 }
 
 function updateCollisionDebugLabels() {
@@ -1696,6 +1713,7 @@ remotePlayersRuntime = createRemotePlayersRuntime({
     THREE,
     performanceNow: () => performance.now(),
     getRenderableRemotePlayers,
+    isHealthDebugVisible: () => state.healthDebugVisible,
     remotePlayerGroup,
     nameLabelsElement,
     camera3d,
@@ -1851,7 +1869,6 @@ function updateCameraFromSelf() {
     const self = getSelfPlayer();
 
     if (!self) {
-        smoothedCameraPosition.initialized = false;
         camera3d.position.set(WORLD_WIDTH / 2, 180, WORLD_HEIGHT / 2 + 220);
         camera3d.lookAt(WORLD_WIDTH / 2, 0, WORLD_HEIGHT / 2);
         camera3d.fov += (CAMERA_FOV_HIP - camera3d.fov) * CAMERA_FOV_BLEND;
@@ -1859,38 +1876,30 @@ function updateCameraFromSelf() {
         return;
     }
 
-    const cosYaw = Math.cos(self.angle);
-    const sinYaw = Math.sin(self.angle);
-    const horizontalPitchFactor = Math.cos(self.pitch);
+    const aimAngle = state.viewAngle;
+    const aimPitch = state.viewPitch;
+    const cosYaw = Math.cos(aimAngle);
+    const sinYaw = Math.sin(aimAngle);
+    const horizontalPitchFactor = Math.cos(aimPitch);
 
     const lookDirection = new THREE.Vector3(
         cosYaw * horizontalPitchFactor,
-        Math.sin(self.pitch),
+        Math.sin(aimPitch),
         sinYaw * horizontalPitchFactor
     ).normalize();
 
-    if (!smoothedCameraPosition.initialized) {
-        smoothedCameraPosition.x = self.x;
-        smoothedCameraPosition.y = self.y;
-        smoothedCameraPosition.z = self.z || 0;
-        smoothedCameraPosition.initialized = true;
-    } else {
-        const blend = CAMERA_POSITION_SMOOTHING;
-        smoothedCameraPosition.x += (self.x - smoothedCameraPosition.x) * blend;
-        smoothedCameraPosition.y += (self.y - smoothedCameraPosition.y) * blend;
-        smoothedCameraPosition.z += ((self.z || 0) - smoothedCameraPosition.z) * blend;
-    }
-
-    const eyeX = smoothedCameraPosition.x - cosYaw * CAMERA_BACK_OFFSET;
-    const eyeY = (self.crouching ? CAMERA_CROUCH_EYE_HEIGHT : CAMERA_EYE_HEIGHT) + smoothedCameraPosition.z;
-    const eyeZ = smoothedCameraPosition.y - sinYaw * CAMERA_BACK_OFFSET;
+    const playerZ = self.z || 0;
+    const eyeHeight = self.crouching ? CAMERA_CROUCH_EYE_HEIGHT : CAMERA_EYE_HEIGHT;
+    const eyeX = self.x - cosYaw * CAMERA_BACK_OFFSET;
+    const eyeY = eyeHeight + playerZ;
+    const eyeZ = self.y - sinYaw * CAMERA_BACK_OFFSET;
 
     camera3d.position.set(eyeX, eyeY, eyeZ);
 
     const lookTarget = new THREE.Vector3(
-        smoothedCameraPosition.x + lookDirection.x * CAMERA_LOOK_DISTANCE,
+        eyeX + lookDirection.x * CAMERA_LOOK_DISTANCE,
         eyeY + lookDirection.y * CAMERA_LOOK_DISTANCE,
-        smoothedCameraPosition.y + lookDirection.z * CAMERA_LOOK_DISTANCE
+        eyeZ + lookDirection.z * CAMERA_LOOK_DISTANCE
     );
 
     camera3d.lookAt(lookTarget);
@@ -1939,6 +1948,10 @@ export function updateAimAngle() {
         state.viewAngle = self.angle;
     }
 
+    if (state.viewPitch === 0 && self.pitch !== 0) {
+        state.viewPitch = self.pitch;
+    }
+
     mouse.angle = state.viewAngle;
     mouse.pitch = state.viewPitch;
 }
@@ -1966,11 +1979,27 @@ editorRuntime = createEditorRuntime({
     fetchImpl: (...args) => fetch(...args),
     ensureEditorModelCatalog: async () => {
         editorModelCatalog = await ensureEditorModelCatalogController(fetch, editorModelCatalog, ALL_OBJ_MODEL_FILES);
-        editorModelCursor = 0;
-        updateEditorHudController(editorHudElement, editorSelectedModelElement, state.editorMode, editorModelCatalog, editorModelCursor);
+        editorModelCursor = -1;
+        updateEditorHudController(
+            editorHudElement,
+            editorSelectedModelElement,
+            state.editorMode,
+            editorModelCatalog,
+            editorModelCursor,
+            selectedEditorModelIndex,
+            editorSceneModels
+        );
     },
     updateEditorHud: () => {
-        updateEditorHudController(editorHudElement, editorSelectedModelElement, state.editorMode, editorModelCatalog, editorModelCursor);
+        updateEditorHudController(
+            editorHudElement,
+            editorSelectedModelElement,
+            state.editorMode,
+            editorModelCatalog,
+            editorModelCursor,
+            selectedEditorModelIndex,
+            editorSceneModels
+        );
     },
     ensureEditorPreview,
     updateWorldModelRenderMode,
@@ -2034,6 +2063,10 @@ export function cycleEditorModel(direction) {
     editorRuntime.cycleEditorModel(direction);
 }
 
+export function setEditorModelToNone() {
+    return editorRuntime.setEditorModelToNone();
+}
+
 export function editorHandleCanvasClick(clientX, clientY, options = {}) {
     return editorRuntime.editorHandleCanvasClick(clientX, clientY, options);
 }
@@ -2071,6 +2104,7 @@ export function render() {
     localViewModelPivot.visible = !state.editorMode;
     localBodyPivot.visible = !state.editorMode && !state.ads;
     updateCollisionDebugLabels();
+    aimDebugController?.update();
     renderer.render(scene, camera3d);
 }
 

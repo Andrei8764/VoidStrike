@@ -10,6 +10,7 @@ public class GameSnapshot {
     private final List<BulletView> bullets;
     private final List<ObstacleView> obstacles;
     private final List<KillFeedView> killFeed;
+    private final List<DamageFeedView> damageFeed;
     private final List<ChatMessageView> chatMessages;
     private final RoundView round;
 
@@ -19,6 +20,7 @@ public class GameSnapshot {
             List<BulletView> bullets,
             List<ObstacleView> obstacles,
             List<KillFeedView> killFeed,
+            List<DamageFeedView> damageFeed,
             List<ChatMessageView> chatMessages,
             RoundView round
     ) {
@@ -27,6 +29,7 @@ public class GameSnapshot {
         this.bullets = bullets;
         this.obstacles = obstacles;
         this.killFeed = killFeed;
+        this.damageFeed = damageFeed;
         this.chatMessages = chatMessages;
         this.round = round;
     }
@@ -53,6 +56,10 @@ public class GameSnapshot {
 
     public List<KillFeedView> getKillFeed() {
         return killFeed;
+    }
+
+    public List<DamageFeedView> getDamageFeed() {
+        return damageFeed;
     }
 
     public List<ChatMessageView> getChatMessages() {
@@ -89,7 +96,8 @@ public class GameSnapshot {
             boolean shooting,
             boolean reloading,
             List<String> unlockedWeapons,
-            boolean flyEnabled
+            boolean flyEnabled,
+            boolean noclipEnabled
     ) {
     }
 
@@ -115,6 +123,17 @@ public class GameSnapshot {
     public record KillFeedView(
             String attacker,
             String victim,
+            String weapon,
+            long createdAt
+    ) {
+    }
+
+    public record DamageFeedView(
+            String attacker,
+            String victim,
+            String hitType,
+            int damage,
+            int remainingHp,
             String weapon,
             long createdAt
     ) {

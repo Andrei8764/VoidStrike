@@ -50,7 +50,9 @@ public class PlayerState {
     private long lastProcessedInputSequence;
     private long lastShotAt;
     private long lastClimbAt;
+    private int consecutiveShots;
     private boolean flyEnabled;
+    private boolean noclipEnabled;
 
     public PlayerState(String id, String name, String team, String characterModel, double x, double y) {
         this.id = id;
@@ -80,6 +82,7 @@ public class PlayerState {
 
         this.lastProcessedInputSequence = 0;
         this.lastShotAt = 0;
+        this.consecutiveShots = 0;
         this.z = 0.0;
     }
 
@@ -137,6 +140,7 @@ public class PlayerState {
         this.shoot = false;
         this.ads = false;
         this.reload = false;
+        this.consecutiveShots = 0;
         this.climb = false;
     }
 
@@ -361,6 +365,18 @@ public class PlayerState {
         return lastShotAt;
     }
 
+    public int getConsecutiveShots() {
+        return consecutiveShots;
+    }
+
+    public void incrementConsecutiveShots() {
+        consecutiveShots += 1;
+    }
+
+    public void resetConsecutiveShots() {
+        consecutiveShots = 0;
+    }
+
     public long getLastClimbAt() {
         return lastClimbAt;
     }
@@ -415,5 +431,13 @@ public class PlayerState {
 
     public void setFlyEnabled(boolean flyEnabled) {
         this.flyEnabled = flyEnabled;
+    }
+
+    public boolean isNoclipEnabled() {
+        return noclipEnabled;
+    }
+
+    public void setNoclipEnabled(boolean noclipEnabled) {
+        this.noclipEnabled = noclipEnabled;
     }
 }

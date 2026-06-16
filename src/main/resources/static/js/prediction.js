@@ -160,7 +160,7 @@ export function reconcileLocalPlayer() {
         });
     }
 
-    if (errorDistance > PREDICTION_ERROR_THRESHOLD * 1.5) {
+    if (errorDistance > PREDICTION_ERROR_THRESHOLD * 1.5 && !state.predictedSelf.noclipEnabled) {
         resolvePlayerPenetration(state.predictedSelf, serverSelf.x, serverSelf.y);
     }
 
@@ -227,7 +227,7 @@ function simulatePredictedMovement(player, input, deltaSeconds) {
         const wishDirectionY = sin * forward + cos * strafe;
         const sprinting = input.sprint && forward > 0;
         const crouching = Boolean(input.crouch);
-        const airborne = (player.z || 0) > 0.001 && !player.flyEnabled;
+        const airborne = (player.z || 0) > 0.001 && !player.flyEnabled && !player.noclipEnabled;
         let maxSpeed = sprinting
             ? PLAYER_MAX_SPEED * PLAYER_SPRINT_SPEED_MULTIPLIER
             : PLAYER_MAX_SPEED;

@@ -38,6 +38,7 @@ function gameLoop() {
     lastFrameTime = frameStart;
     const now = frameStart;
 
+    updateAimAngle();
     tickLocalPrediction(deltaSeconds);
     fpsFrameCount += 1;
     const elapsed = now - fpsLastTime;
@@ -54,7 +55,6 @@ function gameLoop() {
     updateBulletInterpolation();
     updateCamera();
     updateMouseWorldPosition();
-    updateAimAngle();
 
     if (keys.up || keys.down || keys.left || keys.right) {
         state.bobTime += 0.12;

@@ -190,8 +190,10 @@ export function updateBulletInterpolation() {
             ...newer.bullet,
             x: lerp(older.bullet.x, newer.bullet.x, progress),
             y: lerp(older.bullet.y, newer.bullet.y, progress),
+            z: lerp(older.bullet.z ?? 0, newer.bullet.z ?? 0, progress),
             velocityX: lerp(older.bullet.velocityX || 0, newer.bullet.velocityX || 0, progress),
             velocityY: lerp(older.bullet.velocityY || 0, newer.bullet.velocityY || 0, progress),
+            velocityZ: lerp(older.bullet.velocityZ || 0, newer.bullet.velocityZ || 0, progress),
             alpha: 1
         });
     }
@@ -216,6 +218,7 @@ function extrapolateBullet(bullet, millisecondsSinceSnapshot) {
         ...bullet,
         x: bullet.x + (bullet.velocityX || 0) * seconds,
         y: bullet.y + (bullet.velocityY || 0) * seconds,
+        z: (bullet.z ?? 0) + (bullet.velocityZ || 0) * seconds,
         alpha: 1
     };
 }

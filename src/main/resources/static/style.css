@@ -499,12 +499,53 @@ input {
     font-weight: 700;
     pointer-events: none;
     white-space: nowrap;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.nameLabelText {
+    display: block;
+}
+
+.playerHealthBar {
+    width: 56px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.95);
+    overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.35);
+}
+
+.playerHealthBar.hidden {
+    display: none;
+}
+
+.playerHealthBarFill {
+    height: 100%;
+    width: 100%;
+    border-radius: inherit;
+    background: #22c55e;
+    transition: width 0.12s linear;
+}
+
+.playerHealthBarFill.red {
+    background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.playerHealthBarFill.blue {
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.playerHealthBarFill.low {
+    filter: brightness(1.15);
 }
 
 #crosshair {
     position: fixed;
     left: 50%;
-    top: 52%;
+    top: 50%;
     z-index: 20;
     transform: translate(-50%, -50%);
     pointer-events: none;

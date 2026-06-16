@@ -173,8 +173,8 @@ export function createViewmodelRuntime(deps) {
         if (crosshairElement) {
             crosshairElement.classList.toggle("hidden", !self);
             const recoilSpread = Math.min(18, state.recoilKick || 0);
-            const adsTighten = state.ads ? 3 : 0;
-            const dynamicGap = Math.max(5, 8 + recoilSpread - adsTighten);
+            const adsTighten = state.ads ? 6 : 0;
+            const dynamicGap = Math.max(state.ads ? 3 : 5, 8 + recoilSpread - adsTighten);
             crosshairElement.style.setProperty("--crosshair-gap", `${dynamicGap.toFixed(2)}px`);
         }
 

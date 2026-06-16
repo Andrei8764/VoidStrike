@@ -1,6 +1,5 @@
 import { state } from "./state.js";
 import {
-    BULLET_INTERPOLATION_DELAY_MS,
     REMOTE_INTERPOLATION_DELAY_MS,
     SERVER_TICK_INTERVAL_MS
 } from "./config.js";
@@ -54,6 +53,5 @@ export function getRemoteRenderTime() {
 }
 
 export function getBulletRenderTime() {
-    const latencyPadding = Math.min(50, state.networkLatencyMs * 0.35);
-    return getEstimatedServerTime() - BULLET_INTERPOLATION_DELAY_MS - latencyPadding;
+    return getRemoteRenderTime();
 }

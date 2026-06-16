@@ -1,12 +1,31 @@
-export function updateEditorHud(editorHudElement, editorSelectedModelElement, editorMode, editorModelCatalog, editorModelCursor) {
+export function updateEditorHud(
+    editorHudElement,
+    editorSelectedModelElement,
+    editorMode,
+    editorModelCatalog,
+    editorModelCursor,
+    selectedModelIndex = -1,
+    editorSceneModels = []
+) {
     if (!editorHudElement) {
         return;
     }
     editorHudElement.classList.toggle("hidden", !editorMode);
-    if (editorSelectedModelElement) {
-        const current = editorModelCatalog[editorModelCursor] || "-";
-        editorSelectedModelElement.textContent = `Model: ${current.replace("/models/", "")}`;
+    if (!editorSelectedModelElement) {
+        return;
     }
+    if (selectedModelIndex >= 0 && editorSceneModels[selectedModelIndex]) {
+        const selected = editorSceneModels[selectedModelIndex];
+        const name = (selected.path || "-").replace("/models/", "");
+        editorSelectedModelElement.textContent = `Selected: ${name} (#${selectedModelIndex + 1})`;
+        return;
+    }
+    if (editorModelCursor < 0) {
+        editorSelectedModelElement.textContent = "Place: none";
+        return;
+    }
+    const current = editorModelCatalog[editorModelCursor] || "-";
+    editorSelectedModelElement.textContent = `Place: ${current.replace("/models/", "")}`;
 }
 
 export function getEditorPointerNdc(THREE, canvas, pointerX, pointerY) {

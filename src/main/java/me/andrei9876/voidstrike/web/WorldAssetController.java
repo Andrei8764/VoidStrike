@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 
 @RestController
@@ -27,7 +28,11 @@ public class WorldAssetController {
 
     @GetMapping(value = "/world/collision-profiles.json", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> getCollisionProfiles() throws IOException {
-        return jsonFile(Files.readString(worldStorageService.collisionProfilesPath()));
+        Path path = worldStorageService.collisionProfilesPath();
+        if (!Files.exists(path)) {
+            return jsonFile("{\"exactOnly\":true,\"exact\":[],\"prefix\":[]}");
+        }
+        return jsonFile(Files.readString(path));
     }
 
     private ResponseEntity<String> jsonFile(String body) {

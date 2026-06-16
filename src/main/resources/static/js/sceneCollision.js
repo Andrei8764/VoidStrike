@@ -14,6 +14,37 @@ import { clamp } from "./utils.js";
 
 let sceneCollisionBoxes = [];
 let collisionLoadPromise = null;
+let collisionDataLoaded = false;
+let lastCollisionHashes = { scene: "n/a", profiles: "n/a" };
+
+// Sanity bounds for a single collision box (world units, post-scale).
+// Anything outside is treated as a corrupt/suspect profile value.
+const COLLISION_MAX_HALF = 4096;
+const COLLISION_MAX_HEIGHT = 8192;
+const COLLISION_MIN_DIM = 0.05;
+const DEG2RAD = Math.PI / 180;
+
+const collisionWarningKeys = new Set();
+
+function warnCollisionOnce(key, message) {
+    if (collisionWarningKeys.has(key)) {
+        return;
+    }
+    collisionWarningKeys.add(key);
+    console.warn(`[collision] ${message}`);
+}
+
+// Deterministic, dependency-free 32-bit FNV-1a hash, returned as 8 hex chars.
+// Used purely to let the operator confirm client/server are reading the same files.
+function hashString(text) {
+    let h = 0x811c9dc5;
+    const str = String(text ?? "");
+    for (let i = 0; i < str.length; i += 1) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+    }
+    return (h >>> 0).toString(16).padStart(8, "0");
+}
 
 function createDefaultProfile() {
     return {
@@ -26,6 +57,10 @@ function createDefaultProfile() {
         offsetLocalX: 0,
         offsetLocalY: 0,
         offsetLocalZ: 0,
+        elevationLift: 0,
+        kind: "",
+        wallAxis: "",
+        thickness: 0,
         boxes: []
     };
 }
@@ -38,6 +73,10 @@ function readCollisionTemplate(node, fallback) {
     const offsetLocalX = Number(node?.offsetLocalX ?? fallback.offsetLocalX ?? 0);
     const offsetLocalY = Number(node?.offsetLocalY ?? fallback.offsetLocalY ?? 0);
     const offsetLocalZ = Number(node?.offsetLocalZ ?? fallback.offsetLocalZ ?? 0);
+    const elevationLift = Number(node?.elevationLift ?? fallback.elevationLift ?? 0);
+    const kind = String(node?.kind ?? fallback.kind ?? "").toLowerCase();
+    const wallAxis = String(node?.wallAxis ?? fallback.wallAxis ?? "").toLowerCase();
+    const thickness = Number(node?.thickness ?? fallback.thickness ?? 0);
     const boxesRaw = Array.isArray(node?.boxes) ? node.boxes : [];
     const boxes = boxesRaw
         .filter(part => part && typeof part === "object")
@@ -61,6 +100,10 @@ function readCollisionTemplate(node, fallback) {
         offsetLocalX,
         offsetLocalY,
         offsetLocalZ,
+        elevationLift,
+        kind,
+        wallAxis,
+        thickness,
         boxes
     };
 }
@@ -69,6 +112,7 @@ function buildFallbackProfileConfig() {
     const defaultProfile = createDefaultProfile();
     return {
         defaultProfile,
+        exactOnly: false,
         exact: new Map(),
         prefix: [
             { prefix: "/models/road-", collider: readCollisionTemplate({ halfWidth: 64, halfDepth: 64, height: 8, solid: false, walkable: true }, defaultProfile) },
@@ -104,25 +148,34 @@ function parseProfileConfig(rawProfiles) {
     }
 
     const prefix = Array.isArray(rawProfiles.prefix) ? rawProfiles.prefix : [];
-    if (prefix.length > 0) {
-        config.prefix = prefix
-            .map(item => {
-                const prefixValue = String(item?.value || "").toLowerCase();
-                if (!prefixValue) {
-                    return null;
-                }
-                return {
-                    prefix: prefixValue,
-                    collider: readCollisionTemplate(item, config.defaultProfile)
-                };
-            })
-            .filter(Boolean);
+    if (Array.isArray(rawProfiles.prefix)) {
+        config.prefix = prefix.length > 0
+            ? prefix
+                .map(item => {
+                    const prefixValue = String(item?.value || "").toLowerCase();
+                    if (!prefixValue) {
+                        return null;
+                    }
+                    return {
+                        prefix: prefixValue,
+                        collider: readCollisionTemplate(item, config.defaultProfile)
+                    };
+                })
+                .filter(Boolean)
+            : [];
+    }
+
+    if (rawProfiles.exactOnly === true) {
+        config.exactOnly = true;
+        config.prefix = [];
     }
 
     return config;
 }
 
-function resolveCollisionProfile(modelPath, profileConfig) {
+// Returns { collider, source } where source is "exact" | "prefix" | "default".
+// "prefix"/"default" are treated as fallbacks for debug visibility.
+function resolveCollisionProfileWithSource(modelPath, profileConfig) {
     const normalized = String(modelPath || "").toLowerCase();
     if (!normalized) {
         return null;
@@ -130,16 +183,20 @@ function resolveCollisionProfile(modelPath, profileConfig) {
 
     const exact = profileConfig.exact.get(normalized);
     if (exact) {
-        return exact;
+        return { collider: exact, source: "exact" };
+    }
+
+    if (profileConfig.exactOnly) {
+        return null;
     }
 
     for (const prefixProfile of profileConfig.prefix) {
         if (normalized.startsWith(prefixProfile.prefix)) {
-            return prefixProfile.collider;
+            return { collider: prefixProfile.collider, source: "prefix" };
         }
     }
 
-    return profileConfig.defaultProfile;
+    return { collider: profileConfig.defaultProfile, source: "default" };
 }
 
 function readModelScale(scale) {
@@ -170,6 +227,81 @@ function readModelYawDeg(modelDef) {
     }
 
     return 0;
+}
+
+function isWallLikeModelPath(modelPath) {
+    const path = String(modelPath || "").toLowerCase();
+        return path.includes("/wall-")
+            || path.includes("/door-")
+            || path.includes("/window-")
+            || path.includes("/planks.obj");
+    }
+
+// Wall/door/window footprints come out of measurement as near-square tile bounding
+// boxes, which would block the whole tile. We thin them down to a slab.
+//
+// Preferred (deterministic) scheme: profile carries `kind:"wall"`, `wallAxis:"x"|"z"`
+// and a normalized `thickness`. wallAxis is the axis the wall PLANE runs along, so the
+// OTHER axis becomes the thin one. Falls back to the legacy path-based heuristic when
+// those fields are absent, so old profiles keep working. Must stay byte-for-byte
+// identical to the server (GameRoom.tightenWallFootprint).
+function tightenWallFootprint(halfWidth, halfDepth, modelPath, collider, scaleX, scaleZ) {
+    const kind = collider ? String(collider.kind || "").toLowerCase() : "";
+    if (kind === "wall") {
+        const axis = String(collider.wallAxis || "").toLowerCase();
+        const rawThickness = Number(collider.thickness);
+        const hasThickness = Number.isFinite(rawThickness) && rawThickness > 0;
+        if (axis === "x") {
+            const thin = hasThickness ? rawThickness * scaleZ : Math.min(halfWidth, halfDepth);
+            return { halfWidth, halfDepth: thin };
+        }
+        if (axis === "z") {
+            const thin = hasThickness ? rawThickness * scaleX : Math.min(halfWidth, halfDepth);
+            return { halfWidth: thin, halfDepth };
+        }
+        if (hasThickness) {
+            if (halfWidth >= halfDepth) {
+                return { halfWidth, halfDepth: rawThickness * scaleZ };
+            }
+            return { halfWidth: rawThickness * scaleX, halfDepth };
+        }
+    }
+
+    const path = String(modelPath || "").toLowerCase();
+    if (!isWallLikeModelPath(path)) {
+        return { halfWidth, halfDepth };
+    }
+
+    let w = halfWidth;
+    let d = halfDepth;
+    const longSide = Math.max(w, d);
+    const shortSide = Math.min(w, d);
+    const aspect = shortSide / Math.max(longSide, 1e-6);
+
+    if (path.includes("diagonal") || path.includes("slant")) {
+        const shrink = path.includes("diagonal") ? 0.5 : 0.58;
+        return { halfWidth: w * shrink, halfDepth: d * shrink };
+    }
+
+    if (path.includes("corner")) {
+        return { halfWidth: w * 0.62, halfDepth: d * 0.62 };
+    }
+
+    if (aspect > 0.72) {
+        const thinHalf = Math.max(3.5, Math.min(shortSide * 0.14, longSide * 0.065));
+        if (w >= d) {
+            w = longSide * 0.96;
+            d = thinHalf;
+        } else {
+            w = thinHalf;
+            d = longSide * 0.96;
+        }
+    } else {
+        w *= 0.96;
+        d *= 0.96;
+    }
+
+    return { halfWidth: w, halfDepth: d };
 }
 
 function toLocal(box, x, y) {
@@ -273,6 +405,56 @@ function boxComputePushOut(box, x, y, radius, fromX, fromY) {
     };
 }
 
+// Validates a single profile box dimension. Flags NaN / negative / zero / absurd
+// values, clamps them to a safe range and reports the box as suspect for debugging.
+function sanitizeBoxDims(modelPath, halfWidth, halfDepth, height) {
+    let suspect = false;
+    let hw = Number(halfWidth);
+    let hd = Number(halfDepth);
+    let h = Number(height);
+
+    if (!Number.isFinite(hw) || hw <= 0) {
+        warnCollisionOnce(`${modelPath}:hw`, `${modelPath}: invalid halfWidth (${halfWidth}); clamped`);
+        hw = COLLISION_MIN_DIM;
+        suspect = true;
+    }
+    if (!Number.isFinite(hd) || hd <= 0) {
+        warnCollisionOnce(`${modelPath}:hd`, `${modelPath}: invalid halfDepth (${halfDepth}); clamped`);
+        hd = COLLISION_MIN_DIM;
+        suspect = true;
+    }
+    if (!Number.isFinite(h) || h <= 0) {
+        warnCollisionOnce(`${modelPath}:h`, `${modelPath}: invalid height (${height}); clamped`);
+        h = COLLISION_MIN_DIM;
+        suspect = true;
+    }
+    if (hw > COLLISION_MAX_HALF || hd > COLLISION_MAX_HALF || h > COLLISION_MAX_HEIGHT) {
+        warnCollisionOnce(`${modelPath}:huge`, `${modelPath}: oversized box hw=${hw.toFixed(1)} hd=${hd.toFixed(1)} h=${h.toFixed(1)}; clamped`);
+        hw = Math.min(hw, COLLISION_MAX_HALF);
+        hd = Math.min(hd, COLLISION_MAX_HALF);
+        h = Math.min(h, COLLISION_MAX_HEIGHT);
+        suspect = true;
+    }
+
+    return { halfWidth: hw, halfDepth: hd, height: h, suspect };
+}
+
+// Builds world-space oriented collision boxes from a scene + collision profiles.
+//
+// World transform (identical to the Three.js renderer, which rotates each model with
+// root.rotation.y = +toRadians(rotationDegrees.y) using Three's RotationY):
+//   worldX = position.x + (offX*scaleX)*cos + (offDepth*scaleZ)*sin
+//   centerY(=worldZ) = position.z - (offX*scaleX)*sin + (offDepth*scaleZ)*cos
+//   baseZ(=vertical)  = position.y + elevationLift + (offUp*scaleY)
+//
+// Profile field convention (authored normalized at scale = 1):
+//   offsetLocalX -> lateral (model local X)
+//   offsetLocalY -> depth   (model local Z)
+//   offsetLocalZ -> vertical (model local Y / up)   <-- vertical, NOT a planar axis
+//
+// elevationLift is stored in WORLD units (measured post-objScale) so it is NOT scaled.
+// We store cosYaw=cos(yaw), sinYaw=-sin(yaw) so the existing toLocal()/computePushOut()
+// inverse pair reproduces Three's RotationY without altering that math.
 function buildSceneCollisionBoxes(sceneConfig, rawProfiles) {
     const profileConfig = parseProfileConfig(rawProfiles);
     const models = Array.isArray(sceneConfig?.models) ? sceneConfig.models : [];
@@ -284,46 +466,62 @@ function buildSceneCollisionBoxes(sceneConfig, rawProfiles) {
         }
 
         const modelPath = String(modelDef.path).toLowerCase();
-        const collider = resolveCollisionProfile(modelPath, profileConfig);
-        if (!collider) {
+        const resolved = resolveCollisionProfileWithSource(modelPath, profileConfig);
+        if (!resolved) {
             continue;
+        }
+        const collider = resolved.collider;
+        const isFallback = resolved.source !== "exact";
+        if (isFallback) {
+            warnCollisionOnce(`${modelPath}:fallback`, `${modelPath}: no exact profile, using ${resolved.source} fallback`);
         }
 
         const effectiveSolid = collider.solid;
         const modelScale = readModelScale(modelDef.scale);
         const centerX = Number(modelDef.position?.x ?? 0);
         const centerY = Number(modelDef.position?.z ?? 0);
+        const modelElevation = Number(modelDef.position?.y ?? 0) + Number(collider.elevationLift ?? 0);
         const parts = Array.isArray(collider.boxes) && collider.boxes.length > 0
             ? collider.boxes
             : [collider];
 
         for (const part of parts) {
             const yawDeg = readModelYawDeg(modelDef) + Number(part.yawOffsetDeg ?? 0);
-            const yawRad = (yawDeg * Math.PI) / 180;
-            const halfWidth = Number(part.halfWidth) * modelScale.x;
-            const halfDepth = Number(part.halfDepth) * modelScale.z;
+            const yawRad = yawDeg * DEG2RAD;
+            let halfWidth = Number(part.halfWidth) * modelScale.x;
+            let halfDepth = Number(part.halfDepth) * modelScale.z;
+            if (collider.kind === "wall" || isWallLikeModelPath(modelPath)) {
+                const tightened = tightenWallFootprint(halfWidth, halfDepth, modelPath, collider, modelScale.x, modelScale.z);
+                halfWidth = tightened.halfWidth;
+                halfDepth = tightened.halfDepth;
+            }
             const height = Number(part.height) * modelScale.y;
+            const sanitized = sanitizeBoxDims(modelPath, halfWidth, halfDepth, height);
+
             const cosYaw = Math.cos(yawRad);
-            const sinYaw = Math.sin(yawRad);
+            const sinYaw = -Math.sin(yawRad);
             const localOffsetX = Number(part.offsetLocalX ?? 0) * modelScale.x;
-            const localOffsetY = Number(part.offsetLocalY ?? 0) * modelScale.z;
-            const localOffsetZ = Number(part.offsetLocalZ ?? 0) * modelScale.y;
-            const worldOffsetX = localOffsetX * cosYaw - localOffsetY * sinYaw;
-            const worldOffsetY = localOffsetX * sinYaw + localOffsetY * cosYaw;
-            const baseZ = Math.max(0, localOffsetZ);
-            const topZ = Math.max(baseZ, baseZ + height);
+            const localOffsetDepth = Number(part.offsetLocalY ?? 0) * modelScale.z;
+            const localOffsetUp = Number(part.offsetLocalZ ?? 0) * modelScale.y;
+            const worldOffsetX = localOffsetX * cosYaw - localOffsetDepth * sinYaw;
+            const worldOffsetY = localOffsetX * sinYaw + localOffsetDepth * cosYaw;
+            const baseZ = Math.max(0, modelElevation + localOffsetUp);
+            const topZ = Math.max(baseZ, baseZ + sanitized.height);
 
             boxes.push({
                 centerX: centerX + worldOffsetX,
                 centerY: centerY + worldOffsetY,
-                halfWidth,
-                halfDepth,
+                halfWidth: sanitized.halfWidth,
+                halfDepth: sanitized.halfDepth,
                 cosYaw,
                 sinYaw,
                 baseZ,
                 topZ,
                 solid: effectiveSolid,
-                walkable: collider.walkable
+                walkable: collider.walkable,
+                modelPath,
+                isFallback,
+                suspect: sanitized.suspect
             });
         }
     }
@@ -332,22 +530,39 @@ function buildSceneCollisionBoxes(sceneConfig, rawProfiles) {
 }
 
 async function fetchCollisionData() {
-    const [sceneResponse, profileResponse] = await Promise.all([
-        fetch("/world/scene.json", { cache: "no-store" }),
-        fetch("/world/collision-profiles.json", { cache: "no-store" })
-    ]);
+    try {
+        const [sceneResponse, profileResponse] = await Promise.all([
+            fetch("/world/scene.json", { cache: "no-store" }),
+            fetch("/world/collision-profiles.json", { cache: "no-store" })
+        ]);
 
-    if (!sceneResponse.ok || !profileResponse.ok) {
-        throw new Error("Failed to load scene collision data");
+        if (!sceneResponse.ok || !profileResponse.ok) {
+            throw new Error("Failed to load scene collision data");
+        }
+
+        const sceneText = await sceneResponse.text();
+        const profileText = await profileResponse.text();
+        lastCollisionHashes = {
+            scene: hashString(sceneText),
+            profiles: hashString(profileText)
+        };
+        const sceneConfig = JSON.parse(sceneText);
+        const profiles = JSON.parse(profileText);
+        sceneCollisionBoxes = buildSceneCollisionBoxes(sceneConfig, profiles);
+        collisionDataLoaded = true;
+    } catch (error) {
+        sceneCollisionBoxes = [];
+        collisionDataLoaded = false;
+        throw error;
     }
+}
 
-    const sceneConfig = await sceneResponse.json();
-    const profiles = await profileResponse.json();
-    sceneCollisionBoxes = buildSceneCollisionBoxes(sceneConfig, profiles);
+export function getCollisionHashes() {
+    return { ...lastCollisionHashes, boxes: sceneCollisionBoxes.length };
 }
 
 export function isSceneCollisionReady() {
-    return sceneCollisionBoxes.length > 0;
+    return collisionDataLoaded;
 }
 
 export function getSceneCollisionBoxCount() {
@@ -401,10 +616,51 @@ export function findSupportTopAt(x, y, currentZ) {
     return top;
 }
 
+function findWalkableStepTopAt(x, y, currentZ, maxStepHeight) {
+    let best = currentZ;
+
+    for (const box of sceneCollisionBoxes) {
+        if (!box.walkable || !boxSupportsPoint(box, x, y)) {
+            continue;
+        }
+
+        if (box.topZ <= currentZ + PLAYER_GROUND_SNAP_EPSILON) {
+            continue;
+        }
+
+        if (box.topZ - currentZ > maxStepHeight) {
+            continue;
+        }
+
+        if (box.topZ > best) {
+            best = box.topZ;
+        }
+    }
+
+    return best;
+}
+
+function applyWalkableRampStep(player) {
+    const z = player.z || 0;
+    const stepTop = findWalkableStepTopAt(player.x, player.y, z, PLAYER_STEP_UP_HEIGHT);
+
+    if (stepTop > z + PLAYER_GROUND_SNAP_EPSILON
+        && !collidesWithObstacle(player.x, player.y, stepTop)) {
+        player.z = stepTop;
+        player.velocityZ = 0;
+    }
+}
+
 const PENETRATION_RESOLVE_PASSES = 4;
 const MOVEMENT_COLLISION_STEP = 4;
 
 export function movePlayerWithCollision(player, nextX, nextY) {
+    if (player.noclipEnabled) {
+        player.x = clamp(nextX, PLAYER_RADIUS, WORLD_WIDTH - PLAYER_RADIUS);
+        player.y = clamp(nextY, PLAYER_RADIUS, WORLD_HEIGHT - PLAYER_RADIUS);
+        return;
+    }
+
     const startX = player.x;
     const startY = player.y;
     const deltaX = nextX - startX;
@@ -452,9 +708,14 @@ export function movePlayerWithCollision(player, nextX, nextY) {
     }
 
     resolvePlayerPenetration(player, startX, startY);
+    applyWalkableRampStep(player);
 }
 
 export function resolvePlayerPenetration(player, fromX = player.x, fromY = player.y) {
+    if (player.noclipEnabled) {
+        return false;
+    }
+
     let resolvedAny = false;
 
     for (let pass = 0; pass < PENETRATION_RESOLVE_PASSES; pass += 1) {
@@ -501,7 +762,7 @@ export function resolvePlayerPenetration(player, fromX = player.x, fromY = playe
 }
 
 export function updatePlayerVerticalMovement(player, input, deltaSeconds) {
-    if (player.flyEnabled) {
+    if (player.flyEnabled || player.noclipEnabled) {
         let verticalIntent = 0;
         if (input.jump) {
             verticalIntent += 1;

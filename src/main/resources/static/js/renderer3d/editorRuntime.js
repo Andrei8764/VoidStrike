@@ -24,9 +24,86 @@ export function createEditorRuntime(env) {
         if (!state.editorMode || catalog.length === 0) {
             return;
         }
-        env.setEditorModelCursor((env.getEditorModelCursor() + direction + catalog.length) % catalog.length);
+        const slotCount = catalog.length + 1;
+        let slot = env.getEditorModelCursor() + 1;
+        slot = (slot + direction + slotCount) % slotCount;
+        env.setEditorModelCursor(slot - 1);
         env.updateEditorHud();
         env.ensureEditorPreview();
+    }
+
+    function pickEditorModelRoots(ndc) {
+        env.getEditorRaycaster().setFromCamera(ndc, env.getCamera3d());
+        const modelHits = env.getEditorRaycaster().intersectObjects(env.getWorldModelGroup().children, true);
+        const uniqueRoots = [];
+        const seen = new Set();
+        for (const hit of modelHits) {
+            const root = env.getEditorTopLevelRoot(hit.object);
+            if (!root || seen.has(root.uuid)) {
+                continue;
+            }
+            seen.add(root.uuid);
+            uniqueRoots.push(root);
+        }
+        return uniqueRoots;
+    }
+
+    function trySelectEditorModelAtNdc(ndc, options = {}) {
+        const uniqueRoots = pickEditorModelRoots(ndc);
+        if (uniqueRoots.length === 0) {
+            return false;
+        }
+
+        const pickSignature = uniqueRoots.map(root => root.uuid).join("|");
+        const cycleRequested = Boolean(options.cycleSelection);
+        if (!cycleRequested || pickSignature !== env.getEditorLastPickSignature()) {
+            env.setEditorLastPickSignature(pickSignature);
+            env.setEditorLastPickRoots(uniqueRoots);
+            env.setEditorLastPickCursor(0);
+        } else {
+            env.setEditorLastPickCursor((env.getEditorLastPickCursor() + 1) % env.getEditorLastPickRoots().length);
+        }
+
+        const topRoot = env.getEditorLastPickRoots()[env.getEditorLastPickCursor()];
+        if (!topRoot || typeof topRoot.userData.editorModelIndex !== "number") {
+            return false;
+        }
+
+        if (!cycleRequested && topRoot === env.getSelectedEditorRoot()) {
+            env.clearEditorSelectionHighlight();
+            env.updateEditorHud();
+            return true;
+        }
+
+        env.setEditorSelection(topRoot, topRoot.userData.editorModelIndex);
+        env.updateEditorHud();
+        return true;
+    }
+
+    function startEditorPlacementDraft(ndc) {
+        env.clearEditorSelectionHighlight();
+        env.updateEditorHud();
+        const placement = env.resolveEditorPlacementPoint(ndc);
+        if (!placement) {
+            return;
+        }
+        const path = env.getEditorModelCatalog()[env.getEditorModelCursor()];
+        if (!path) {
+            return;
+        }
+        const draft = {
+            enabled: true,
+            path,
+            position: { x: placement.x, y: placement.y, z: placement.z },
+            rotationDegrees: { y: 0 },
+            scale: 1
+        };
+        env.setEditorDraftModel(draft);
+        env.clearEditorPreview();
+        env.loadWorldModel(draft, root => {
+            env.setEditorDraftRoot(root);
+            env.applyDraftVisual(root);
+        });
     }
 
     function editorHandleCanvasClick(clientX, clientY, options = {}) {
@@ -39,9 +116,11 @@ export function createEditorRuntime(env) {
         const pointerY = typeof clientY === "number" ? (clientY - rect.top) : env.getMouse().y;
         const ndc = env.getEditorPointerNdc(pointerX, pointerY);
         const selectOnly = Boolean(options.selectOnly);
+        const forcePlace = Boolean(options.forcePlace);
 
         if (env.getEditorDraftModel() && env.getEditorDraftRoot()) {
             env.clearEditorSelectionHighlight();
+            env.updateEditorHud();
             const placement = env.resolveEditorPlacementPoint(ndc);
             if (!placement) {
                 return true;
@@ -54,67 +133,17 @@ export function createEditorRuntime(env) {
             return true;
         }
 
-        if (!selectOnly) {
-            env.clearEditorSelectionHighlight();
-            const placement = env.resolveEditorPlacementPoint(ndc);
-            if (!placement) {
-                return true;
-            }
-            const path = env.getEditorModelCatalog()[env.getEditorModelCursor()];
-            if (!path) {
-                return true;
-            }
-            const draft = {
-                enabled: true,
-                path,
-                position: { x: placement.x, y: placement.y, z: placement.z },
-                rotationDegrees: { y: 0 },
-                scale: 1
-            };
-            env.setEditorDraftModel(draft);
-            env.clearEditorPreview();
-            env.loadWorldModel(draft, root => {
-                env.setEditorDraftRoot(root);
-                env.applyDraftVisual(root);
-            });
+        if (!forcePlace && trySelectEditorModelAtNdc(ndc, options)) {
             return true;
         }
 
-        env.getEditorRaycaster().setFromCamera(ndc, env.getCamera3d());
-        const modelHits = env.getEditorRaycaster().intersectObjects(env.getWorldModelGroup().children, true);
-        if (modelHits.length > 0) {
-            const uniqueRoots = [];
-            const seen = new Set();
-            for (const hit of modelHits) {
-                const root = env.getEditorTopLevelRoot(hit.object);
-                if (!root || seen.has(root.uuid)) {
-                    continue;
-                }
-                seen.add(root.uuid);
-                uniqueRoots.push(root);
-            }
-            if (uniqueRoots.length > 0) {
-                const pickSignature = uniqueRoots.map(root => root.uuid).join("|");
-                const cycleRequested = Boolean(options.cycleSelection);
-                if (!cycleRequested || pickSignature !== env.getEditorLastPickSignature()) {
-                    env.setEditorLastPickSignature(pickSignature);
-                    env.setEditorLastPickRoots(uniqueRoots);
-                    env.setEditorLastPickCursor(0);
-                } else {
-                    env.setEditorLastPickCursor((env.getEditorLastPickCursor() + 1) % env.getEditorLastPickRoots().length);
-                }
-                const topRoot = env.getEditorLastPickRoots()[env.getEditorLastPickCursor()];
-                if (topRoot && typeof topRoot.userData.editorModelIndex === "number") {
-                    if (!cycleRequested && topRoot === env.getSelectedEditorRoot()) {
-                        env.clearEditorSelectionHighlight();
-                        return true;
-                    }
-                    env.setEditorSelection(topRoot, topRoot.userData.editorModelIndex);
-                    return true;
-                }
-            }
+        if (selectOnly) {
+            env.clearEditorSelectionHighlight();
+            env.updateEditorHud();
+            return true;
         }
-        env.clearEditorSelectionHighlight();
+
+        startEditorPlacementDraft(ndc);
         return true;
     }
 
@@ -140,6 +169,7 @@ export function createEditorRuntime(env) {
                 env.setEditorDraftModel(null);
                 env.setEditorDraftRoot(null);
                 env.ensureEditorPreview();
+                env.updateEditorHud();
                 return true;
             }
             return false;
@@ -147,13 +177,15 @@ export function createEditorRuntime(env) {
         if (event.code === "Escape") {
             if (env.getEditorDraftModel() || env.getEditorDraftRoot()) {
                 env.cancelEditorDraft();
+                env.updateEditorHud();
                 return true;
             }
             return false;
         }
-        if (event.code === "Delete" || event.code === "Backspace") {
+        if (event.code === "Delete" || event.code === "Backspace" || event.code === "KeyD") {
             if (env.getEditorDraftModel() || env.getEditorDraftRoot()) {
                 env.cancelEditorDraft();
+                env.updateEditorHud();
                 return true;
             }
             if (env.getSelectedEditorRoot() && env.getSelectedEditorModelIndex() >= 0) {
@@ -165,6 +197,7 @@ export function createEditorRuntime(env) {
                     }
                 }
                 env.clearEditorSelectionHighlight();
+                env.updateEditorHud();
             }
             return true;
         }
@@ -182,6 +215,7 @@ export function createEditorRuntime(env) {
                     env.loadWorldModel(duplicate, root => {
                         root.userData.editorModelIndex = nextIndex;
                         env.setEditorSelection(root, nextIndex);
+                        env.updateEditorHud();
                     });
                 }
             }
@@ -234,9 +268,20 @@ export function createEditorRuntime(env) {
         previewRoot.position.z = placement.z;
     }
 
+    function setEditorModelToNone() {
+        if (!env.getState().editorMode) {
+            return false;
+        }
+        env.setEditorModelCursor(-1);
+        env.updateEditorHud();
+        env.ensureEditorPreview();
+        return true;
+    }
+
     return {
         toggleEditorMode,
         cycleEditorModel,
+        setEditorModelToNone,
         editorHandleCanvasClick,
         editorHandleKeyDown,
         saveEditorScene,

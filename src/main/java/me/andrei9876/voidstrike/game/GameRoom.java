@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -55,17 +56,18 @@ public class GameRoom {
     private static final double PLAYER_CROUCH_HEAD_MAX_Z = 48;
     private static final double PLAYER_EYE_HEIGHT_STAND = 54;
     private static final double PLAYER_EYE_HEIGHT_CROUCH = 40;
-    private static final double BULLET_SPAWN_Z_STAND = 30;
-    private static final double BULLET_SPAWN_Z_CROUCH = 22;
-    private static final double BULLET_MUZZLE_FORWARD_OFFSET = 48;
-    private static final double BULLET_MUZZLE_SIDE_OFFSET = -12;
-    private static final double BULLET_MUZZLE_PITCH_OFFSET = 6;
-    private static final double BULLET_EYE_FORWARD_OFFSET = 12;
+    private static final double BULLET_EYE_FORWARD_OFFSET = 4;
+    private static final double ADS_SPREAD_MULTIPLIER = 0.2;
+    private static final double ADS_SPRAY_BUILDUP_PER_SHOT = 0.045;
+    private static final double HIP_SPRAY_BUILDUP_PER_SHOT = 0.14;
+    private static final double ADS_MAX_SPRAY_MULTIPLIER = 1.2;
+    private static final double HIP_MAX_SPRAY_MULTIPLIER = 2.8;
     private static final double FLY_VERTICAL_SPEED = 520;
-    private static final double BULLET_HIT_RADIUS = 14;
     private static final double HEADSHOT_RADIUS = 10;
     private static final int KILL_FEED_LIMIT = 6;
     private static final long KILL_FEED_TTL_MS = 8_000;
+    private static final int DAMAGE_FEED_LIMIT = 12;
+    private static final long DAMAGE_FEED_TTL_MS = 8_000;
     private static final int CHAT_LIMIT = 40;
     private static final long CHAT_TTL_MS = 300_000;
 
@@ -147,12 +149,21 @@ public class GameRoom {
     private static final int SPAWN_TRIES = 48;
     private static final double SPAWN_Y_MIN = 200;
     private static final double SPAWN_Y_MAX = MAP_HEIGHT - 200;
-    private static final double SPAWN_X_RED = 120;
-    private static final double SPAWN_X_BLUE = MAP_WIDTH - 120;
+    private static final double SPAWN_X_RED = 520;
+    private static final double SPAWN_X_BLUE = MAP_WIDTH - 520;
     private static final double SPAWN_RING_STEP = 26;
     private static final double SPAWN_GRID_MAX_RADIUS = 720;
-    private static final double SPAWN_GEOMETRY_MARGIN = 10;
-    private static final double SPAWN_PLAYER_CLEARANCE = PLAYER_RADIUS * 2.4;
+    private static final double SPAWN_GEOMETRY_MARGIN = 18;
+    private static final double SPAWN_PLAYER_CLEARANCE = PLAYER_RADIUS * 2.8;
+    private static final double SPAWN_MAP_MARGIN = PLAYER_RADIUS + 40;
+    private static final double BULLET_COLLISION_EXPAND = 1.25;
+    private static final double[][] SPAWN_FOOTPRINT_SAMPLES = {
+            {0, 0},
+            {PLAYER_RADIUS * 0.82, 0},
+            {-PLAYER_RADIUS * 0.82, 0},
+            {0, PLAYER_RADIUS * 0.82},
+            {0, -PLAYER_RADIUS * 0.82}
+    };
     private static final double MOVEMENT_COLLISION_STEP = 4;
 
     private final String id;
@@ -163,10 +174,22 @@ public class GameRoom {
     private final Map<String, PlayerState> players;
     private final List<BulletState> bullets = new ArrayList<>();
     private final List<KillFeedEvent> killFeed = new ArrayList<>();
+    private final List<DamageFeedEvent> damageFeed = new ArrayList<>();
     private final List<ChatEvent> chatMessages = new ArrayList<>();
     private final List<CollisionBox> sceneCollisionBoxes = new ArrayList<>();
     private final CollisionProfileConfig collisionProfileConfig;
+    private final Map<String, List<StoredSpawnPoint>> customSpawnPoints = new HashMap<>();
+    private final Map<String, Integer> customSpawnRoundRobin = new HashMap<>();
     private volatile boolean collisionDebugLogging = false;
+    private volatile String sceneHash = "n/a";
+    private volatile String profilesHash = "n/a";
+
+    // Sanity bounds for a single collision box (world units, post-scale). Mirrors the
+    // client (sceneCollision.js) so both sides reject/clamp the same corrupt values.
+    private static final double COLLISION_MAX_HALF = 4096.0;
+    private static final double COLLISION_MAX_HEIGHT = 8192.0;
+    private static final double COLLISION_MIN_DIM = 0.05;
+    private final java.util.Set<String> collisionWarningKeys = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private int roundNumber = 1;
     private int redScore = 0;
@@ -199,9 +222,41 @@ public class GameRoom {
         this.websocketSendBufferSizeBytes = websocketSendBufferSizeBytes;
         this.collisionProfileConfig = loadCollisionProfileConfig();
         this.sceneCollisionBoxes.addAll(loadSceneCollisionBoxes());
+        recomputeCollisionHashes();
+        loadCustomSpawnPoints();
         long solidBoxes = this.sceneCollisionBoxes.stream().filter(box -> box.solid).count();
-        log.info("[collision] room {} loaded {} collision boxes ({} solid)",
-                id, this.sceneCollisionBoxes.size(), solidBoxes);
+        log.info("[collision] room {} loaded {} collision boxes ({} solid) scene#={} profiles#={}",
+                id, this.sceneCollisionBoxes.size(), solidBoxes, sceneHash, profilesHash);
+    }
+
+    // Deterministic 32-bit FNV-1a (8 hex chars). Identical algorithm to the client
+    // (sceneCollision.js hashString) so the two hashes can be compared to confirm both
+    // sides loaded the same scene.json / collision-profiles.json.
+    private static String fnv1aHex(String text) {
+        int h = 0x811c9dc5;
+        String str = text == null ? "" : text;
+        for (int i = 0; i < str.length(); i++) {
+            h ^= str.charAt(i);
+            h *= 0x01000193;
+        }
+        return String.format("%08x", h);
+    }
+
+    private void recomputeCollisionHashes() {
+        try {
+            sceneHash = Files.exists(worldStorageService.scenePath())
+                    ? fnv1aHex(Files.readString(worldStorageService.scenePath()))
+                    : "missing";
+        } catch (Exception _ignored) {
+            sceneHash = "error";
+        }
+        try {
+            profilesHash = Files.exists(worldStorageService.collisionProfilesPath())
+                    ? fnv1aHex(Files.readString(worldStorageService.collisionProfilesPath()))
+                    : "missing";
+        } catch (Exception _ignored) {
+            profilesHash = "error";
+        }
     }
 
     public synchronized boolean hasFreeSlot() {
@@ -227,9 +282,21 @@ public class GameRoom {
         );
 
         sessions.put(playerId, outboundSession);
-        PlayerState player = new PlayerState(playerId, playerName, team, characterModel, spawn.x, spawn.y);
-        finalizeSpawnGeometry(player);
+        PlayerState player = new PlayerState(playerId, playerName, team, characterModel, spawn.x(), spawn.y());
+        applySpawnToPlayer(player, spawn);
         players.put(playerId, player);
+    }
+
+    private void applySpawnToPlayer(PlayerState player, SpawnPoint spawn) {
+        player.respawn(spawn.x(), spawn.y());
+        if (spawn.usesCustomZ()) {
+            player.setZ(clamp(spawn.z(), 0, MAX_BULLET_Z));
+            player.setVelocityX(0);
+            player.setVelocityY(0);
+            player.setVelocityZ(0);
+            return;
+        }
+        finalizeSpawnGeometry(player);
     }
 
     private SpawnPoint findSafeSpawn(String team) {
@@ -237,6 +304,16 @@ public class GameRoom {
     }
 
     private SpawnPoint findSafeSpawn(String team, PlayerState excludePlayer) {
+        List<StoredSpawnPoint> custom = customSpawnPoints.getOrDefault(team, List.of());
+        if (!custom.isEmpty()) {
+            return findSafeSpawnFromCustomPoints(team, custom, excludePlayer);
+        }
+
+        SpawnPoint ingressSpawn = findSafeSpawnFromIngress(team, excludePlayer);
+        if (ingressSpawn != null) {
+            return ingressSpawn;
+        }
+
         double baseX = "RED".equals(team) ? SPAWN_X_RED : SPAWN_X_BLUE;
         double baseY = SPAWN_Y_MIN + Math.random() * (SPAWN_Y_MAX - SPAWN_Y_MIN);
 
@@ -250,7 +327,7 @@ public class GameRoom {
             double radius = ring * SPAWN_RING_STEP;
             double x = baseX + Math.cos(angle) * radius;
             double y = baseY + Math.sin(angle) * radius;
-            x = clamp(x, PLAYER_RADIUS + 8, MAP_WIDTH - PLAYER_RADIUS - 8);
+            x = clamp(x, SPAWN_MAP_MARGIN, MAP_WIDTH - SPAWN_MAP_MARGIN);
             y = clamp(y, SPAWN_Y_MIN, SPAWN_Y_MAX);
             if (isSpawnPointSafe(x, y, excludePlayer)) {
                 return new SpawnPoint(x, y);
@@ -269,8 +346,133 @@ public class GameRoom {
             }
         }
 
-        log.warn("[spawn] no safe spawn found for team {}, using map center fallback", team);
-        return new SpawnPoint(centerX, (SPAWN_Y_MIN + SPAWN_Y_MAX) / 2.0);
+        SpawnPoint globalSpawn = findSafeSpawnGlobalSearch(team, excludePlayer);
+        if (globalSpawn != null) {
+            return globalSpawn;
+        }
+
+        log.warn("[spawn] no safe spawn found for team {}, trying map center", team);
+        return findSafeSpawnNearPoint(MAP_WIDTH / 2.0, MAP_HEIGHT / 2.0, excludePlayer);
+    }
+
+    private SpawnPoint findSafeSpawnFromCustomPoints(String team, List<StoredSpawnPoint> custom, PlayerState excludePlayer) {
+        int count = custom.size();
+        int start = customSpawnRoundRobin.getOrDefault(team, 0) % count;
+        customSpawnRoundRobin.put(team, (start + 1) % count);
+
+        List<StoredSpawnPoint> ordered = new ArrayList<>(count);
+        for (int offset = 0; offset < count; offset += 1) {
+            ordered.add(custom.get((start + offset) % count));
+        }
+        ordered.sort(Comparator.comparingInt(anchor -> countPlayersNear(anchor.x(), anchor.y(), excludePlayer)));
+
+        for (StoredSpawnPoint anchor : ordered) {
+            SpawnPoint spawn = resolveCustomAnchorSpawn(anchor, excludePlayer);
+            if (isSpawnPointSafe(spawn.x(), spawn.y(), excludePlayer)) {
+                return spawn;
+            }
+        }
+
+        return resolveCustomAnchorSpawn(ordered.get(0), excludePlayer);
+    }
+
+    private SpawnPoint resolveCustomAnchorSpawn(StoredSpawnPoint anchor, PlayerState excludePlayer) {
+        SpawnPoint spread = findSafeSpawnNearPoint(anchor.x(), anchor.y(), excludePlayer);
+        double dx = spread.x() - anchor.x();
+        double dy = spread.y() - anchor.y();
+        if (dx * dx + dy * dy < 4.0) {
+            return new SpawnPoint(anchor.x(), anchor.y(), anchor.z());
+        }
+        return spread;
+    }
+
+    private int countPlayersNear(double x, double y, PlayerState excludePlayer) {
+        int nearby = 0;
+        double clearanceSq = SPAWN_PLAYER_CLEARANCE * SPAWN_PLAYER_CLEARANCE;
+        for (PlayerState other : players.values()) {
+            if (other == excludePlayer) {
+                continue;
+            }
+            double dx = other.getX() - x;
+            double dy = other.getY() - y;
+            if (dx * dx + dy * dy < clearanceSq) {
+                nearby += 1;
+            }
+        }
+        return nearby;
+    }
+
+    private SpawnPoint findSafeSpawnNearPoint(double originX, double originY, PlayerState excludePlayer) {
+        if (isSpawnPointSafe(originX, originY, excludePlayer)) {
+            return new SpawnPoint(originX, originY);
+        }
+
+        for (int ring = 1; ring <= 48; ring += 1) {
+            double radius = ring * SPAWN_RING_STEP;
+            for (int i = 0; i < 16; i += 1) {
+                double angle = (Math.PI * 2 * i) / 16;
+                double x = clamp(
+                        originX + Math.cos(angle) * radius,
+                        SPAWN_MAP_MARGIN,
+                        MAP_WIDTH - SPAWN_MAP_MARGIN
+                );
+                double y = clamp(
+                        originY + Math.sin(angle) * radius,
+                        SPAWN_Y_MIN,
+                        SPAWN_Y_MAX
+                );
+                if (isSpawnPointSafe(x, y, excludePlayer)) {
+                    return new SpawnPoint(x, y);
+                }
+            }
+        }
+
+        log.error("[spawn] no validated spawn found near ({}, {})", originX, originY);
+        return new SpawnPoint(
+                clamp(originX, SPAWN_MAP_MARGIN, MAP_WIDTH - SPAWN_MAP_MARGIN),
+                clamp(originY, SPAWN_Y_MIN, SPAWN_Y_MAX)
+        );
+    }
+
+    private SpawnPoint findSafeSpawnGlobalSearch(String team, PlayerState excludePlayer) {
+        double teamAnchorX = "RED".equals(team) ? SPAWN_X_RED : SPAWN_X_BLUE;
+        SpawnPoint best = null;
+        double bestDistSq = Double.MAX_VALUE;
+
+        for (double x = SPAWN_MAP_MARGIN; x <= MAP_WIDTH - SPAWN_MAP_MARGIN; x += SPAWN_RING_STEP) {
+            for (double y = SPAWN_Y_MIN; y <= SPAWN_Y_MAX; y += SPAWN_RING_STEP) {
+                if (!isSpawnPointSafe(x, y, excludePlayer)) {
+                    continue;
+                }
+                double dx = x - teamAnchorX;
+                double dy = y - (MAP_HEIGHT / 2.0);
+                double distSq = dx * dx + dy * dy;
+                if (distSq < bestDistSq) {
+                    bestDistSq = distSq;
+                    best = new SpawnPoint(x, y);
+                }
+            }
+        }
+
+        return best;
+    }
+
+    private SpawnPoint findSafeSpawnFromIngress(String team, PlayerState excludePlayer) {
+        double ingressX = teamSpawnIngressPoint(team, 0)[0];
+        int inwardDir = "RED".equals(team) ? 1 : -1;
+        double minX = SPAWN_MAP_MARGIN;
+        double maxX = MAP_WIDTH - SPAWN_MAP_MARGIN;
+
+        for (double inward = 0; inward <= SPAWN_GRID_MAX_RADIUS; inward += SPAWN_RING_STEP) {
+            double x = clamp(ingressX + inwardDir * inward, minX, maxX);
+            for (double y = SPAWN_Y_MIN; y <= SPAWN_Y_MAX; y += SPAWN_RING_STEP) {
+                if (isSpawnPointSafe(x, y, excludePlayer)) {
+                    return new SpawnPoint(x, y);
+                }
+            }
+        }
+
+        return null;
     }
 
     private SpawnPoint findSafeSpawnByGridSearch(String team, PlayerState excludePlayer) {
@@ -282,8 +484,8 @@ public class GameRoom {
             for (double y = SPAWN_Y_MIN; y <= SPAWN_Y_MAX; y += SPAWN_RING_STEP) {
                 double x = clamp(
                         baseX + xDirection * radius,
-                        PLAYER_RADIUS + 8,
-                        MAP_WIDTH - PLAYER_RADIUS - 8
+                        SPAWN_MAP_MARGIN,
+                        MAP_WIDTH - SPAWN_MAP_MARGIN
                 );
                 if (isSpawnPointSafe(x, y, excludePlayer)) {
                     return new SpawnPoint(x, y);
@@ -295,8 +497,8 @@ public class GameRoom {
                 for (double xOffset = 0; xOffset <= radius; xOffset += SPAWN_RING_STEP) {
                     double x = clamp(
                             baseX + xDirection * xOffset,
-                            PLAYER_RADIUS + 8,
-                            MAP_WIDTH - PLAYER_RADIUS - 8
+                            SPAWN_MAP_MARGIN,
+                            MAP_WIDTH - SPAWN_MAP_MARGIN
                     );
                     if (isSpawnPointSafe(x, y, excludePlayer)) {
                         return new SpawnPoint(x, y);
@@ -326,19 +528,37 @@ public class GameRoom {
     }
 
     private double spawnGroundZAt(double x, double y) {
-        return findSupportTopAt(x, y, PLAYER_GROUND_SNAP_EPSILON);
+        return findWalkableSurfaceTopAt(x, y);
+    }
+
+    private double findWalkableSurfaceTopAt(double x, double y) {
+        double top = 0;
+        for (CollisionBox box : sceneCollisionBoxes) {
+            if (!box.walkable || !box.supportsPoint(x, y)) {
+                continue;
+            }
+            if (box.topZ > top) {
+                top = box.topZ;
+            }
+        }
+        return top;
     }
 
     private boolean isSpawnPointGeometrySafe(double x, double y) {
         double spawnZ = spawnGroundZAt(x, y);
         double spawnRadius = PLAYER_RADIUS + SPAWN_GEOMETRY_MARGIN;
-        return !collidesWithObstacle(x, y, spawnZ, spawnRadius, DEFAULT_PLAYER_COLLIDER_HEIGHT);
+
+        for (double[] sample : SPAWN_FOOTPRINT_SAMPLES) {
+            if (collidesWithObstacle(x + sample[0], y + sample[1], spawnZ, spawnRadius, DEFAULT_PLAYER_COLLIDER_HEIGHT)) {
+                return false;
+            }
+        }
+
+        return !collidesWithObstacle(x, y, spawnZ, PLAYER_RADIUS, DEFAULT_PLAYER_COLLIDER_HEIGHT);
     }
 
     private double[] teamSpawnIngressPoint(String team, double y) {
-        double ingressX = "RED".equals(team)
-                ? PLAYER_RADIUS + 8
-                : MAP_WIDTH - PLAYER_RADIUS - 8;
+        double ingressX = "RED".equals(team) ? SPAWN_X_RED : SPAWN_X_BLUE;
         return new double[]{ingressX, clamp(y, SPAWN_Y_MIN, SPAWN_Y_MAX)};
     }
 
@@ -372,6 +592,82 @@ public class GameRoom {
         if (!preserveVerticalPosition) {
             player.setZ(spawnGroundZAt(player.getX(), player.getY()));
         }
+
+        if (isPlayerOverlappingSolid(player)) {
+            relocateSpawnIfBlocked(player, preserveVerticalPosition);
+        }
+
+        if (isPlayerOverlappingSolid(player)) {
+            SpawnPoint safeSpawn = findSafeSpawn(player.getTeam(), player);
+            player.setX(safeSpawn.x);
+            player.setY(safeSpawn.y);
+            if (!preserveVerticalPosition) {
+                player.setZ(spawnGroundZAt(safeSpawn.x, safeSpawn.y));
+            }
+            player.setVelocityX(0);
+            player.setVelocityY(0);
+            player.setVelocityZ(0);
+
+            ingress = teamSpawnIngressPoint(player.getTeam(), player.getY());
+            for (int pass = 0; pass < PENETRATION_RESOLVE_PASSES * 2; pass++) {
+                resolvePlayerPenetration(player, ingress[0], ingress[1]);
+                if (!isPlayerOverlappingSolid(player)) {
+                    break;
+                }
+            }
+            if (!preserveVerticalPosition) {
+                player.setZ(spawnGroundZAt(player.getX(), player.getY()));
+            }
+        }
+    }
+
+    private void relocateSpawnIfBlocked(PlayerState player, boolean preserveVerticalPosition) {
+        double originX = player.getX();
+        double originY = player.getY();
+
+        for (int ring = 1; ring <= 32; ring += 1) {
+            double radius = ring * SPAWN_RING_STEP;
+            for (int i = 0; i < 12; i += 1) {
+                double angle = (Math.PI * 2 * i) / 12;
+                double x = clamp(originX + Math.cos(angle) * radius, SPAWN_MAP_MARGIN, MAP_WIDTH - SPAWN_MAP_MARGIN);
+                double y = clamp(originY + Math.sin(angle) * radius, SPAWN_Y_MIN, SPAWN_Y_MAX);
+                if (!isSpawnPointGeometrySafe(x, y)) {
+                    continue;
+                }
+
+                player.setX(x);
+                player.setY(y);
+                if (!preserveVerticalPosition) {
+                    player.setZ(spawnGroundZAt(x, y));
+                }
+
+                double[] ingress = teamSpawnIngressPoint(player.getTeam(), y);
+                for (int pass = 0; pass < PENETRATION_RESOLVE_PASSES * 2; pass++) {
+                    resolvePlayerPenetration(player, ingress[0], ingress[1]);
+                    if (!isPlayerOverlappingSolid(player)) {
+                        if (!preserveVerticalPosition) {
+                            player.setZ(spawnGroundZAt(player.getX(), player.getY()));
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+
+        log.warn("[spawn] could not clear geometry for {} at ({}, {}), searching for safe spawn",
+                player.getName(),
+                String.format(Locale.ROOT, "%.1f", originX),
+                String.format(Locale.ROOT, "%.1f", originY));
+
+        SpawnPoint safeSpawn = findSafeSpawnNearPoint(originX, originY, player);
+        player.setX(safeSpawn.x);
+        player.setY(safeSpawn.y);
+        if (!preserveVerticalPosition) {
+            player.setZ(spawnGroundZAt(safeSpawn.x, safeSpawn.y));
+        }
+        player.setVelocityX(0);
+        player.setVelocityY(0);
+        player.setVelocityZ(0);
     }
 
     public synchronized void removePlayer(String playerId) {
@@ -412,7 +708,7 @@ public class GameRoom {
 
         String trimmed = rawCommand.trim();
         if (trimmed.isEmpty()) {
-            addSystemChat("Usage: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>, respawn [playerName|all], reloadcollision, coldebug on|off");
+            addSystemChat("Usage: freeze on|off|toggle, money <amount>, fly on|off|toggle, noclip on|off|toggle, setspawn here|red|blue|list|clear, tp <x> <y> [z] | tp <playerName>, respawn [playerName|all], reloadcollision, coldebug on|off");
             return;
         }
 
@@ -423,6 +719,8 @@ public class GameRoom {
             case "freeze" -> handleFreezeCommand(parts);
             case "money" -> handleMoneyCommand(requester, parts);
             case "fly" -> handleFlyCommand(requester, parts);
+            case "noclip", "ghost" -> handleNoclipCommand(requester, parts);
+            case "setspawn", "spawnpoint" -> handleSetSpawnCommand(requester, parts);
             case "tp" -> handleTeleportCommand(requester, parts);
             case "respawn" -> handleRespawnCommand(requester, parts);
             case "reloadcollision", "reloadcol", "reloadprofiles" -> handleReloadCollisionCommand();
@@ -439,10 +737,10 @@ public class GameRoom {
             default -> !collisionDebugLogging;
         };
         collisionDebugLogging = enabled;
-        log.info("[collision] debug logging {} ({} solid/walkable boxes loaded)",
-                enabled ? "ON" : "OFF", sceneCollisionBoxes.size());
+        log.info("[collision] debug logging {} ({} solid/walkable boxes loaded) scene#={} profiles#={}",
+                enabled ? "ON" : "OFF", sceneCollisionBoxes.size(), sceneHash, profilesHash);
         addSystemChat("Collision debug logging " + (enabled ? "ON" : "OFF")
-                + " (" + sceneCollisionBoxes.size() + " boxes)");
+                + " (" + sceneCollisionBoxes.size() + " boxes, scene#" + sceneHash + " profiles#" + profilesHash + ")");
     }
 
     private void handleReloadCollisionCommand() {
@@ -453,10 +751,16 @@ public class GameRoom {
             collisionProfileConfig.prefix.clear();
             collisionProfileConfig.prefix.addAll(reloadedConfig.prefix);
             collisionProfileConfig.defaultProfile = reloadedConfig.defaultProfile;
+            collisionProfileConfig.exactOnly = reloadedConfig.exactOnly;
 
             sceneCollisionBoxes.clear();
             sceneCollisionBoxes.addAll(loadSceneCollisionBoxes());
-            addSystemChat("Collision profiles reloaded (" + sceneCollisionBoxes.size() + " boxes)");
+            recomputeCollisionHashes();
+            log.info("[collision] reloaded {} boxes exactOnly={} scene#={} profiles#={}",
+                    sceneCollisionBoxes.size(), collisionProfileConfig.exactOnly, sceneHash, profilesHash);
+            addSystemChat("Collision profiles reloaded (" + sceneCollisionBoxes.size()
+                    + " boxes, exactOnly=" + collisionProfileConfig.exactOnly
+                    + ", scene#" + sceneHash + " profiles#" + profilesHash + ")");
         } catch (Exception e) {
             addSystemChat("Collision reload failed");
         }
@@ -466,7 +770,6 @@ public class GameRoom {
         updateRound();
         updatePlayers(deltaSeconds);
         updateBullets(deltaSeconds);
-        handleBulletHits();
         broadcastSnapshot();
     }
 
@@ -514,6 +817,7 @@ public class GameRoom {
         nextRoundStartsAt = 0;
         bullets.clear();
         killFeed.clear();
+        damageFeed.clear();
 
         for (PlayerState player : players.values()) {
             respawnPlayer(player);
@@ -573,7 +877,18 @@ public class GameRoom {
             double preMoveY = player.getY();
             updatePlayerMovement(player, deltaSeconds);
             updatePlayerVerticalMovement(player, deltaSeconds);
-            resolvePlayerPenetration(player, preMoveX, preMoveY);
+            if (!player.isNoclipEnabled()) {
+                resolvePlayerPenetration(player, preMoveX, preMoveY);
+            }
+
+            if (!player.isShoot()) {
+                player.resetConsecutiveShots();
+            } else {
+                long sinceLastShot = now - player.getLastShotAt();
+                if (sinceLastShot > player.getWeapon().getCooldownMs() * 3L) {
+                    player.resetConsecutiveShots();
+                }
+            }
 
             if (canShoot(player, now)) {
                 spawnBullet(player);
@@ -638,7 +953,7 @@ public class GameRoom {
             double wishDirectionY = sin * forward + cos * strafe;
             boolean sprinting = player.isSprint() && forward > 0;
             boolean crouching = player.isCrouch();
-            boolean airborne = player.getZ() > 0.001 && !player.isFlyEnabled();
+            boolean airborne = player.getZ() > 0.001 && !player.isFlyEnabled() && !player.isNoclipEnabled();
             double maxSpeed = sprinting
                     ? PLAYER_MAX_SPEED * PLAYER_SPRINT_SPEED_MULTIPLIER
                     : PLAYER_MAX_SPEED;
@@ -664,7 +979,7 @@ public class GameRoom {
     }
 
     private void updatePlayerVerticalMovement(PlayerState player, double deltaSeconds) {
-        if (player.isFlyEnabled()) {
+        if (player.isFlyEnabled() || player.isNoclipEnabled()) {
             double verticalIntent = 0;
             if (player.isJump()) {
                 verticalIntent += 1;
@@ -896,22 +1211,32 @@ public class GameRoom {
         int bulletCount = weapon == WeaponType.SHOTGUN ? 6 : 1;
 
         for (int i = 0; i < bulletCount; i++) {
-            double spread = (Math.random() - 0.5) * weapon.getSpread();
-            double finalAngle = player.getAngle() + spread;
-            double finalPitch = player.getPitch();
+            double baseSpread = weapon.getSpread();
+            boolean ads = player.isAds();
+            double sprayBuildup = ads ? ADS_SPRAY_BUILDUP_PER_SHOT : HIP_SPRAY_BUILDUP_PER_SHOT;
+            double maxSprayMultiplier = ads ? ADS_MAX_SPRAY_MULTIPLIER : HIP_MAX_SPRAY_MULTIPLIER;
+            double sprayMultiplier = 1.0 + player.getConsecutiveShots() * sprayBuildup;
+            if (ads) {
+                sprayMultiplier *= ADS_SPREAD_MULTIPLIER;
+            }
+            sprayMultiplier = Math.min(sprayMultiplier, maxSprayMultiplier);
 
-            double forwardX = Math.cos(player.getAngle());
-            double forwardY = Math.sin(player.getAngle());
-            double rightX = -Math.sin(player.getAngle());
-            double rightY = Math.cos(player.getAngle());
+            double spreadRadius = baseSpread * sprayMultiplier;
+            double spreadAngle = Math.random() * Math.PI * 2;
+            double spreadDistance = spreadRadius * Math.sqrt(Math.random());
+            double yawSpread = Math.cos(spreadAngle) * spreadDistance;
+            double pitchSpread = Math.sin(spreadAngle) * spreadDistance * 0.85;
+
+            double finalAngle = player.getAngle() + yawSpread;
+            double finalPitch = Math.max(-0.55, Math.min(0.55, player.getPitch() + pitchSpread));
 
             double lookDirX = Math.cos(finalAngle) * Math.cos(finalPitch);
             double lookDirY = Math.sin(finalAngle) * Math.cos(finalPitch);
             double lookDirZ = Math.sin(finalPitch);
             double eyeHeight = player.isCrouch() ? PLAYER_EYE_HEIGHT_CROUCH : PLAYER_EYE_HEIGHT_STAND;
-            double eyeX = player.getX() + lookDirX * BULLET_EYE_FORWARD_OFFSET;
-            double eyeY = player.getY() + lookDirY * BULLET_EYE_FORWARD_OFFSET;
-            double eyeZ = player.getZ() + eyeHeight;
+            double spawnX = player.getX() + lookDirX * BULLET_EYE_FORWARD_OFFSET;
+            double spawnY = player.getY() + lookDirY * BULLET_EYE_FORWARD_OFFSET;
+            double spawnZ = player.getZ() + eyeHeight + lookDirZ * BULLET_EYE_FORWARD_OFFSET;
             double velocityX = lookDirX * weapon.getBulletSpeed();
             double velocityY = lookDirY * weapon.getBulletSpeed();
             double velocityZ = lookDirZ * weapon.getBulletSpeed();
@@ -920,9 +1245,9 @@ public class GameRoom {
                     "b-" + System.nanoTime() + "-" + i,
                     player.getId(),
                     weapon.getDamage(),
-                    eyeX,
-                    eyeY,
-                    eyeZ,
+                    spawnX,
+                    spawnY,
+                    spawnZ,
                     velocityX,
                     velocityY,
                     velocityZ
@@ -930,6 +1255,8 @@ public class GameRoom {
 
             bullets.add(bullet);
         }
+
+        player.incrementConsecutiveShots();
     }
 
     private void updateBullets(double deltaSeconds) {
@@ -939,6 +1266,11 @@ public class GameRoom {
             BulletState bullet = iterator.next();
             bullet.update(deltaSeconds);
 
+            if (tryResolveBulletPlayerHit(bullet)) {
+                iterator.remove();
+                continue;
+            }
+
             boolean outsideMap = bullet.getX() < 0
                     || bullet.getX() > MAP_WIDTH
                     || bullet.getY() < 0
@@ -946,110 +1278,213 @@ public class GameRoom {
                     || bullet.getZ() < 0
                     || bullet.getZ() > MAX_BULLET_Z;
 
-            if (bullet.isExpired() || outsideMap || collidesWithObstaclePoint3D(bullet.getX(), bullet.getY(), bullet.getZ())) {
+            if (bullet.isExpired() || outsideMap || bulletIntersectsSolid(bullet)) {
                 iterator.remove();
             }
         }
     }
 
-    private void handleBulletHits() {
-        Iterator<BulletState> bulletIterator = bullets.iterator();
-
-        while (bulletIterator.hasNext()) {
-            BulletState bullet = bulletIterator.next();
-            PlayerState attacker = players.get(bullet.getOwnerId());
-
-            if (attacker == null) {
-                bulletIterator.remove();
-                continue;
-            }
-
-            for (PlayerState player : players.values()) {
-                if (player.getId().equals(bullet.getOwnerId())) {
-                    continue;
-                }
-
-                if (player.getTeam().equals(attacker.getTeam())) {
-                    continue;
-                }
-
-                ClosestPointOnSegment closestPoint = closestPointOnBulletPathToPlayer(bullet, player);
-                double playerZ = player.getZ();
-                boolean headshot = isHeadshot(closestPoint, player, playerZ);
-                boolean bodyshot = isBodyshot(closestPoint, player, playerZ);
-
-                if (headshot || bodyshot) {
-                    player.setHp(headshot ? 0 : player.getHp() - bullet.getDamage());
-                    bulletIterator.remove();
-
-                    if (player.getHp() <= 0) {
-                        attacker.addKill();
-                        attacker.addKillReward(KILL_REWARD);
-                        player.addDeath();
-                        addTeamScore(attacker.getTeam());
-                        addKillFeedEvent(attacker, player, headshot);
-                        respawnPlayer(player);
-                    }
-
-                    break;
-                }
+    private boolean bulletIntersectsSolid(BulletState bullet) {
+        for (CollisionBox box : sceneCollisionBoxes) {
+            if (box.solid && box.intersectsSegment3D(
+                    bullet.getPreviousX(),
+                    bullet.getPreviousY(),
+                    bullet.getPreviousZ(),
+                    bullet.getX(),
+                    bullet.getY(),
+                    bullet.getZ()
+            )) {
+                return true;
             }
         }
+        return false;
     }
 
-    private boolean isHeadshot(ClosestPointOnSegment closestPoint, PlayerState player, double playerZ) {
-        boolean crouching = player.isCrouch();
-        double headMin = crouching ? PLAYER_CROUCH_HEAD_MIN_Z : PLAYER_HEAD_MIN_Z;
-        double headMax = crouching ? PLAYER_CROUCH_HEAD_MAX_Z : PLAYER_HEAD_MAX_Z;
-        return closestPoint.horizontalDistance <= HEADSHOT_RADIUS
-                && closestPoint.z >= playerZ + headMin
-                && closestPoint.z <= playerZ + headMax;
-    }
-
-    private boolean isBodyshot(ClosestPointOnSegment closestPoint, PlayerState player, double playerZ) {
-        boolean crouching = player.isCrouch();
-        double bodyMaxZ = crouching ? PLAYER_CROUCH_BODY_MAX_Z : PLAYER_BODY_MAX_Z;
-        if (closestPoint.z < playerZ || closestPoint.z > playerZ + bodyMaxZ) {
+    private boolean tryResolveBulletPlayerHit(BulletState bullet) {
+        PlayerState attacker = players.get(bullet.getOwnerId());
+        if (attacker == null) {
             return false;
         }
 
-        // Stricter near shoulders/neck to avoid grazing hits above the model.
-        double upperBodyStartZ = playerZ + bodyMaxZ - 16;
-        double allowedRadius = closestPoint.z >= upperBodyStartZ
-                ? BULLET_HIT_RADIUS * 0.72
-                : BULLET_HIT_RADIUS;
+        PlayerState hitPlayer = null;
+        boolean headshot = false;
+        double bestDistance = Double.MAX_VALUE;
 
-        return closestPoint.horizontalDistance <= allowedRadius;
+        for (PlayerState player : players.values()) {
+            if (player.getId().equals(bullet.getOwnerId())) {
+                continue;
+            }
+
+            if (player.getTeam().equals(attacker.getTeam())) {
+                continue;
+            }
+
+            double playerZ = player.getZ();
+            boolean crouching = player.isCrouch();
+            double headMin = crouching ? PLAYER_CROUCH_HEAD_MIN_Z : PLAYER_HEAD_MIN_Z;
+            double headMax = crouching ? PLAYER_CROUCH_HEAD_MAX_Z : PLAYER_HEAD_MAX_Z;
+            double bodyMaxZ = crouching ? PLAYER_CROUCH_BODY_MAX_Z : PLAYER_BODY_MAX_Z;
+
+            if (segmentIntersectsPlayerZone(
+                    bullet,
+                    player,
+                    headMin,
+                    headMax,
+                    HEADSHOT_RADIUS
+            )) {
+                double headCenterZ = playerZ + (headMin + headMax) * 0.5;
+                double hitDistance = distanceToPlayerZoneCenter(bullet, player.getX(), player.getY(), headCenterZ);
+                if (hitDistance < bestDistance) {
+                    hitPlayer = player;
+                    headshot = true;
+                    bestDistance = hitDistance;
+                }
+                continue;
+            }
+
+            if (segmentIntersectsPlayerZone(
+                    bullet,
+                    player,
+                    0,
+                    bodyMaxZ,
+                    PLAYER_RADIUS
+            )) {
+                double bodyCenterZ = playerZ + bodyMaxZ * 0.5;
+                double hitDistance = distanceToPlayerZoneCenter(bullet, player.getX(), player.getY(), bodyCenterZ);
+                if (hitDistance < bestDistance) {
+                    hitPlayer = player;
+                    headshot = false;
+                    bestDistance = hitDistance;
+                }
+            }
+        }
+
+        if (hitPlayer == null) {
+            return false;
+        }
+
+        int previousHp = hitPlayer.getHp();
+        int damageDealt = headshot ? previousHp : bullet.getDamage();
+        hitPlayer.setHp(headshot ? 0 : previousHp - bullet.getDamage());
+        addDamageEvent(attacker, hitPlayer, headshot ? "HEAD" : "BODY", damageDealt, hitPlayer.getHp());
+
+        if (hitPlayer.getHp() <= 0) {
+            attacker.addKill();
+            attacker.addKillReward(KILL_REWARD);
+            hitPlayer.addDeath();
+            addTeamScore(attacker.getTeam());
+            addKillFeedEvent(attacker, hitPlayer, headshot);
+            respawnPlayer(hitPlayer);
+        }
+
+        return true;
     }
 
-    private ClosestPointOnSegment closestPointOnBulletPathToPlayer(BulletState bullet, PlayerState player) {
-        double startX = bullet.getPreviousX();
-        double startY = bullet.getPreviousY();
-        double startZ = bullet.getPreviousZ();
-        double endX = bullet.getX();
-        double endY = bullet.getY();
-        double endZ = bullet.getZ();
+    private boolean segmentIntersectsPlayerZone(
+            BulletState bullet,
+            PlayerState player,
+            double zoneMinOffset,
+            double zoneMaxOffset,
+            double radius
+    ) {
+        double playerZ = player.getZ();
+        return segmentIntersectsVerticalCylinder(
+                bullet.getPreviousX(),
+                bullet.getPreviousY(),
+                bullet.getPreviousZ(),
+                bullet.getX(),
+                bullet.getY(),
+                bullet.getZ(),
+                player.getX(),
+                player.getY(),
+                playerZ + zoneMinOffset,
+                playerZ + zoneMaxOffset,
+                radius
+        );
+    }
 
-        double segmentX = endX - startX;
-        double segmentY = endY - startY;
-        double segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
+    private double distanceToPlayerZoneCenter(
+            BulletState bullet,
+            double centerX,
+            double centerY,
+            double centerZ
+    ) {
+        double segmentX = bullet.getX() - bullet.getPreviousX();
+        double segmentY = bullet.getY() - bullet.getPreviousY();
+        double segmentZ = bullet.getZ() - bullet.getPreviousZ();
+        double segmentLengthSquared = segmentX * segmentX + segmentY * segmentY + segmentZ * segmentZ;
 
         double t;
         if (segmentLengthSquared <= 1e-9) {
             t = 0.0;
         } else {
-            double playerOffsetX = player.getX() - startX;
-            double playerOffsetY = player.getY() - startY;
-            t = (playerOffsetX * segmentX + playerOffsetY * segmentY) / segmentLengthSquared;
+            double offsetX = centerX - bullet.getPreviousX();
+            double offsetY = centerY - bullet.getPreviousY();
+            double offsetZ = centerZ - bullet.getPreviousZ();
+            t = (offsetX * segmentX + offsetY * segmentY + offsetZ * segmentZ) / segmentLengthSquared;
             t = clamp(t, 0, 1);
         }
 
-        double closestX = startX + segmentX * t;
-        double closestY = startY + segmentY * t;
-        double closestZ = startZ + (endZ - startZ) * t;
-        double horizontalDistance = distance(closestX, closestY, player.getX(), player.getY());
+        double closestX = bullet.getPreviousX() + segmentX * t;
+        double closestY = bullet.getPreviousY() + segmentY * t;
+        double closestZ = bullet.getPreviousZ() + segmentZ * t;
+        double dx = closestX - centerX;
+        double dy = closestY - centerY;
+        double dz = closestZ - centerZ;
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
 
-        return new ClosestPointOnSegment(horizontalDistance, closestZ);
+    private boolean segmentIntersectsVerticalCylinder(
+            double startX,
+            double startY,
+            double startZ,
+            double endX,
+            double endY,
+            double endZ,
+            double centerX,
+            double centerY,
+            double zMin,
+            double zMax,
+            double radius
+    ) {
+        double dx = endX - startX;
+        double dy = endY - startY;
+        double dz = endZ - startZ;
+        double fx = startX - centerX;
+        double fy = startY - centerY;
+        double radiusSquared = radius * radius;
+
+        if (dx * dx + dy * dy <= 1e-9) {
+            if (fx * fx + fy * fy > radiusSquared) {
+                return false;
+            }
+            double zLow = Math.min(startZ, endZ);
+            double zHigh = Math.max(startZ, endZ);
+            return zHigh >= zMin && zLow <= zMax;
+        }
+
+        double a = dx * dx + dy * dy;
+        double b = 2.0 * (fx * dx + fy * dy);
+        double c = fx * fx + fy * fy - radiusSquared;
+        double discriminant = b * b - 4.0 * a * c;
+        if (discriminant < 0) {
+            return false;
+        }
+
+        double sqrtDiscriminant = Math.sqrt(discriminant);
+        double tEnter = (-b - sqrtDiscriminant) / (2.0 * a);
+        double tExit = (-b + sqrtDiscriminant) / (2.0 * a);
+        double tMin = Math.max(0.0, Math.min(tEnter, tExit));
+        double tMax = Math.min(1.0, Math.max(tEnter, tExit));
+        if (tMin > tMax) {
+            return false;
+        }
+
+        double zAtMin = startZ + dz * tMin;
+        double zAtMax = startZ + dz * tMax;
+        double segmentZLow = Math.min(zAtMin, zAtMax);
+        double segmentZHigh = Math.max(zAtMin, zAtMax);
+        return segmentZHigh >= zMin && segmentZLow <= zMax;
     }
 
     private void addTeamScore(String team) {
@@ -1062,8 +1497,7 @@ public class GameRoom {
 
     private void respawnPlayer(PlayerState player) {
         SpawnPoint spawn = findSafeSpawn(player.getTeam(), player);
-        player.respawn(spawn.x, spawn.y);
-        finalizeSpawnGeometry(player);
+        applySpawnToPlayer(player, spawn);
     }
 
     private void handleRespawnCommand(PlayerState requester, String[] parts) {
@@ -1096,6 +1530,12 @@ public class GameRoom {
     }
 
     private void movePlayerWithCollision(PlayerState player, double nextX, double nextY) {
+        if (player.isNoclipEnabled()) {
+            player.setX(clamp(nextX, PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS));
+            player.setY(clamp(nextY, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS));
+            return;
+        }
+
         double startX = player.getX();
         double startY = player.getY();
         double deltaX = nextX - startX;
@@ -1143,6 +1583,36 @@ public class GameRoom {
         }
 
         resolvePlayerPenetration(player, startX, startY);
+        applyWalkableRampStep(player);
+    }
+
+    private void applyWalkableRampStep(PlayerState player) {
+        double z = player.getZ();
+        double stepTop = findWalkableStepTopAt(player.getX(), player.getY(), z, PLAYER_STEP_UP_HEIGHT);
+        if (stepTop > z + PLAYER_GROUND_SNAP_EPSILON
+                && !collidesWithObstacle(player.getX(), player.getY(), stepTop, PLAYER_RADIUS, DEFAULT_PLAYER_COLLIDER_HEIGHT)) {
+            player.setZ(stepTop);
+            player.setVelocityZ(0);
+        }
+    }
+
+    private double findWalkableStepTopAt(double x, double y, double currentZ, double maxStepHeight) {
+        double best = currentZ;
+        for (CollisionBox box : sceneCollisionBoxes) {
+            if (!box.walkable || !box.supportsPoint(x, y)) {
+                continue;
+            }
+            if (box.topZ <= currentZ + PLAYER_GROUND_SNAP_EPSILON) {
+                continue;
+            }
+            if (box.topZ - currentZ > maxStepHeight) {
+                continue;
+            }
+            if (box.topZ > best) {
+                best = box.topZ;
+            }
+        }
+        return best;
     }
 
     private boolean collidesWithObstacle(double x, double y) {
@@ -1159,14 +1629,6 @@ public class GameRoom {
         return collidesWithObstacle(x, y, 0, radius, DEFAULT_PLAYER_COLLIDER_HEIGHT);
     }
 
-    private boolean collidesWithObstaclePoint3D(double x, double y, double z) {
-        for (CollisionBox box : sceneCollisionBoxes) {
-            if (box.solid && box.intersectsPoint3D(x, y, z)) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     private boolean collidesWithObstacle(double x, double y, double z, double radius, double height) {
         if (COLLISION_OBSTACLES.stream().anyMatch(obstacle -> obstacle.intersectsCircle(x, y, radius))) {
@@ -1279,8 +1741,36 @@ public class GameRoom {
         }
     }
 
+    private void addDamageEvent(
+            PlayerState attacker,
+            PlayerState victim,
+            String hitType,
+            int damage,
+            int remainingHp
+    ) {
+        damageFeed.add(new DamageFeedEvent(
+                attacker.getName(),
+                victim.getName(),
+                hitType,
+                damage,
+                remainingHp,
+                attacker.getWeapon().getDisplayName(),
+                System.currentTimeMillis()
+        ));
+
+        damageFeed.sort(Comparator.comparingLong(DamageFeedEvent::createdAt).reversed());
+
+        while (damageFeed.size() > DAMAGE_FEED_LIMIT) {
+            damageFeed.remove(damageFeed.size() - 1);
+        }
+    }
+
     private void pruneKillFeed(long now) {
         killFeed.removeIf(event -> now - event.createdAt() > KILL_FEED_TTL_MS);
+    }
+
+    private void pruneDamageFeed(long now) {
+        damageFeed.removeIf(event -> now - event.createdAt() > DAMAGE_FEED_TTL_MS);
     }
 
     private void handleFreezeCommand(String[] parts) {
@@ -1328,6 +1818,161 @@ public class GameRoom {
             }
         }
         addSystemChat(requester.getName() + " fly: " + (enabled ? "ON" : "OFF"));
+    }
+
+    private void handleNoclipCommand(PlayerState requester, String[] parts) {
+        String mode = parts.length > 1 ? parts[1].toLowerCase(Locale.ROOT) : "toggle";
+        boolean enabled = requester.isNoclipEnabled();
+        switch (mode) {
+            case "on", "1", "true" -> enabled = true;
+            case "off", "0", "false" -> enabled = false;
+            default -> enabled = !enabled;
+        }
+
+        requester.setNoclipEnabled(enabled);
+        if (enabled) {
+            requester.setFlyEnabled(true);
+        }
+        addSystemChat(requester.getName() + " noclip: " + (enabled ? "ON" : "OFF") + " (Space=up, Ctrl=down)");
+    }
+
+    private void handleSetSpawnCommand(PlayerState requester, String[] parts) {
+        String arg = parts.length > 1 ? parts[1].toLowerCase(Locale.ROOT) : "here";
+
+        if (arg.equals("list")) {
+            appendSpawnPointList("RED");
+            appendSpawnPointList("BLUE");
+            return;
+        }
+
+        if (arg.equals("clear")) {
+            String teamArg = parts.length > 2 ? parts[2].toUpperCase(Locale.ROOT) : "ALL";
+            if (teamArg.equals("ALL")) {
+                customSpawnPoints.put("RED", new ArrayList<>());
+                customSpawnPoints.put("BLUE", new ArrayList<>());
+                saveCustomSpawnPoints();
+                addSystemChat("Custom spawn points cleared for RED and BLUE");
+            } else if (teamArg.equals("RED") || teamArg.equals("BLUE")) {
+                customSpawnPoints.put(teamArg, new ArrayList<>());
+                saveCustomSpawnPoints();
+                addSystemChat("Custom spawn points cleared for " + teamArg);
+            } else {
+                addSystemChat("Usage: setspawn clear [red|blue|all]");
+            }
+            return;
+        }
+
+        String team;
+        if (arg.equals("here")) {
+            team = requester.getTeam();
+        } else if (arg.equals("red") || arg.equals("blue")) {
+            team = arg.toUpperCase(Locale.ROOT);
+        } else {
+            addSystemChat("Usage: setspawn here|red|blue|list|clear [red|blue|all]");
+            return;
+        }
+
+        StoredSpawnPoint point = new StoredSpawnPoint(
+                requester.getX(),
+                requester.getY(),
+                requester.getZ(),
+                requester.getName()
+        );
+        customSpawnPoints.computeIfAbsent(team, ignored -> new ArrayList<>()).add(point);
+        saveCustomSpawnPoints();
+        addSystemChat(String.format(
+                Locale.ROOT,
+                "%s spawn #%d saved at x=%.1f y=%.1f z=%.1f",
+                team,
+                customSpawnPoints.get(team).size(),
+                point.x(),
+                point.y(),
+                point.z()
+        ));
+    }
+
+    private void appendSpawnPointList(String team) {
+        List<StoredSpawnPoint> points = customSpawnPoints.getOrDefault(team, List.of());
+        if (points.isEmpty()) {
+            addSystemChat(team + " spawns: (none — using auto spawn)");
+            return;
+        }
+        for (int i = 0; i < points.size(); i += 1) {
+            StoredSpawnPoint point = points.get(i);
+            addSystemChat(String.format(
+                    Locale.ROOT,
+                    "%s #%d: x=%.1f y=%.1f z=%.1f%s",
+                    team,
+                    i + 1,
+                    point.x(),
+                    point.y(),
+                    point.z(),
+                    point.label() == null || point.label().isBlank() ? "" : " (" + point.label() + ")"
+            ));
+        }
+    }
+
+    private void loadCustomSpawnPoints() {
+        customSpawnPoints.put("RED", new ArrayList<>());
+        customSpawnPoints.put("BLUE", new ArrayList<>());
+        try {
+            if (!Files.exists(worldStorageService.spawnPointsPath())) {
+                return;
+            }
+            JsonNode root = objectMapper.readTree(Files.readString(worldStorageService.spawnPointsPath()));
+            loadTeamSpawnPoints(root.path("RED"), "RED");
+            loadTeamSpawnPoints(root.path("BLUE"), "BLUE");
+            log.info("[spawn] loaded {} RED and {} BLUE custom spawn points",
+                    customSpawnPoints.get("RED").size(),
+                    customSpawnPoints.get("BLUE").size());
+        } catch (Exception error) {
+            log.warn("[spawn] failed to load custom spawn points: {}", error.getMessage());
+        }
+    }
+
+    private void loadTeamSpawnPoints(JsonNode nodes, String team) {
+        if (!nodes.isArray()) {
+            return;
+        }
+        List<StoredSpawnPoint> loaded = new ArrayList<>();
+        for (JsonNode node : nodes) {
+            double x = node.path("x").asDouble(Double.NaN);
+            double y = node.path("y").asDouble(Double.NaN);
+            double z = node.path("z").asDouble(0);
+            if (!Double.isFinite(x) || !Double.isFinite(y)) {
+                continue;
+            }
+            loaded.add(new StoredSpawnPoint(x, y, z, node.path("label").asText("")));
+        }
+        customSpawnPoints.put(team, loaded);
+    }
+
+    private void saveCustomSpawnPoints() {
+        try {
+            var root = objectMapper.createObjectNode();
+            root.put("version", 1);
+            root.set("RED", spawnPointsToJson(customSpawnPoints.getOrDefault("RED", List.of())));
+            root.set("BLUE", spawnPointsToJson(customSpawnPoints.getOrDefault("BLUE", List.of())));
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(worldStorageService.spawnPointsPath().toFile(), root);
+        } catch (Exception error) {
+            log.warn("[spawn] failed to save custom spawn points: {}", error.getMessage());
+            addSystemChat("setspawn save failed");
+        }
+    }
+
+    private JsonNode spawnPointsToJson(List<StoredSpawnPoint> points) {
+        var array = objectMapper.createArrayNode();
+        for (StoredSpawnPoint point : points) {
+            var node = objectMapper.createObjectNode();
+            node.put("x", point.x());
+            node.put("y", point.y());
+            node.put("z", point.z());
+            if (point.label() != null && !point.label().isBlank()) {
+                node.put("label", point.label());
+            }
+            array.add(node);
+        }
+        return array;
     }
 
     private void handleTeleportCommand(PlayerState requester, String[] parts) {
@@ -1427,6 +2072,7 @@ public class GameRoom {
                 : Math.max(0, (roundEndsAt - countdownReferenceTime) / 1000);
 
         pruneKillFeed(now);
+        pruneDamageFeed(now);
         pruneChat(now);
 
         GameSnapshot snapshot = new GameSnapshot(
@@ -1462,7 +2108,8 @@ public class GameRoom {
                                         .stream()
                                         .map(WeaponType::getDisplayName)
                                         .toList(),
-                                player.isFlyEnabled()
+                                player.isFlyEnabled(),
+                                player.isNoclipEnabled()
                         ))
                         .toList(),
 
@@ -1491,6 +2138,18 @@ public class GameRoom {
                         .map(event -> new GameSnapshot.KillFeedView(
                                 event.attacker(),
                                 event.victim(),
+                                event.weapon(),
+                                event.createdAt()
+                        ))
+                        .toList(),
+
+                damageFeed.stream()
+                        .map(event -> new GameSnapshot.DamageFeedView(
+                                event.attacker(),
+                                event.victim(),
+                                event.hitType(),
+                                event.damage(),
+                                event.remainingHp(),
                                 event.weapon(),
                                 event.createdAt()
                         ))
@@ -1593,6 +2252,17 @@ public class GameRoom {
     private record KillFeedEvent(String attacker, String victim, String weapon, long createdAt) {
     }
 
+    private record DamageFeedEvent(
+            String attacker,
+            String victim,
+            String hitType,
+            int damage,
+            int remainingHp,
+            String weapon,
+            long createdAt
+    ) {
+    }
+
     private record LadderZone(
             double triggerX,
             double triggerY,
@@ -1611,10 +2281,17 @@ public class GameRoom {
     private record ChatEvent(String player, String team, String text, long createdAt) {
     }
 
-    private record ClosestPointOnSegment(double horizontalDistance, double z) {
+    private record SpawnPoint(double x, double y, Double z) {
+        SpawnPoint(double x, double y) {
+            this(x, y, null);
+        }
+
+        boolean usesCustomZ() {
+            return z != null;
+        }
     }
 
-    private record SpawnPoint(double x, double y) {
+    private record StoredSpawnPoint(double x, double y, double z, String label) {
     }
 
     private record CollisionBox(
@@ -1647,6 +2324,74 @@ public class GameRoom {
 
         boolean intersectsPoint3D(double x, double y, double z) {
             return contains(x, y, z);
+        }
+
+        boolean intersectsSegment3D(double x0, double y0, double z0, double x1, double y1, double z1) {
+            double segMinZ = Math.min(z0, z1);
+            double segMaxZ = Math.max(z0, z1);
+            if (segMaxZ < baseZ || segMinZ > topZ) {
+                return false;
+            }
+
+            LocalPoint a = toLocal(x0, y0);
+            LocalPoint b = toLocal(x1, y1);
+            return segmentIntersectsLocalRect(
+                    a.x,
+                    a.y,
+                    b.x,
+                    b.y,
+                    halfWidth + BULLET_COLLISION_EXPAND,
+                    halfDepth + BULLET_COLLISION_EXPAND
+            );
+        }
+
+        private static boolean segmentIntersectsLocalRect(
+                double ax,
+                double ay,
+                double bx,
+                double by,
+                double halfWidth,
+                double halfDepth
+        ) {
+            double dx = bx - ax;
+            double dy = by - ay;
+            double t0 = 0.0;
+            double t1 = 1.0;
+            double[][] edges = {
+                    {-dx, ax + halfWidth},
+                    {dx, halfWidth - ax},
+                    {-dy, ay + halfDepth},
+                    {dy, halfDepth - ay}
+            };
+
+            for (double[] edge : edges) {
+                double p = edge[0];
+                double q = edge[1];
+                if (Math.abs(p) < 1e-9) {
+                    if (q < 0.0) {
+                        return false;
+                    }
+                    continue;
+                }
+                double t = q / p;
+                if (p < 0.0) {
+                    if (t > t1) {
+                        return false;
+                    }
+                    if (t > t0) {
+                        t0 = t;
+                    }
+                } else {
+                    if (t < t0) {
+                        return false;
+                    }
+                    if (t < t1) {
+                        t1 = t;
+                    }
+                }
+            }
+
+            return t0 <= t1;
         }
 
         boolean supportsPoint(double x, double y) {
@@ -1758,6 +2503,111 @@ public class GameRoom {
     private record LocalPoint(double x, double y) {
     }
 
+    private static boolean isWallLikeModelPath(String modelPath) {
+        if (modelPath == null || modelPath.isBlank()) {
+            return false;
+        }
+        return modelPath.contains("/wall-")
+                || modelPath.contains("/door-")
+                || modelPath.contains("/window-")
+                || modelPath.contains("/planks.obj");
+    }
+
+    // See sceneCollision.js tightenWallFootprint - kept byte-for-byte equivalent.
+    // Preferred deterministic scheme: profile kind="wall" + wallAxis ("x"/"z") + thickness.
+    // Falls back to the legacy path heuristic for old profiles.
+    private static double[] tightenWallFootprint(double halfWidth, double halfDepth, String modelPath,
+                                                 ColliderTemplate collider, double scaleX, double scaleZ) {
+        String kind = collider == null ? "" : collider.kind == null ? "" : collider.kind.toLowerCase(Locale.ROOT);
+        if (kind.equals("wall")) {
+            String axis = collider.wallAxis == null ? "" : collider.wallAxis.toLowerCase(Locale.ROOT);
+            double rawThickness = collider.thickness;
+            boolean hasThickness = Double.isFinite(rawThickness) && rawThickness > 0;
+            if (axis.equals("x")) {
+                double thin = hasThickness ? rawThickness * scaleZ : Math.min(halfWidth, halfDepth);
+                return new double[]{halfWidth, thin};
+            }
+            if (axis.equals("z")) {
+                double thin = hasThickness ? rawThickness * scaleX : Math.min(halfWidth, halfDepth);
+                return new double[]{thin, halfDepth};
+            }
+            if (hasThickness) {
+                if (halfWidth >= halfDepth) {
+                    return new double[]{halfWidth, rawThickness * scaleZ};
+                }
+                return new double[]{rawThickness * scaleX, halfDepth};
+            }
+        }
+
+        if (!isWallLikeModelPath(modelPath)) {
+            return new double[]{halfWidth, halfDepth};
+        }
+
+        double w = halfWidth;
+        double d = halfDepth;
+        double longSide = Math.max(w, d);
+        double shortSide = Math.min(w, d);
+        double aspect = shortSide / Math.max(longSide, 1e-6);
+
+        if (modelPath.contains("diagonal") || modelPath.contains("slant")) {
+            double shrink = modelPath.contains("diagonal") ? 0.5 : 0.58;
+            return new double[]{w * shrink, d * shrink};
+        }
+
+        if (modelPath.contains("corner")) {
+            return new double[]{w * 0.62, d * 0.62};
+        }
+
+        if (aspect > 0.72) {
+            double thinHalf = Math.max(3.5, Math.min(shortSide * 0.14, longSide * 0.065));
+            if (w >= d) {
+                w = longSide * 0.96;
+                d = thinHalf;
+            } else {
+                w = thinHalf;
+                d = longSide * 0.96;
+            }
+        } else {
+            w *= 0.96;
+            d *= 0.96;
+        }
+
+        return new double[]{w, d};
+    }
+
+    private void warnCollisionOnce(String key, String message) {
+        if (collisionWarningKeys.add(key)) {
+            log.warn("[collision] {}", message);
+        }
+    }
+
+    // Validates one box's dimensions. Flags NaN / <=0 / absurd values, clamps to a safe
+    // range and warns once per model path. Mirrors client sanitizeBoxDims.
+    private double[] sanitizeBoxDims(String modelPath, double halfWidth, double halfDepth, double height) {
+        double hw = halfWidth;
+        double hd = halfDepth;
+        double h = height;
+        if (!Double.isFinite(hw) || hw <= 0) {
+            warnCollisionOnce(modelPath + ":hw", modelPath + ": invalid halfWidth (" + halfWidth + "); clamped");
+            hw = COLLISION_MIN_DIM;
+        }
+        if (!Double.isFinite(hd) || hd <= 0) {
+            warnCollisionOnce(modelPath + ":hd", modelPath + ": invalid halfDepth (" + halfDepth + "); clamped");
+            hd = COLLISION_MIN_DIM;
+        }
+        if (!Double.isFinite(h) || h <= 0) {
+            warnCollisionOnce(modelPath + ":h", modelPath + ": invalid height (" + height + "); clamped");
+            h = COLLISION_MIN_DIM;
+        }
+        if (hw > COLLISION_MAX_HALF || hd > COLLISION_MAX_HALF || h > COLLISION_MAX_HEIGHT) {
+            warnCollisionOnce(modelPath + ":huge", modelPath + ": oversized box; clamped");
+            hw = Math.min(hw, COLLISION_MAX_HALF);
+            hd = Math.min(hd, COLLISION_MAX_HALF);
+            h = Math.min(h, COLLISION_MAX_HEIGHT);
+        }
+        return new double[]{hw, hd, h};
+    }
+
     private List<CollisionBox> loadSceneCollisionBoxes() {
         List<CollisionBox> boxes = new ArrayList<>();
         try {
@@ -1776,9 +2626,15 @@ public class GameRoom {
                     continue;
                 }
                 String path = model.path("path").asText("").toLowerCase(Locale.ROOT);
-                var collider = resolveCollisionProfile(path);
-                if (collider == null) {
+                ResolvedProfile resolved = resolveCollisionProfileWithSource(path);
+                if (resolved == null) {
                     continue;
+                }
+                var collider = resolved.collider();
+                boolean isFallback = !"exact".equals(resolved.source());
+                if (isFallback) {
+                    warnCollisionOnce(path + ":fallback",
+                            path + ": no exact profile, using " + resolved.source() + " fallback");
                 }
                 // Collision profiles are authored per-model via the editor tooling, so the
                 // `solid` flag is the single source of truth. The previous substring whitelist
@@ -1788,6 +2644,7 @@ public class GameRoom {
                 ModelScale modelScale = readModelScale(model.path("scale"));
                 double x = model.path("position").path("x").asDouble(0);
                 double y = model.path("position").path("z").asDouble(0);
+                double modelElevation = model.path("position").path("y").asDouble(0) + collider.elevationLift;
                 List<ColliderPart> parts = collider.parts == null || collider.parts.isEmpty()
                         ? List.of(new ColliderPart(
                         collider.halfWidth,
@@ -1805,15 +2662,26 @@ public class GameRoom {
                     double yawRad = Math.toRadians(yawDeg);
                     double halfWidth = part.halfWidth * modelScale.x();
                     double halfDepth = part.halfDepth * modelScale.z();
+                    if ("wall".equals(collider.kind) || isWallLikeModelPath(path)) {
+                        double[] tightened = tightenWallFootprint(halfWidth, halfDepth, path, collider, modelScale.x(), modelScale.z());
+                        halfWidth = tightened[0];
+                        halfDepth = tightened[1];
+                    }
                     double height = part.height * modelScale.y();
+                    // Validate + clamp corrupt dimensions (NaN / <=0 / absurd). Mirrors client.
+                    double[] safeDims = sanitizeBoxDims(path, halfWidth, halfDepth, height);
+                    halfWidth = safeDims[0];
+                    halfDepth = safeDims[1];
+                    height = safeDims[2];
+                    // sinYaw negated so the OBB matches the Three.js renderer (RotationY(+yaw)).
                     double cosYaw = Math.cos(yawRad);
-                    double sinYaw = Math.sin(yawRad);
+                    double sinYaw = -Math.sin(yawRad);
                     double localOffsetX = part.offsetLocalX * modelScale.x();
-                    double localOffsetY = part.offsetLocalY * modelScale.z();
-                    double localOffsetZ = part.offsetLocalZ * modelScale.y();
-                    double worldOffsetX = localOffsetX * cosYaw - localOffsetY * sinYaw;
-                    double worldOffsetY = localOffsetX * sinYaw + localOffsetY * cosYaw;
-                    double baseZ = Math.max(0, localOffsetZ);
+                    double localOffsetDepth = part.offsetLocalY * modelScale.z();
+                    double localOffsetUp = part.offsetLocalZ * modelScale.y();
+                    double worldOffsetX = localOffsetX * cosYaw - localOffsetDepth * sinYaw;
+                    double worldOffsetY = localOffsetX * sinYaw + localOffsetDepth * cosYaw;
+                    double baseZ = Math.max(0, modelElevation + localOffsetUp);
                     double topZ = Math.max(baseZ, baseZ + height);
                     boxes.add(new CollisionBox(x + worldOffsetX, y + worldOffsetY, halfWidth, halfDepth, cosYaw, sinYaw, baseZ, topZ, effectiveSolid, collider.walkable));
                 }
@@ -1859,34 +2727,47 @@ public class GameRoom {
     }
 
     private ColliderTemplate resolveCollisionProfile(String modelPath) {
+        ResolvedProfile resolved = resolveCollisionProfileWithSource(modelPath);
+        return resolved == null ? null : resolved.collider();
+    }
+
+    private record ResolvedProfile(ColliderTemplate collider, String source) {
+    }
+
+    // Mirrors client resolveCollisionProfileWithSource: source is exact|prefix|default,
+    // where prefix/default are treated as fallbacks for debug visibility.
+    private ResolvedProfile resolveCollisionProfileWithSource(String modelPath) {
         if (modelPath == null || modelPath.isEmpty()) {
             return null;
         }
 
         ColliderTemplate exact = collisionProfileConfig.exact.get(modelPath);
         if (exact != null) {
-            return exact;
+            return new ResolvedProfile(exact, "exact");
+        }
+        if (collisionProfileConfig.exactOnly) {
+            return null;
         }
         for (PrefixColliderProfile prefixProfile : collisionProfileConfig.prefix) {
             if (modelPath.startsWith(prefixProfile.prefix)) {
-                return prefixProfile.collider;
+                return new ResolvedProfile(prefixProfile.collider, "prefix");
             }
         }
-        return collisionProfileConfig.defaultProfile;
+        return new ResolvedProfile(collisionProfileConfig.defaultProfile, "default");
     }
 
     private CollisionProfileConfig loadCollisionProfileConfig() {
         CollisionProfileConfig config = new CollisionProfileConfig();
         // Reasonable fallback defaults if file is missing.
-        config.defaultProfile = new ColliderTemplate(48, 48, 64, true, true, 0, 0, 0, 0, List.of());
-        config.prefix.add(new PrefixColliderProfile("/models/road-", new ColliderTemplate(64, 64, 8, false, true, 0, 0, 0, 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/grass", new ColliderTemplate(64, 64, 8, false, true, 0, 0, 0, 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/wall-", new ColliderTemplate(64, 64, 96, true, true, 0, 0, 0, 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/window-", new ColliderTemplate(48, 24, 96, true, true, 0, 0, 0, 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/door-", new ColliderTemplate(40, 20, 96, true, true, 0, 0, 0, 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/truck-", new ColliderTemplate(92, 56, 88, true, true, 0, 0, 0, 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/detail-block", new ColliderTemplate(56, 56, 72, true, true, 0, 0, 0, 0, List.of())));
-        config.prefix.add(new PrefixColliderProfile("/models/detail-barrier", new ColliderTemplate(52, 36, 52, true, true, 0, 0, 0, 0, List.of())));
+        config.defaultProfile = new ColliderTemplate(48, 48, 64, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of());
+        config.prefix.add(new PrefixColliderProfile("/models/road-", new ColliderTemplate(64, 64, 8, false, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/grass", new ColliderTemplate(64, 64, 8, false, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/wall-", new ColliderTemplate(64, 64, 96, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/window-", new ColliderTemplate(48, 24, 96, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/door-", new ColliderTemplate(40, 20, 96, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/truck-", new ColliderTemplate(92, 56, 88, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/detail-block", new ColliderTemplate(56, 56, 72, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
+        config.prefix.add(new PrefixColliderProfile("/models/detail-barrier", new ColliderTemplate(52, 36, 52, true, true, 0, 0, 0, 0, 0, "", "", 0, List.of())));
 
         try {
             if (!Files.exists(worldStorageService.collisionProfilesPath())) {
@@ -1923,6 +2804,11 @@ public class GameRoom {
                     config.prefix.add(new PrefixColliderProfile(value, collider));
                 }
             }
+
+            if (root.path("exactOnly").asBoolean(false)) {
+                config.exactOnly = true;
+                config.prefix.clear();
+            }
         } catch (Exception _ignored) {
         }
         return config;
@@ -1941,6 +2827,10 @@ public class GameRoom {
         double offsetLocalX = node.path("offsetLocalX").asDouble(fallback.offsetLocalX);
         double offsetLocalY = node.path("offsetLocalY").asDouble(fallback.offsetLocalY);
         double offsetLocalZ = node.path("offsetLocalZ").asDouble(fallback.offsetLocalZ);
+        double elevationLift = node.path("elevationLift").asDouble(fallback.elevationLift);
+        String kind = node.path("kind").asText(fallback.kind == null ? "" : fallback.kind).toLowerCase(Locale.ROOT);
+        String wallAxis = node.path("wallAxis").asText(fallback.wallAxis == null ? "" : fallback.wallAxis).toLowerCase(Locale.ROOT);
+        double thickness = node.path("thickness").asDouble(fallback.thickness);
         List<ColliderPart> parts = new ArrayList<>();
         JsonNode partsNode = node.path("boxes");
         if (partsNode.isArray()) {
@@ -1958,7 +2848,7 @@ public class GameRoom {
                 parts.add(new ColliderPart(partHalfWidth, partHalfDepth, partHeight, partYawOffsetDeg, partOffsetLocalX, partOffsetLocalY, partOffsetLocalZ));
             }
         }
-        return new ColliderTemplate(halfWidth, halfDepth, height, solid, walkable, yawOffsetDeg, offsetLocalX, offsetLocalY, offsetLocalZ, parts);
+        return new ColliderTemplate(halfWidth, halfDepth, height, solid, walkable, yawOffsetDeg, offsetLocalX, offsetLocalY, offsetLocalZ, elevationLift, kind, wallAxis, thickness, parts);
     }
 
     private record ColliderTemplate(
@@ -1971,6 +2861,10 @@ public class GameRoom {
             double offsetLocalX,
             double offsetLocalY,
             double offsetLocalZ,
+            double elevationLift,
+            String kind,
+            String wallAxis,
+            double thickness,
             List<ColliderPart> parts
     ) {
     }
@@ -1997,6 +2891,7 @@ public class GameRoom {
         final java.util.Map<String, ColliderTemplate> exact = new java.util.HashMap<>();
         final List<PrefixColliderProfile> prefix = new ArrayList<>();
         ColliderTemplate defaultProfile;
+        boolean exactOnly;
     }
 
     private record PrefixColliderProfile(String prefix, ColliderTemplate collider) {

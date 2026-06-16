@@ -25,6 +25,7 @@ import {
 } from "./dom.js";
 import { getSelfPlayer, keys, mouse, state } from "./state.js";
 import { resumeAudio } from "./audio.js";
+import { appendConsoleLine } from "./devConsole.js";
 import { joinGame, sendAdminCommand, sendChatMessage } from "./websocket.js";
 import {
     clearEditorSceneModels,
@@ -33,9 +34,13 @@ import {
     editorHandleKeyDown,
     getCollisionProfileSuggestionAtCrosshair,
     getCollisionProfileSuggestionsForScene,
+    getCollisionDiagnosticsAtCrosshair,
     saveEditorScene,
+    setEditorModelToNone,
     setAnisotropyLevel,
     setCollisionDebugVisible,
+    setAimDebugVisible,
+    rebuildCollisionDebugBoxes,
     setRemoteHandMountOffset,
     setPerformanceMode,
     setRemoteBackMountTransform,
@@ -48,7 +53,7 @@ import {
 } from "./renderer3d.js";
 import { initWeaponShopPreview, previewWeaponModel } from "./weaponShopPreview.js";
 import { MOUSE_SENSITIVITY } from "./config.js";
-import { reloadSceneCollision } from "./sceneCollision.js";
+import { reloadSceneCollision, getCollisionHashes, getSceneCollisionBoxCount } from "./sceneCollision.js";
 import { clamp, normalizeAngle } from "./utils.js";
 
 export function registerInputHandlers() {
@@ -114,6 +119,12 @@ export function registerInputHandlers() {
 
     if (chatInputElement) {
         chatInputElement.addEventListener("keydown", event => {
+            if (event.code === "Escape") {
+                event.preventDefault();
+                chatInputElement.blur();
+                return;
+            }
+
             if (event.code !== "Enter") {
                 return;
             }
@@ -122,11 +133,13 @@ export function registerInputHandlers() {
             const text = chatInputElement.value.trim();
 
             if (text.length === 0) {
+                chatInputElement.blur();
                 return;
             }
 
             sendChatMessage(text);
             chatInputElement.value = "";
+            chatInputElement.blur();
         });
     }
 
@@ -170,11 +183,15 @@ export function registerInputHandlers() {
     });
 
     canvas.addEventListener("mousedown", event => {
-        if (state.editorMode && event.button === 0) {
+        if (state.editorMode && (event.button === 0 || event.button === 2)) {
             event.preventDefault();
+            if (event.button === 2) {
+                state.ads = false;
+            }
             editorHandleCanvasClick(event.clientX, event.clientY, {
                 cycleSelection: event.shiftKey,
-                selectOnly: event.altKey
+                selectOnly: event.button === 2 || event.altKey,
+                forcePlace: event.button === 0 && event.ctrlKey
             });
             return;
         }
@@ -297,6 +314,33 @@ function buyWeaponImmediately(weaponSlot) {
     }));
 }
 
+function focusChatInput() {
+    if (!chatInputElement) {
+        return;
+    }
+
+    mouse.down = false;
+    state.ads = false;
+    keys.up = false;
+    keys.down = false;
+    keys.left = false;
+    keys.right = false;
+    keys.sprint = false;
+    keys.crouch = false;
+    keys.descend = false;
+    keys.jump = false;
+
+    if (document.pointerLockElement) {
+        document.exitPointerLock();
+    }
+
+    chatInputElement.focus();
+}
+
+function isChatInputActive() {
+    return document.activeElement === chatInputElement;
+}
+
 function setShopVisible(visible) {
     state.shopVisible = visible;
     weaponShopElement.classList.toggle("hidden", !visible);
@@ -409,6 +453,16 @@ function handleKeyDown(event) {
         return;
     }
 
+    if (isChatInputActive()) {
+        return;
+    }
+
+    if (event.code === "KeyT" && !event.repeat) {
+        event.preventDefault();
+        focusChatInput();
+        return;
+    }
+
     if (event.repeat && (event.code === "KeyB" || event.code === "Escape")) {
         event.preventDefault();
         return;
@@ -428,10 +482,6 @@ function handleKeyDown(event) {
 
     if (state.shopVisible) {
         event.preventDefault();
-        return;
-    }
-
-    if (document.activeElement === chatInputElement) {
         return;
     }
 
@@ -600,15 +650,46 @@ function setPerfHudVisible(enabled) {
     perfHudElement?.classList.toggle("hidden", !state.perfHudVisible);
 }
 
-function appendConsoleLine(text) {
-    if (!devConsoleOutputElement) {
-        return;
+function parseConsoleToggleArg(arg, currentValue) {
+    if (arg === "on" || arg === "1" || arg === "true") {
+        return true;
     }
+    if (arg === "off" || arg === "0" || arg === "false") {
+        return false;
+    }
+    return !currentValue;
+}
 
-    const line = document.createElement("div");
-    line.textContent = text;
-    devConsoleOutputElement.appendChild(line);
-    devConsoleOutputElement.scrollTop = devConsoleOutputElement.scrollHeight;
+function scaleColboxPayload(payload, scale) {
+    payload.halfWidth = Number((payload.halfWidth * scale).toFixed(2));
+    payload.halfDepth = Number((payload.halfDepth * scale).toFixed(2));
+    payload.height = Number((payload.height * scale).toFixed(2));
+    if (Number.isFinite(Number(payload.thickness)) && payload.thickness > 0) {
+        payload.thickness = Number((payload.thickness * scale).toFixed(2));
+    }
+    payload.boxes = [{
+        halfWidth: payload.halfWidth,
+        halfDepth: payload.halfDepth,
+        height: payload.height,
+        offsetLocalX: payload.offsetLocalX ?? 0,
+        offsetLocalY: payload.offsetLocalY ?? 0,
+        offsetLocalZ: payload.offsetLocalZ ?? 0,
+        yawOffsetDeg: payload.yawOffsetDeg ?? 0
+    }];
+    return payload;
+}
+
+function finalizeColboxPayload(payload) {
+    payload.boxes = [{
+        halfWidth: payload.halfWidth,
+        halfDepth: payload.halfDepth,
+        height: payload.height,
+        offsetLocalX: payload.offsetLocalX ?? 0,
+        offsetLocalY: payload.offsetLocalY ?? 0,
+        offsetLocalZ: payload.offsetLocalZ ?? 0,
+        yawOffsetDeg: payload.yawOffsetDeg ?? 0
+    }];
+    return payload;
 }
 
 function reloadCollisionOnServerAndClient() {
@@ -621,10 +702,21 @@ function reloadCollisionOnServerAndClient() {
     reloadSceneCollision()
         .then(boxCount => {
             appendConsoleLine(`reloadcollision ok (${boxCount} boxes)`);
+            if (state.collisionDebugVisible) {
+                void rebuildCollisionDebugBoxes();
+            }
         })
         .catch(() => {
-            appendConsoleLine("reloadcollision server ok, client reload failed");
+            appendConsoleLine("reloadcollision server ok, client reload failed — restart server after code update");
         });
+}
+
+async function clearCollisionProfilesRequest() {
+    let response = await fetch("/api/world/collision-profiles", { method: "DELETE" });
+    if (!response.ok) {
+        response = await fetch("/api/world/collision-profiles/clear", { method: "POST" });
+    }
+    return response;
 }
 
 function runConsoleCommand(rawCommand) {
@@ -721,13 +813,52 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
+    if (command === "colinfo" || command === "hbinfo" || command === "colliderinfo") {
+        void (async () => {
+            const info = await getCollisionDiagnosticsAtCrosshair();
+            if (!info) {
+                appendConsoleLine("colinfo: no model under crosshair");
+                return;
+            }
+            const tag = info.isFallback ? `FALLBACK(${info.source})` : "exact";
+            appendConsoleLine(`colinfo ${info.path} [${tag}]`);
+            appendConsoleLine(`  scale=(${info.sceneScale.x},${info.sceneScale.y},${info.sceneScale.z}) yaw=${info.yawDeg} solid=${info.solid} walk=${info.walkable} elevLift=${info.elevationLift}`);
+            if (info.kind) {
+                appendConsoleLine(`  kind=${info.kind} wallAxis=${info.wallAxis || "-"}`);
+            }
+            appendConsoleLine(`  boxes=${info.boxCount}`);
+            info.boxes.forEach((b, i) => {
+                const suspect = b.suspect ? " SUSPECT" : "";
+                appendConsoleLine(`  #${i} profile(hw=${b.profile.halfWidth} hd=${b.profile.halfDepth} h=${b.profile.height}) -> world(hw=${b.worldHalfWidth} hd=${b.worldHalfDepth} h=${b.worldHeight})${suspect}`);
+                appendConsoleLine(`     offLocal(x=${b.offsetLocal.x} y=${b.offsetLocal.y} z=${b.offsetLocal.z}) offWorld(x=${b.offsetWorld.x} z=${b.offsetWorld.z})`);
+            });
+        })();
+        return;
+    }
+
+    if (command === "colhash" || command === "collisionhash") {
+        const hashes = getCollisionHashes();
+        appendConsoleLine(`client collision: scene#${hashes.scene} profiles#${hashes.profiles} boxes=${hashes.boxes}`);
+        appendConsoleLine("compare with server (run 'coldebug on' -> chat shows scene#/profiles#)");
+        const sent = sendAdminCommand("coldebug on");
+        if (!sent) {
+            appendConsoleLine("colhash: socket not ready (cannot query server)");
+        }
+        return;
+    }
+
     if (command === "colprofile" || command === "colliderprofile" || command === "hbprofile") {
         const suggestion = getCollisionProfileSuggestionAtCrosshair();
         if (!suggestion) {
             appendConsoleLine("colprofile: no model under crosshair");
             return;
         }
-        appendConsoleLine(`{ "value": "${suggestion.value}", "halfWidth": ${suggestion.halfWidth}, "halfDepth": ${suggestion.halfDepth}, "height": ${suggestion.height}, "solid": ${suggestion.solid}, "walkable": ${suggestion.walkable} }`);
+        appendConsoleLine(`colprofile ${suggestion.value}`);
+        appendConsoleLine(`  auto hw=${suggestion.halfWidth} hd=${suggestion.halfDepth} h=${suggestion.height}`);
+        if (suggestion.kind) {
+            appendConsoleLine(`  kind=${suggestion.kind} wallAxis=${suggestion.wallAxis || "-"} thickness=${suggestion.thickness ?? "-"}`);
+        }
+        appendConsoleLine(`  tip: setcolbox scale 0.25 to shrink | setcolbox <hw> <hd> <h> manual`);
         return;
     }
 
@@ -738,18 +869,61 @@ function runConsoleCommand(rawCommand) {
             return;
         }
 
+        const numbers = parts.slice(1).map(Number);
+        let payload = { ...suggestion };
+        let scaleNote = "";
+
+        if (parts.length === 3 && (parts[1] === "scale" || parts[1] === "shrink" || parts[1] === "mul")) {
+            const scale = numbers[1];
+            if (!Number.isFinite(scale) || scale <= 0 || scale > 1) {
+                appendConsoleLine("setcolbox: scale must be >0 and <=1 (e.g. setcolbox scale 0.25)");
+                return;
+            }
+            scaleColboxPayload(payload, scale);
+            scaleNote = ` x${scale}`;
+        } else if (parts.length === 2) {
+            const arg = numbers[0];
+            if (arg > 0 && arg <= 1) {
+                scaleColboxPayload(payload, arg);
+                scaleNote = ` x${arg}`;
+            } else if (!Number.isFinite(arg) || arg <= 0) {
+                appendConsoleLine("setcolbox: invalid height/scale");
+                appendConsoleLine("usage: setcolbox [height] | setcolbox <0..1 scale> | setcolbox scale <0..1> | setcolbox <halfW> <halfD> <height>");
+                return;
+            } else {
+                payload.height = Number(arg.toFixed(2));
+                finalizeColboxPayload(payload);
+            }
+        } else if (parts.length === 4) {
+            const [halfWidth, halfDepth, height] = numbers;
+            if (![halfWidth, halfDepth, height].every(v => Number.isFinite(v) && v > 0)) {
+                appendConsoleLine("setcolbox: invalid numbers");
+                appendConsoleLine("usage: setcolbox [height] | setcolbox <0..1 scale> | setcolbox scale <0..1> | setcolbox <halfW> <halfD> <height>");
+                return;
+            }
+            payload.halfWidth = Number(halfWidth.toFixed(2));
+            payload.halfDepth = Number(halfDepth.toFixed(2));
+            payload.height = Number(height.toFixed(2));
+            finalizeColboxPayload(payload);
+        } else if (parts.length === 1) {
+            finalizeColboxPayload(payload);
+        } else if (parts.length > 1) {
+            appendConsoleLine("usage: setcolbox [height] | setcolbox <0..1 scale> | setcolbox scale <0..1> | setcolbox <halfW> <halfD> <height>");
+            return;
+        }
+
         void (async () => {
             try {
                 const response = await fetch("/api/world/collision-profile", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(suggestion)
+                    body: JSON.stringify(payload)
                 });
                 if (!response.ok) {
                     appendConsoleLine("setcolbox: save failed");
                     return;
                 }
-                appendConsoleLine(`setcolbox saved ${suggestion.value} hw=${suggestion.halfWidth} hd=${suggestion.halfDepth} h=${suggestion.height}`);
+                appendConsoleLine(`setcolbox saved ${payload.value} hw=${payload.halfWidth} hd=${payload.halfDepth} h=${payload.height}${scaleNote}`);
                 reloadCollisionOnServerAndClient();
             } catch (_error) {
                 appendConsoleLine("setcolbox: save failed");
@@ -769,21 +943,44 @@ function runConsoleCommand(rawCommand) {
         let payload = null;
 
         if (parts.length === 1) {
-            const baseHalfW = Math.max(4, Number((suggestion.halfWidth * 0.34).toFixed(2)));
-            const baseHalfD = Math.max(4, Number((suggestion.halfDepth * 0.34).toFixed(2)));
-            const baseH = Math.max(8, Number((suggestion.height * 0.28).toFixed(2)));
-            const midHalfW = Math.max(3, Number((suggestion.halfWidth * 0.2).toFixed(2)));
-            const midHalfD = Math.max(3, Number((suggestion.halfDepth * 0.2).toFixed(2)));
-            const midH = Math.max(8, Number((suggestion.height * 0.5).toFixed(2)));
+            const boxHalfW = Number(Math.max(4, suggestion.halfWidth * 0.96).toFixed(2));
+            const boxHalfD = Number(Math.max(4, suggestion.halfDepth * 0.96).toFixed(2));
+            const boxH = Number(Math.max(4, suggestion.height * 0.98).toFixed(2));
             payload = {
                 ...suggestion,
-                halfWidth: baseHalfW,
-                halfDepth: baseHalfD,
-                height: Math.max(baseH, midH),
-                boxes: [
-                    { halfWidth: baseHalfW, halfDepth: baseHalfD, height: baseH, offsetLocalX: 0, offsetLocalY: 0, offsetLocalZ: 0, yawOffsetDeg: 0 },
-                    { halfWidth: midHalfW, halfDepth: midHalfD, height: midH, offsetLocalX: 0, offsetLocalY: 0, offsetLocalZ: Number((baseH * 0.4).toFixed(2)), yawOffsetDeg: 0 }
-                ]
+                halfWidth: boxHalfW,
+                halfDepth: boxHalfD,
+                height: boxH,
+                boxes: [{
+                    halfWidth: boxHalfW,
+                    halfDepth: boxHalfD,
+                    height: boxH,
+                    offsetLocalX: suggestion.offsetLocalX ?? 0,
+                    offsetLocalY: suggestion.offsetLocalY ?? 0,
+                    offsetLocalZ: suggestion.offsetLocalZ ?? 0,
+                    yawOffsetDeg: 0
+                }]
+            };
+        } else if (parts.length === 4) {
+            const [halfWidth, halfDepth, height] = numbers;
+            if (![halfWidth, halfDepth, height].every(v => Number.isFinite(v) && v > 0)) {
+                appendConsoleLine("setcolboxes: invalid numbers");
+                return;
+            }
+            payload = {
+                ...suggestion,
+                halfWidth,
+                halfDepth,
+                height,
+                boxes: [{
+                    halfWidth,
+                    halfDepth,
+                    height,
+                    offsetLocalX: suggestion.offsetLocalX ?? 0,
+                    offsetLocalY: suggestion.offsetLocalY ?? 0,
+                    offsetLocalZ: suggestion.offsetLocalZ ?? 0,
+                    yawOffsetDeg: 0
+                }]
             };
         } else if (parts.length === 7) {
             const [baseHalfW, baseHalfD, baseH, topHalfW, topHalfD, topH] = numbers;
@@ -842,6 +1039,7 @@ function runConsoleCommand(rawCommand) {
         } else {
             appendConsoleLine("usage: setcolboxes");
             appendConsoleLine("auto: setcolboxes");
+            appendConsoleLine("single: setcolboxes <halfW> <halfD> <height>");
             appendConsoleLine("simple: setcolboxes <baseHalfW> <baseHalfD> <baseH> <topHalfW> <topHalfD> <topH>");
             appendConsoleLine("advanced: setcolboxes <bHW> <bHD> <bH> <bOffX> <bOffY> <bYaw> <tHW> <tHD> <tH> <tOffX> <tOffY> <tYaw>");
             appendConsoleLine("advancedZ: setcolboxes <bHW> <bHD> <bH> <bOffX> <bOffY> <bOffZ> <bYaw> <tHW> <tHD> <tH> <tOffX> <tOffY> <tOffZ> <tYaw>");
@@ -914,6 +1112,24 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
+    if (command === "clearcolboxes" || command === "clearhitboxes" || command === "clearcollision"
+        || command === "removecolboxes" || command === "wipecolboxes") {
+        void (async () => {
+            try {
+                const response = await clearCollisionProfilesRequest();
+                if (!response.ok) {
+                    appendConsoleLine("clearcolboxes: delete failed (restart server?)");
+                    return;
+                }
+                appendConsoleLine("clearcolboxes: all collision removed (0 boxes, no fallback)");
+                reloadCollisionOnServerAndClient();
+            } catch (_error) {
+                appendConsoleLine("clearcolboxes: delete failed (restart server?)");
+            }
+        })();
+        return;
+    }
+
     if (command === "perfhud" || command === "debugfps") {
         let enabled = state.perfHudVisible;
         if (arg === "on" || arg === "1" || arg === "true") {
@@ -928,6 +1144,30 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
+    if (command === "aimdebug" || command === "aimdbg") {
+        const enabled = parseConsoleToggleArg(arg, Boolean(state.aimDebugVisible));
+        setAimDebugVisible(enabled);
+        appendConsoleLine(`aimdebug ${enabled ? "ON" : "OFF"} (camera ray=yellow, server ray=red, player hitboxes=green/orange)`);
+        return;
+    }
+
+    if (command === "debughealth" || command === "healthdebug" || command === "hpdebug") {
+        const enabled = parseConsoleToggleArg(arg, Boolean(state.healthDebugVisible));
+        state.healthDebugVisible = enabled;
+        appendConsoleLine(`debughealth ${enabled ? "ON" : "OFF"} (HP bar above players)`);
+        return;
+    }
+
+    if (command === "debugdamage" || command === "damagedebug" || command === "dmgdebug") {
+        const enabled = parseConsoleToggleArg(arg, Boolean(state.damageDebugVisible));
+        state.damageDebugVisible = enabled;
+        if (enabled) {
+            state.lastDamageEventIds.clear();
+        }
+        appendConsoleLine(`debugdamage ${enabled ? "ON" : "OFF"} (logs HEADHIT/BODY hits in console)`);
+        return;
+    }
+
     if (command === "hitbox" || command === "collisionbox" || command === "colbox") {
         let enabled = Boolean(state.collisionDebugVisible);
         if (arg === "on" || arg === "1" || arg === "true") {
@@ -938,8 +1178,13 @@ function runConsoleCommand(rawCommand) {
             enabled = !enabled;
         }
         state.collisionDebugVisible = enabled;
-        void setCollisionDebugVisible(enabled);
-        appendConsoleLine(`hitbox ${enabled ? "ON" : "OFF"}`);
+        void setCollisionDebugVisible(enabled).then(() => {
+            const count = getSceneCollisionBoxCount();
+            appendConsoleLine(`hitbox ${enabled ? "ON" : "OFF"} (${count} collision boxes)`);
+            if (enabled && count === 0) {
+                appendConsoleLine("hitbox: no boxes — run autocolboxes all 0 or setcolbox on a model");
+            }
+        });
         return;
     }
 
@@ -965,12 +1210,22 @@ function runConsoleCommand(rawCommand) {
             appendConsoleLine("editor scene cleared (run 'editor save' to persist)");
             return;
         }
+        if (arg === "none" || (arg === "model" && (parts[2] || "").toLowerCase() === "none")) {
+            if (!state.editorMode) {
+                appendConsoleLine("editor model none: turn on editor first (editor on)");
+                return;
+            }
+            setEditorModelToNone();
+            appendConsoleLine("editor model: none");
+            return;
+        }
         void toggleEditorMode();
         appendConsoleLine(`editor ${state.editorMode ? "OFF" : "ON"}`);
         return;
     }
 
-    if (command === "freeze" || command === "money" || command === "fly" || command === "tp" || command === "respawn"
+    if (command === "freeze" || command === "money" || command === "fly" || command === "noclip" || command === "ghost"
+        || command === "setspawn" || command === "spawnpoint" || command === "tp" || command === "respawn"
         || command === "coldebug" || command === "collisiondebug") {
         const sent = sendAdminCommand(normalized);
         appendConsoleLine(sent ? "ok" : "socket not ready");
@@ -982,5 +1237,5 @@ function runConsoleCommand(rawCommand) {
         return;
     }
 
-    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, tp <x> <y> [z] | tp <playerName>, respawn [playerName|all], reloadcollision, coldebug on|off, hitbox on|off|toggle, colprofile, setcolbox, setcolboxes (auto if no args), autocolboxes [scope] [density|0=adaptive], backmount <x> <y> <z> <rxDeg> <ryDeg> <rzDeg>, handoffset <x> <y> <z> [weapon], wallhack on|off|toggle, performancemode on|off|toggle, perfhud on|off|toggle, editor on|off|save|clear");
+    appendConsoleLine("commands: freeze on|off|toggle, money <amount>, fly on|off|toggle, noclip on|off|toggle, setspawn here|red|blue|list|clear, tp <x> <y> [z] | tp <playerName>, respawn [playerName|all], reloadcollision, coldebug on|off, aimdebug on|off|toggle, debughealth on|off|toggle, debugdamage on|off|toggle, hitbox on|off|toggle, colinfo, colhash, colprofile, setcolbox [height|scale], setcolboxes, autocolboxes [scope] [density|0=adaptive], clearcolboxes, backmount ..., handoffset ..., wallhack ..., performancemode ..., perfhud ..., editor ...");
 }
